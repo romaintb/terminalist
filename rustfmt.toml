@@ -1,0 +1,27 @@
+# Rust formatting configuration (similar to .rubocop.yml)
+# See https://rust-lang.github.io/rustfmt/ for all options
+# This config uses only stable features
+
+# Use 4 spaces for indentation (Rust standard)
+hard_tabs = false
+tab_spaces = 4
+
+# Line length (you mentioned you like 120 chars)
+max_width = 120
+
+# Array and slice formatting
+array_width = 60
+chain_width = 60
+
+# Newlines
+newline_style = "Unix"
+
+# Edition (use 2021 features)
+edition = "2021"
+
+# Use single line for short items
+use_small_heuristics = "Default"
+
+# Reorder imports (basic version, stable)
+reorder_imports = true
+reorder_modules = true

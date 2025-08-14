@@ -1,0 +1,258 @@
+use anyhow::Result;
+use chrono::{DateTime, Duration, Utc};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+use crate::storage::LocalStorage;
+use crate::todoist::{ProjectDisplay, TaskDisplay, TodoistWrapper};
+
+/// Sync service that manages data synchronization between API and local storage
+#[derive(Clone)]
+pub struct SyncService {
+    todoist: TodoistWrapper,
+    storage: Arc<Mutex<LocalStorage>>,
+    sync_in_progress: Arc<Mutex<bool>>,
+}
+
+#[derive(Debug, Clone)]
+pub enum SyncStatus {
+    Idle,
+    InProgress,
+    Success { last_sync: DateTime<Utc> },
+    Error { message: String },
+}
+
+impl SyncService {
+    /// Create a new sync service
+    pub async fn new(api_token: String) -> Result<Self> {
+        let todoist = TodoistWrapper::new(api_token);
+        let storage = Arc::new(Mutex::new(LocalStorage::new().await?));
+        let sync_in_progress = Arc::new(Mutex::new(false));
+
+        Ok(Self {
+            todoist,
+            storage,
+            sync_in_progress,
+        })
+    }
+
+    /// Get projects from local storage (fast)
+    pub async fn get_projects(&self) -> Result<Vec<ProjectDisplay>> {
+        let storage = self.storage.lock().await;
+        storage.get_projects().await
+    }
+
+    /// Get tasks for a project from local storage (fast)
+    pub async fn get_tasks_for_project(&self, project_id: &str) -> Result<Vec<TaskDisplay>> {
+        let storage = self.storage.lock().await;
+        storage.get_tasks_for_project(project_id).await
+    }
+
+    /// Check if sync is currently in progress
+    pub async fn is_syncing(&self) -> bool {
+        *self.sync_in_progress.lock().await
+    }
+
+    /// Check if we have local data available
+    pub async fn has_local_data(&self) -> Result<bool> {
+        let storage = self.storage.lock().await;
+        storage.has_data().await
+    }
+
+    /// Get last sync time for projects
+    pub async fn get_last_sync_time(&self) -> Result<Option<DateTime<Utc>>> {
+        let storage = self.storage.lock().await;
+        storage.get_last_sync("projects").await
+    }
+
+    /// Perform full sync with Todoist API
+    pub async fn sync(&self) -> Result<SyncStatus> {
+        // Check if sync is already in progress
+        {
+            let mut sync_guard = self.sync_in_progress.lock().await;
+            if *sync_guard {
+                return Ok(SyncStatus::InProgress);
+            }
+            *sync_guard = true;
+        }
+
+        let result = self.perform_sync().await;
+
+        // Release sync lock
+        {
+            let mut sync_guard = self.sync_in_progress.lock().await;
+            *sync_guard = false;
+        }
+
+        result
+    }
+
+    /// Internal sync implementation
+    async fn perform_sync(&self) -> Result<SyncStatus> {
+        // Fetch projects from API
+        let projects = match self.todoist.get_projects().await {
+            Ok(projects) => projects,
+            Err(e) => {
+                return Ok(SyncStatus::Error {
+                    message: format!("Failed to fetch projects: {}", e),
+                });
+            }
+        };
+
+        // Fetch all tasks from API
+        let tasks = match self.todoist.get_tasks().await {
+            Ok(tasks) => tasks,
+            Err(e) => {
+                return Ok(SyncStatus::Error {
+                    message: format!("Failed to fetch tasks: {}", e),
+                });
+            }
+        };
+
+        // Store in local database
+        {
+            let storage = self.storage.lock().await;
+
+            if let Err(e) = storage.store_projects(projects).await {
+                return Ok(SyncStatus::Error {
+                    message: format!("Failed to store projects: {}", e),
+                });
+            }
+
+            if let Err(e) = storage.store_tasks(tasks).await {
+                return Ok(SyncStatus::Error {
+                    message: format!("Failed to store tasks: {}", e),
+                });
+            }
+        }
+
+        Ok(SyncStatus::Success { last_sync: Utc::now() })
+    }
+
+    /// Check if sync is needed based on last sync time
+    pub async fn should_sync(&self) -> Result<bool> {
+        let last_sync = self.get_last_sync_time().await?;
+
+        match last_sync {
+            None => Ok(true), // Never synced
+            Some(last) => {
+                // Sync if last sync was more than 1 minute ago
+                let threshold = Utc::now() - Duration::minutes(1);
+                Ok(last < threshold)
+            }
+        }
+    }
+
+    /// Sync if needed (smart sync)
+    pub async fn sync_if_needed(&self) -> Result<SyncStatus> {
+        if self.should_sync().await? {
+            self.sync().await
+        } else {
+            match self.get_last_sync_time().await? {
+                Some(last_sync) => Ok(SyncStatus::Success { last_sync }),
+                None => Ok(SyncStatus::Idle),
+            }
+        }
+    }
+
+    /// Force sync regardless of last sync time
+    pub async fn force_sync(&self) -> Result<SyncStatus> {
+        self.sync().await
+    }
+
+    /// Clear all local data (useful for reset)
+    pub async fn clear_local_data(&self) -> Result<()> {
+        let storage = self.storage.lock().await;
+        storage.clear_all_data().await
+    }
+
+    /// Complete a task (mark as done)
+    pub async fn complete_task(&self, task_id: &str) -> Result<()> {
+        // First, complete the task via API
+        self.todoist.complete_task(task_id).await?;
+
+        // Then update local storage
+        let storage = self.storage.lock().await;
+        storage.mark_task_completed(task_id).await?;
+
+        Ok(())
+    }
+
+    /// Reopen a task (mark as incomplete)
+    pub async fn reopen_task(&self, task_id: &str) -> Result<()> {
+        // First, reopen the task via API
+        self.todoist.reopen_task(task_id).await?;
+
+        // Then update local storage
+        let storage = self.storage.lock().await;
+        storage.mark_task_incomplete(task_id).await?;
+
+        Ok(())
+    }
+
+    /// Delete a task permanently
+    pub async fn delete_task(&self, task_id: &str) -> Result<()> {
+        // First, delete the task via API
+        self.todoist.delete_task(task_id).await?;
+
+        // Then remove from local storage
+        let storage = self.storage.lock().await;
+        storage.delete_task(task_id).await?;
+
+        Ok(())
+    }
+
+    /// Get sync statistics
+    pub async fn get_sync_stats(&self) -> Result<SyncStats> {
+        let storage = self.storage.lock().await;
+        let project_count = storage.get_projects().await?.len();
+        let task_count = storage.get_all_tasks().await?.len();
+        let last_sync = storage.get_last_sync("projects").await?;
+
+        Ok(SyncStats {
+            project_count,
+            task_count,
+            last_sync,
+            has_data: project_count > 0,
+        })
+    }
+}
+
+/// Statistics about local data and sync status
+#[derive(Debug, Clone)]
+pub struct SyncStats {
+    pub project_count: usize,
+    pub task_count: usize,
+    pub last_sync: Option<DateTime<Utc>>,
+    pub has_data: bool,
+}
+
+impl SyncStats {
+    /// Get a human-readable description of sync status
+    pub fn status_description(&self) -> String {
+        if !self.has_data {
+            "No local data - sync needed".to_string()
+        } else {
+            match &self.last_sync {
+                Some(last) => {
+                    let elapsed = Utc::now() - *last;
+                    if elapsed.num_minutes() < 1 {
+                        "Just synced".to_string()
+                    } else if elapsed.num_minutes() < 60 {
+                        format!("Synced {} minutes ago", elapsed.num_minutes())
+                    } else if elapsed.num_hours() < 24 {
+                        format!("Synced {} hours ago", elapsed.num_hours())
+                    } else {
+                        format!("Synced {} days ago", elapsed.num_days())
+                    }
+                }
+                None => "Never synced".to_string(),
+            }
+        }
+    }
+
+    /// Get data summary
+    pub fn data_summary(&self) -> String {
+        format!("{} projects, {} tasks", self.project_count, self.task_count)
+    }
+}
