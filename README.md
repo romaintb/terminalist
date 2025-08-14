@@ -62,7 +62,7 @@ The interface consists of:
 
 Tasks are displayed with:
 - **Status Icons**: ✅ (completed) or ⏳ (pending)
-- **Priority Indicators**: 🔴 (urgent), 🟠 (high), 🟡 (medium), ⚪ (normal)
+- **Priority Indicators**: [P0] (urgent), [P1] (high), [P2] (medium), [P3] (low), no badge (normal)
 - **Task Content**: Truncated to fit the display
 - **Rich Metadata Badges**:
   - `🔄REC` Recurring tasks (blue badge)

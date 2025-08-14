@@ -19,25 +19,31 @@ pub enum TerminalBadgeStyle {
 impl TerminalBadgeStyle {
     fn to_style(&self) -> Style {
         match self {
-            // Use bright colors with modifiers for better visibility
+            // Use bright colors with proper backgrounds for better visibility
             TerminalBadgeStyle::Primary => Style::default()
-                .fg(Color::LightBlue)
-                .add_modifier(Modifier::BOLD | Modifier::REVERSED),
+                .fg(Color::Black)
+                .bg(Color::LightBlue)
+                .add_modifier(Modifier::BOLD),
             TerminalBadgeStyle::Success => Style::default()
-                .fg(Color::LightGreen)
-                .add_modifier(Modifier::BOLD | Modifier::REVERSED),
+                .fg(Color::Black)
+                .bg(Color::LightGreen)
+                .add_modifier(Modifier::BOLD),
             TerminalBadgeStyle::Warning => Style::default()
-                .fg(Color::LightYellow)
-                .add_modifier(Modifier::BOLD | Modifier::REVERSED),
+                .fg(Color::Black)
+                .bg(Color::LightYellow)
+                .add_modifier(Modifier::BOLD),
             TerminalBadgeStyle::Danger => Style::default()
-                .fg(Color::LightRed)
-                .add_modifier(Modifier::BOLD | Modifier::REVERSED),
+                .fg(Color::White)
+                .bg(Color::Red)
+                .add_modifier(Modifier::BOLD),
             TerminalBadgeStyle::Info => Style::default()
-                .fg(Color::LightCyan)
-                .add_modifier(Modifier::BOLD | Modifier::REVERSED),
+                .fg(Color::Black)
+                .bg(Color::LightCyan)
+                .add_modifier(Modifier::BOLD),
             TerminalBadgeStyle::Secondary => Style::default()
-                .fg(Color::Gray)
-                .add_modifier(Modifier::BOLD | Modifier::REVERSED),
+                .fg(Color::White)
+                .bg(Color::Gray)
+                .add_modifier(Modifier::BOLD),
             TerminalBadgeStyle::Bordered => Style::default()
                 .fg(Color::White)
                 .add_modifier(Modifier::BOLD),
@@ -115,10 +121,10 @@ pub fn create_terminal_task_badges(
 /// Create priority badges with better terminal support
 pub fn create_terminal_priority_badge(priority: i32) -> Option<Span<'static>> {
     match priority {
-        4 => Some(create_bracket_badge("P0", TerminalBadgeStyle::Danger)), // Urgent
-        3 => Some(create_bracket_badge("P1", TerminalBadgeStyle::Warning)), // High
-        2 => Some(create_bracket_badge("P2", TerminalBadgeStyle::Info)),   // Medium
-        1 => Some(create_bracket_badge("P3", TerminalBadgeStyle::Secondary)), // Low
+        4 => Some(create_terminal_badge("P0", TerminalBadgeStyle::Danger)), // Urgent
+        3 => Some(create_terminal_badge("P1", TerminalBadgeStyle::Warning)), // High
+        2 => Some(create_terminal_badge("P2", TerminalBadgeStyle::Info)),   // Medium
+        1 => Some(create_terminal_badge("P3", TerminalBadgeStyle::Secondary)), // Low
         _ => None,                                                         // No priority
     }
 }
