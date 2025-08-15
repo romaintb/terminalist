@@ -14,6 +14,7 @@ pub struct LocalProject {
     pub is_favorite: bool,
     pub is_inbox_project: bool,
     pub order_index: i32,
+    pub parent_id: Option<String>,
     pub last_synced: DateTime<Utc>,
 }
 
@@ -44,6 +45,7 @@ impl From<LocalProject> for ProjectDisplay {
             name: local.name,
             color: local.color,
             is_favorite: local.is_favorite,
+            parent_id: local.parent_id,
         }
     }
 }
@@ -77,6 +79,7 @@ impl From<Project> for LocalProject {
             is_favorite: project.is_favorite,
             is_inbox_project: project.is_inbox_project,
             order_index: project.order,
+            parent_id: project.parent_id,
             last_synced: Utc::now(),
         }
     }
@@ -177,6 +180,7 @@ impl LocalStorage {
                 is_favorite BOOLEAN NOT NULL,
                 is_inbox_project BOOLEAN NOT NULL,
                 order_index INTEGER NOT NULL,
+                parent_id TEXT,
                 last_synced TEXT NOT NULL
             )
             ",
@@ -240,8 +244,8 @@ impl LocalStorage {
             let local_project: LocalProject = project.into();
             sqlx::query(
                 r"
-                INSERT INTO projects (id, name, color, is_favorite, is_inbox_project, order_index, last_synced)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO projects (id, name, color, is_favorite, is_inbox_project, order_index, parent_id, last_synced)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 ",
             )
             .bind(&local_project.id)
@@ -250,6 +254,7 @@ impl LocalStorage {
             .bind(local_project.is_favorite)
             .bind(local_project.is_inbox_project)
             .bind(local_project.order_index)
+            .bind(&local_project.parent_id)
             .bind(local_project.last_synced)
             .execute(&mut *tx)
             .await?;
@@ -303,7 +308,7 @@ impl LocalStorage {
 
     /// Get all projects from local storage
     pub async fn get_projects(&self) -> Result<Vec<ProjectDisplay>> {
-        let rows = sqlx::query("SELECT id, name, color, is_favorite FROM projects ORDER BY order_index, name")
+        let rows = sqlx::query("SELECT id, name, color, is_favorite, parent_id FROM projects ORDER BY order_index, name")
             .fetch_all(&self.pool)
             .await?;
 
@@ -314,6 +319,7 @@ impl LocalStorage {
                 name: row.get("name"),
                 color: row.get("color"),
                 is_favorite: row.get("is_favorite"),
+                parent_id: row.get("parent_id"),
             })
             .collect();
 

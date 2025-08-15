@@ -283,6 +283,7 @@ pub struct ProjectDisplay {
     pub name: String,
     pub color: String,
     pub is_favorite: bool,
+    pub parent_id: Option<String>,
 }
 
 impl From<Project> for ProjectDisplay {
@@ -292,6 +293,7 @@ impl From<Project> for ProjectDisplay {
             name: project.name,
             color: project.color,
             is_favorite: project.is_favorite,
+            parent_id: project.parent_id,
         }
     }
 }

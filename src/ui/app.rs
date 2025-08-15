@@ -62,23 +62,51 @@ impl App {
         }
     }
 
-    /// Get projects sorted with favorites first, maintaining original order within each group
+    /// Get projects sorted with favorites first within their own hierarchical level
     #[must_use]
     pub fn get_sorted_projects(&self) -> Vec<(usize, &ProjectDisplay)> {
         let mut sorted_projects: Vec<_> = self.projects.iter().enumerate().collect();
-        sorted_projects.sort_by(|(a_idx, a_project), (b_idx, b_project)| {
+        
+        // Helper function to get the root project ID (top-level parent)
+        fn get_root_project_id(project: &ProjectDisplay, projects: &[ProjectDisplay]) -> String {
+            let mut current = project;
+            while let Some(parent_id) = &current.parent_id {
+                if let Some(parent) = projects.iter().find(|p| p.id == *parent_id) {
+                    current = parent;
+                } else {
+                    break;
+                }
+            }
+            current.id.clone()
+        }
+        
+        // Helper function to get the immediate parent ID
+        fn get_immediate_parent_id(project: &ProjectDisplay) -> Option<String> {
+            project.parent_id.clone()
+        }
+        
+        sorted_projects.sort_by(|(_a_idx, a_project), (_b_idx, b_project)| {
+            // First, sort by root project to keep tree structures together
+            let a_root = get_root_project_id(a_project, &self.projects);
+            let b_root = get_root_project_id(b_project, &self.projects);
+            let root_cmp = a_root.cmp(&b_root);
+            if root_cmp != std::cmp::Ordering::Equal {
+                return root_cmp;
+            }
+            
+            // Same root, now sort by immediate parent to keep siblings together
+            let a_parent = get_immediate_parent_id(a_project);
+            let b_parent = get_immediate_parent_id(b_project);
+            let parent_cmp = a_parent.cmp(&b_parent);
+            if parent_cmp != std::cmp::Ordering::Equal {
+                return parent_cmp;
+            }
+            
+            // Same immediate parent (siblings), sort favorites first, then by name
             match (a_project.is_favorite, b_project.is_favorite) {
                 (true, false) => std::cmp::Ordering::Less,    // a (favorite) comes before b (non-favorite)
                 (false, true) => std::cmp::Ordering::Greater, // a (non-favorite) comes after b (favorite)
-                _ => {
-                    // Same favorite status, sort by name, then by original index for stability
-                    let name_cmp = a_project.name.cmp(&b_project.name);
-                    if name_cmp == std::cmp::Ordering::Equal {
-                        a_idx.cmp(b_idx)
-                    } else {
-                        name_cmp
-                    }
-                }
+                _ => a_project.name.cmp(&b_project.name),     // Same favorite status, sort by name
             }
         });
         sorted_projects
