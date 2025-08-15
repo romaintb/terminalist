@@ -101,7 +101,7 @@ impl From<Task> for LocalTask {
             order_index: task.order,
             due_date: task.due.as_ref().map(|d| d.string.clone()),
             due_datetime: task.due.as_ref().and_then(|d| d.datetime.clone()),
-            is_recurring: task.due.as_ref().map(|d| d.is_recurring).unwrap_or(false),
+            is_recurring: task.due.as_ref().is_some_and(|d| d.is_recurring),
             deadline: task.deadline.map(|d| d.date),
             duration: duration_string,
             labels: serde_json::to_string(&task.labels).unwrap_or_default(),
@@ -117,7 +117,7 @@ pub struct LocalStorage {
 }
 
 impl LocalStorage {
-    /// Initialize the local storage with SQLite database
+    /// Initialize the local storage with `SQLite` database
     pub async fn new() -> Result<Self> {
         // Create data directory if it doesn't exist
         let data_dir = dirs::data_dir()
@@ -150,7 +150,7 @@ impl LocalStorage {
                 Ok(storage)
             }
             Err(e) => {
-                eprintln!("Warning: Could not create database in data directory: {}", e);
+                eprintln!("Warning: Could not create database in data directory: {e}");
                 eprintln!("Falling back to current directory for database storage.");
 
                 // Fallback to current directory
@@ -169,56 +169,56 @@ impl LocalStorage {
     async fn init_schema(&self) -> Result<()> {
         // Create projects table
         sqlx::query(
-            r#"
+            r"
             CREATE TABLE IF NOT EXISTS projects (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                color TEXT NOT NULL,
+                color TEXT,
                 is_favorite BOOLEAN NOT NULL,
                 is_inbox_project BOOLEAN NOT NULL,
                 order_index INTEGER NOT NULL,
-                last_synced DATETIME NOT NULL
+                last_synced TEXT NOT NULL
             )
-            "#,
+            ",
         )
         .execute(&self.pool)
         .await?;
 
         // Create tasks table
         sqlx::query(
-            r#"
+            r"
             CREATE TABLE IF NOT EXISTS tasks (
                 id TEXT PRIMARY KEY,
                 content TEXT NOT NULL,
                 project_id TEXT NOT NULL,
                 is_completed BOOLEAN NOT NULL,
-                is_deleted BOOLEAN NOT NULL DEFAULT 0,
+                is_deleted BOOLEAN NOT NULL,
                 priority INTEGER NOT NULL,
                 order_index INTEGER NOT NULL,
                 due_date TEXT,
                 due_datetime TEXT,
-                is_recurring BOOLEAN NOT NULL DEFAULT 0,
+                is_recurring BOOLEAN NOT NULL,
                 deadline TEXT,
                 duration TEXT,
-                labels TEXT NOT NULL DEFAULT '[]',
-                description TEXT NOT NULL DEFAULT '',
-                last_synced DATETIME NOT NULL,
-                FOREIGN KEY (project_id) REFERENCES projects (id)
+                labels TEXT NOT NULL,
+                description TEXT,
+                last_synced TEXT NOT NULL,
+                FOREIGN KEY (project_id) REFERENCES projects(id)
             )
-            "#,
+            ",
         )
         .execute(&self.pool)
         .await?;
 
         // Create sync metadata table
         sqlx::query(
-            r#"
+            r"
             CREATE TABLE IF NOT EXISTS sync_metadata (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL,
-                updated_at DATETIME NOT NULL
+                updated_at TEXT NOT NULL
             )
-            "#,
+            ",
         )
         .execute(&self.pool)
         .await?;
@@ -239,10 +239,10 @@ impl LocalStorage {
         for project in projects {
             let local_project: LocalProject = project.into();
             sqlx::query(
-                r#"
+                r"
                 INSERT INTO projects (id, name, color, is_favorite, is_inbox_project, order_index, last_synced)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-                "#,
+                ",
             )
             .bind(&local_project.id)
             .bind(&local_project.name)
@@ -272,10 +272,10 @@ impl LocalStorage {
             let local_task: LocalTask = task.into();
 
             sqlx::query(
-                r#"
+                r"
                 INSERT OR REPLACE INTO tasks (id, content, project_id, is_completed, is_deleted, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description, last_synced)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                "#,
+                ",
             )
             .bind(&local_task.id)
             .bind(&local_task.content)
@@ -323,12 +323,12 @@ impl LocalStorage {
     /// Get tasks for a specific project from local storage
     pub async fn get_tasks_for_project(&self, project_id: &str) -> Result<Vec<TaskDisplay>> {
         let rows = sqlx::query(
-            r#"
+            r"
             SELECT id, content, project_id, is_completed, is_deleted, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
             FROM tasks 
             WHERE project_id = ? 
             ORDER BY is_completed ASC, priority DESC, order_index ASC
-            "#,
+            ",
         )
         .bind(project_id)
         .fetch_all(&self.pool)
@@ -401,7 +401,7 @@ impl LocalStorage {
     /// Get last sync timestamp for a data type
     pub async fn get_last_sync(&self, data_type: &str) -> Result<Option<DateTime<Utc>>> {
         let row = sqlx::query("SELECT value FROM sync_metadata WHERE key = ?")
-            .bind(format!("last_sync_{}", data_type))
+            .bind(format!("last_sync_{data_type}"))
             .fetch_optional(&self.pool)
             .await?;
 
@@ -417,12 +417,12 @@ impl LocalStorage {
     async fn update_sync_timestamp(&self, data_type: &str) -> Result<()> {
         let now = Utc::now();
         sqlx::query(
-            r#"
+            r"
             INSERT OR REPLACE INTO sync_metadata (key, value, updated_at)
             VALUES (?, ?, ?)
-            "#,
+            ",
         )
-        .bind(format!("last_sync_{}", data_type))
+        .bind(format!("last_sync_{data_type}"))
         .bind(now.to_rfc3339())
         .bind(now)
         .execute(&self.pool)

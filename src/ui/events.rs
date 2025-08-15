@@ -19,7 +19,7 @@ pub async fn handle_events(
 
             // Handle help panel - block all other shortcuts when help is open
             if app.show_help {
-                return handle_help_panel(key.code, app);
+                return Ok(handle_help_panel(key.code, app));
             }
 
             // Handle normal navigation and actions
@@ -36,12 +36,12 @@ async fn handle_delete_confirmation(
     sync_service: &SyncService,
 ) -> Result<bool, anyhow::Error> {
     match key_code {
-        KeyCode::Char('y') | KeyCode::Char('Y') => {
+        KeyCode::Char('y' | 'Y') => {
             // Confirm delete
             app.delete_selected_task(sync_service).await;
             Ok(true)
         }
-        KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => {
+        KeyCode::Char('n' | 'N') | KeyCode::Esc => {
             // Cancel delete
             app.delete_confirmation = None;
             Ok(true)
@@ -51,46 +51,46 @@ async fn handle_delete_confirmation(
 }
 
 /// Handle events when help panel is open
-fn handle_help_panel(key_code: KeyCode, app: &mut App) -> Result<bool, anyhow::Error> {
+fn handle_help_panel(key_code: KeyCode, app: &mut App) -> bool {
     match key_code {
         KeyCode::Char('?') | KeyCode::Esc => {
             app.show_help = false;
             app.help_scroll_offset = 0; // Reset scroll when closing
-            Ok(true)
+            true
         }
         KeyCode::Up | KeyCode::Char('k') => {
             // Scroll up in help panel
             if app.help_scroll_offset > 0 {
                 app.help_scroll_offset = app.help_scroll_offset.saturating_sub(1);
             }
-            Ok(true)
+            true
         }
         KeyCode::Down | KeyCode::Char('j') => {
             // Scroll down in help panel
             app.help_scroll_offset = app.help_scroll_offset.saturating_add(1);
-            Ok(true)
+            true
         }
         KeyCode::PageUp => {
             // Page up in help panel
             app.help_scroll_offset = app.help_scroll_offset.saturating_sub(10);
-            Ok(true)
+            true
         }
         KeyCode::PageDown => {
             // Page down in help panel
             app.help_scroll_offset = app.help_scroll_offset.saturating_add(10);
-            Ok(true)
+            true
         }
         KeyCode::Home => {
             // Go to top of help panel
             app.help_scroll_offset = 0;
-            Ok(true)
+            true
         }
         KeyCode::End => {
-            // Go to bottom of help panel (will be calculated in UI)
+            // Go to bottom of help panel (will be clamped in UI)
             app.help_scroll_offset = usize::MAX; // Will be clamped in UI
-            Ok(true)
+            true
         }
-        _ => Ok(false), // Ignore all other keys when help is open
+        _ => false, // Ignore all other keys when help is open
     }
 }
 
@@ -116,14 +116,14 @@ async fn handle_normal_mode(
         KeyCode::Left | KeyCode::Char('h') => {
             app.previous_project();
             if let Err(e) = app.load_tasks_for_selected_project(sync_service).await {
-                app.error_message = Some(format!("Error loading tasks: {}", e));
+                app.error_message = Some(format!("Error loading tasks: {e}"));
             }
             Ok(true)
         }
         KeyCode::Right | KeyCode::Char('l') => {
             app.next_project();
             if let Err(e) = app.load_tasks_for_selected_project(sync_service).await {
-                app.error_message = Some(format!("Error loading tasks: {}", e));
+                app.error_message = Some(format!("Error loading tasks: {e}"));
             }
             Ok(true)
         }

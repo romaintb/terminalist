@@ -25,7 +25,15 @@ pub struct App {
     pub help_scroll_offset: usize, // Scroll position for help panel
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
+    /// Create a new App instance
+    #[must_use]
     pub fn new() -> Self {
         let mut project_list_state = ListState::default();
         project_list_state.select(Some(0));
@@ -88,12 +96,12 @@ impl App {
 
                     // Load tasks for the selected project
                     if let Err(e) = self.load_tasks_for_selected_project(sync_service).await {
-                        self.error_message = Some(format!("Error loading tasks: {}", e));
+                        self.error_message = Some(format!("Error loading tasks: {e}"));
                     }
                 }
             }
             Err(e) => {
-                self.error_message = Some(format!("Error loading projects: {}", e));
+                self.error_message = Some(format!("Error loading projects: {e}"));
             }
         }
 
@@ -108,8 +116,8 @@ impl App {
                     let mut sorted_tasks = tasks;
                     sorted_tasks.sort_by(|a, b| {
                         // Create priority scores: pending=0, completed=1, deleted=2
-                        let a_score = if a.is_deleted { 2 } else if a.is_completed { 1 } else { 0 };
-                        let b_score = if b.is_deleted { 2 } else if b.is_completed { 1 } else { 0 };
+                        let a_score = if a.is_deleted { 2 } else { i32::from(a.is_completed) };
+                        let b_score = if b.is_deleted { 2 } else { i32::from(b.is_completed) };
                         
                         // Sort by score (lower score = higher priority)
                         a_score.cmp(&b_score)
@@ -117,16 +125,11 @@ impl App {
                     
                     self.tasks = sorted_tasks;
                     // Reset task selection to first task
-                    if !self.tasks.is_empty() {
-                        self.selected_task_index = 0;
-                        self.task_list_state.select(Some(0));
-                    } else {
-                        self.selected_task_index = 0;
-                        self.task_list_state.select(Some(0));
-                    }
+                    self.selected_task_index = 0;
+                    self.task_list_state.select(Some(0));
                 }
                 Err(e) => {
-                    self.error_message = Some(format!("Error loading tasks: {}", e));
+                    self.error_message = Some(format!("Error loading tasks: {e}"));
                     return Err(e);
                 }
             }
@@ -185,11 +188,11 @@ impl App {
                 Ok(()) => {
                     // Reload tasks to reflect the change
                     if let Err(e) = self.load_tasks_for_selected_project(sync_service).await {
-                        self.error_message = Some(format!("Error reloading tasks: {}", e));
+                        self.error_message = Some(format!("Error reloading tasks: {e}"));
                     }
                 }
                 Err(e) => {
-                    self.error_message = Some(format!("Error toggling task: {}", e));
+                    self.error_message = Some(format!("Error toggling task: {e}"));
                 }
             }
 
@@ -206,11 +209,11 @@ impl App {
                 Ok(()) => {
                     // Reload tasks to reflect the change
                     if let Err(e) = self.load_tasks_for_selected_project(sync_service).await {
-                        self.error_message = Some(format!("Error reloading tasks: {}", e));
+                        self.error_message = Some(format!("Error reloading tasks: {e}"));
                     }
                 }
                 Err(e) => {
-                    self.error_message = Some(format!("Error deleting task: {}", e));
+                    self.error_message = Some(format!("Error deleting task: {e}"));
                 }
             }
 
@@ -230,7 +233,7 @@ impl App {
                 self.load_local_data(sync_service).await;
             }
             Err(e) => {
-                self.error_message = Some(format!("Sync error: {}", e));
+                self.error_message = Some(format!("Sync error: {e}"));
             }
         }
 

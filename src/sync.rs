@@ -94,7 +94,7 @@ impl SyncService {
             Ok(projects) => projects,
             Err(e) => {
                 return Ok(SyncStatus::Error {
-                    message: format!("Failed to fetch projects: {}", e),
+                    message: format!("Failed to fetch projects: {e}"),
                 });
             }
         };
@@ -104,7 +104,7 @@ impl SyncService {
             Ok(tasks) => tasks,
             Err(e) => {
                 return Ok(SyncStatus::Error {
-                    message: format!("Failed to fetch tasks: {}", e),
+                    message: format!("Failed to fetch tasks: {e}"),
                 });
             }
         };
@@ -115,13 +115,13 @@ impl SyncService {
 
             if let Err(e) = storage.store_projects(projects).await {
                 return Ok(SyncStatus::Error {
-                    message: format!("Failed to store projects: {}", e),
+                    message: format!("Failed to store projects: {e}"),
                 });
             }
 
             if let Err(e) = storage.store_tasks(tasks).await {
                 return Ok(SyncStatus::Error {
-                    message: format!("Failed to store tasks: {}", e),
+                    message: format!("Failed to store tasks: {e}"),
                 });
             }
         }
@@ -229,29 +229,31 @@ pub struct SyncStats {
 
 impl SyncStats {
     /// Get a human-readable description of sync status
+    #[must_use]
     pub fn status_description(&self) -> String {
-        if !self.has_data {
-            "No local data - sync needed".to_string()
-        } else {
+        if self.has_data {
             match &self.last_sync {
                 Some(last) => {
                     let elapsed = Utc::now() - *last;
                     if elapsed.num_minutes() < 1 {
                         "Just synced".to_string()
                     } else if elapsed.num_minutes() < 60 {
-                        format!("Synced {} minutes ago", elapsed.num_minutes())
+                        format!("Synced {elapsed} minutes ago", elapsed = elapsed.num_minutes())
                     } else if elapsed.num_hours() < 24 {
-                        format!("Synced {} hours ago", elapsed.num_hours())
+                        format!("Synced {elapsed} hours ago", elapsed = elapsed.num_hours())
                     } else {
-                        format!("Synced {} days ago", elapsed.num_days())
+                        format!("Synced {elapsed} days ago", elapsed = elapsed.num_days())
                     }
                 }
                 None => "Never synced".to_string(),
             }
+        } else {
+            "No local data - sync needed".to_string()
         }
     }
 
-    /// Get data summary
+    /// Get a summary of local data
+    #[must_use]
     pub fn data_summary(&self) -> String {
         format!("{} projects, {} tasks", self.project_count, self.task_count)
     }

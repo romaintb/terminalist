@@ -4,6 +4,7 @@ use ratatui::{
 };
 
 /// Alternative badge styles that work better in terminals with limited color support
+#[derive(Debug, Clone, Copy)]
 pub enum TerminalBadgeStyle {
     Primary,
     Success,
@@ -17,7 +18,7 @@ pub enum TerminalBadgeStyle {
 }
 
 impl TerminalBadgeStyle {
-    fn to_style(&self) -> Style {
+    fn to_style(self) -> Style {
         match self {
             // Use bright colors with proper backgrounds for better visibility
             TerminalBadgeStyle::Primary => Style::default()
@@ -44,50 +45,36 @@ impl TerminalBadgeStyle {
                 .fg(Color::White)
                 .bg(Color::Gray)
                 .add_modifier(Modifier::BOLD),
-            TerminalBadgeStyle::Bordered => Style::default()
+            TerminalBadgeStyle::Bordered | TerminalBadgeStyle::Bold => Style::default()
                 .fg(Color::White)
                 .add_modifier(Modifier::BOLD),
             TerminalBadgeStyle::Underlined => Style::default()
                 .fg(Color::White)
                 .add_modifier(Modifier::UNDERLINED | Modifier::BOLD),
-            TerminalBadgeStyle::Bold => Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
         }
     }
 }
 
-/// Create a badge using reverse video (works in most terminals)
+/// Create a terminal-optimized badge with text and style
+#[must_use]
 pub fn create_terminal_badge(text: &str, style: TerminalBadgeStyle) -> Span<'static> {
-    Span::styled(format!(" {} ", text), style.to_style())
-}
-
-/// Create badges with Unicode box drawing (no color needed)
-pub fn create_box_badge(text: &str) -> Span<'static> {
-    Span::styled(
-        format!("┌{}┐", text),
-        Style::default()
-            .fg(Color::White)
-            .add_modifier(Modifier::BOLD),
-    )
+    Span::styled(format!(" {text} "), style.to_style())
 }
 
 /// Create badges with brackets (ASCII fallback)
+#[must_use]
 pub fn create_bracket_badge(text: &str, style: TerminalBadgeStyle) -> Span<'static> {
-    Span::styled(format!("[{}]", text), style.to_style())
+    Span::styled(format!("[{text}]"), style.to_style())
 }
 
 /// Create badges with parentheses
+#[must_use]
 pub fn create_paren_badge(text: &str, style: TerminalBadgeStyle) -> Span<'static> {
-    Span::styled(format!("({})", text), style.to_style())
-}
-
-/// Create simple text badges with modifiers only
-pub fn create_text_badge(text: &str, style: TerminalBadgeStyle) -> Span<'static> {
-    Span::styled(text.to_string(), style.to_style())
+    Span::styled(format!("({text})"), style.to_style())
 }
 
 /// Create task badges optimized for terminal compatibility
+#[must_use]
 pub fn create_terminal_task_badges(
     is_recurring: bool,
     has_deadline: bool,
@@ -110,7 +97,7 @@ pub fn create_terminal_task_badges(
 
     if label_count > 0 {
         badges.push(create_bracket_badge(
-            &format!("{}L", label_count),
+            &format!("{label_count}L"),
             TerminalBadgeStyle::Success,
         ));
     }
@@ -119,6 +106,7 @@ pub fn create_terminal_task_badges(
 }
 
 /// Create priority badges with better terminal support
+#[must_use]
 pub fn create_terminal_priority_badge(priority: i32) -> Option<Span<'static>> {
     match priority {
         4 => Some(create_terminal_badge("P0", TerminalBadgeStyle::Danger)), // Urgent
@@ -127,40 +115,4 @@ pub fn create_terminal_priority_badge(priority: i32) -> Option<Span<'static>> {
         1 => Some(create_terminal_badge("P3", TerminalBadgeStyle::Secondary)), // Low
         _ => None,                                                         // No priority
     }
-}
-
-/// Create alternative badge styles for testing
-pub fn create_test_badges() -> Vec<(&'static str, Span<'static>)> {
-    vec![
-        (
-            "Terminal Primary",
-            create_terminal_badge("PRIMARY", TerminalBadgeStyle::Primary),
-        ),
-        (
-            "Terminal Success",
-            create_terminal_badge("SUCCESS", TerminalBadgeStyle::Success),
-        ),
-        (
-            "Terminal Warning",
-            create_terminal_badge("WARNING", TerminalBadgeStyle::Warning),
-        ),
-        (
-            "Terminal Danger",
-            create_terminal_badge("DANGER", TerminalBadgeStyle::Danger),
-        ),
-        ("Box Badge", create_box_badge("BOX")),
-        (
-            "Bracket Badge",
-            create_bracket_badge("BRACKET", TerminalBadgeStyle::Info),
-        ),
-        (
-            "Paren Badge",
-            create_paren_badge("PAREN", TerminalBadgeStyle::Secondary),
-        ),
-        ("Text Bold", create_text_badge("BOLD", TerminalBadgeStyle::Bold)),
-        (
-            "Text Underlined",
-            create_text_badge("UNDERLINE", TerminalBadgeStyle::Underlined),
-        ),
-    ]
 }

@@ -25,128 +25,68 @@ impl HelpPanel {
         let help_area = LayoutManager::centered_rect(help_width, help_height, f.size());
         f.render_widget(Clear, help_area);
         
-        let help_content = r#"
-TERMINALIST - Todoist Terminal Client
-====================================
-
-NAVIGATION & FOCUS
-==================
-  ← →          Navigate between projects (left sidebar)
-  ↑ ↓          Navigate between tasks (main pane)
-  Tab          Focus next pane
-  Shift+Tab    Focus previous pane
-  h/l          Alternative navigation keys (vim-style)
-
-TASK MANAGEMENT
-===============
-  Space/Enter  Toggle task completion (complete ↔ reopen)
-  d            Delete selected task (with confirmation, cannot redelete)
-  r            Refresh/sync with Todoist API
-  n            Create new task (coming soon)
-  e            Edit selected task (coming soon)
-
-PROJECT MANAGEMENT
-==================
-  p            Create new project (coming soon)
-  e            Edit project (coming soon)
-  f            Toggle project favorite status (coming soon)
-
-SYNC & DATA
-===========
-  r            Force refresh from Todoist
-  Auto-sync    Background sync every 5 minutes
-  Offline      Browse cached data when offline
-  Local DB     SQLite storage in ~/.local/share/terminalist/
-
-GENERAL CONTROLS
-================
-  ?            Toggle this help panel
-  q            Quit application gracefully
-  Ctrl+C      Force quit (emergency exit)
-
-HELP PANEL SCROLLING
-====================
-  ↑/k         Scroll up one line
-  ↓/j         Scroll down one line
-  PageUp      Scroll up 10 lines
-  PageDown    Scroll down 10 lines
-  Home        Jump to top
-  End         Jump to bottom
-  Esc/?       Close help panel
-
-STATUS INDICATORS & BADGES
-==========================
-  ✅           Completed task (dimmed, green)
-  🔳           Pending task (normal, white)
-  ❌           Deleted task (red, strikethrough)
-
-  Task Ordering:
-  - Pending tasks appear first
-  - Completed tasks appear second
-  - Deleted tasks appear last
-  - Deleted tasks cannot be redeleted
-  
-  Priority Levels:
-  [P0]         P1 - Urgent (highest) - Red background
-  [P1]         P2 - High - Yellow background
-  [P2]         P3 - Medium - Cyan background  
-  [P3]         P4 - Low - Gray background
-  (no badge)   P4 - Normal (lowest priority)
-  
-  Task Metadata:
-  🔄REC       Recurring task (blue badge)
-  ⏰DUE       Task with deadline (red badge)
-  (2h)        Duration estimate (yellow badge)
-  (30m)       Duration in minutes
-  (3L)        Number of labels (green badge)
-
-INTERFACE LAYOUT
-================
-  Left Sidebar (30% width, max 25 chars):
-    - Project list with favorites (⭐)
-    - Responsive width adaptation
-    - Long names truncated with ellipsis (...)
-  
-  Main Pane (70% width):
-    - Tasks for selected project
-    - Rich metadata display
-    - Interactive selection
-  
-  Status Bar (bottom):
-    - Current project name
-    - Task counts (pending/completed)
-    - Sync status indicators
-    - Keyboard shortcut hints
-
-SYNC MECHANISM
-==============
-  Local Storage: SQLite database for instant loading
-  Smart Sync: Background refresh every 5 minutes
-  Manual Sync: Press 'r' for immediate refresh
-  Offline Support: Browse cached data when disconnected
-  Error Handling: Graceful fallback for network issues
-
-PERFORMANCE FEATURES
-====================
-  Instant startup from local cache
-  Background sync without blocking UI
-  Efficient memory usage
-  Responsive keyboard navigation
-  Adaptive terminal size handling
-
-TROUBLESHOOTING
-===============
-  No tasks showing: Press 'r' to sync
-  Can't navigate: Check if project is selected
-  Sync errors: Check API token and network
-  Display issues: Resize terminal window
-  Performance: Wait for background sync
-
-For more information, visit the project repository
-or check the README.md file for detailed setup instructions.
-
-Press 'Esc' or '?' to close this help panel
-        "#;
+        let help_content = r"
+        TERMINALIST - Todoist Terminal Client
+        ====================================
+        
+        NAVIGATION
+        ----------
+        ↑↓          Navigate projects/tasks
+        ←→          Switch between projects and tasks
+        Tab         Switch focus between panes
+        Enter       Select project/task or confirm action
+        Esc         Cancel action or close dialogs
+        
+        PROJECT MANAGEMENT
+        ------------------
+        p           Previous project
+        n           Next project
+        s           Sync projects and tasks
+        
+        TASK MANAGEMENT
+        ---------------
+        Space       Toggle task completion
+        d           Delete task (with confirmation)
+        r           Reopen completed task
+        c           Mark task as completed
+        
+        SYNC & DATA
+        ------------
+        s           Force sync with Todoist
+        Ctrl+C      Quit application
+        
+        GENERAL CONTROLS
+        ----------------
+        ?           Toggle help panel
+        q           Quit application
+        
+        HELP PANEL SCROLLING
+        --------------------
+        ↑↓          Scroll help content up/down
+        Home        Jump to top of help
+        End         Jump to bottom of help
+        
+        STATUS INDICATORS & BADGES
+        ---------------------------
+        🔳          Pending task
+        ✅          Completed task
+        ❌          Deleted task
+        
+        Priority badges: [P0] (urgent), [P1] (high), [P2] (medium), [P3] (low), no badge (normal)
+        
+        LAYOUT DETAILS
+        ---------------
+        Left pane:  Projects list with selection
+        Right pane: Tasks for selected project
+        Bottom:     Status bar with shortcuts
+        Help:       Modal overlay with scrollable content
+        
+        TASK ORDERING
+        --------------
+        Tasks are ordered: pending, then completed, then deleted
+        
+        Press 'Esc' or '?' to close this help panel
+        ";
         
         // Apply scroll offset to the content
         let lines: Vec<&str> = help_content.lines().collect();
@@ -174,12 +114,12 @@ Press 'Esc' or '?' to close this help panel
             } else {
                 0
             };
-            format!("\n\n[Scroll: {}% - ↑↓ to navigate, Home/End for extremes]", scroll_percent)
+            format!("\n\n[Scroll: {scroll_percent}% - ↑↓ to navigate, Home/End for extremes]")
         } else {
             String::new()
         };
         
-        let final_text = format!("{}{}", help_text, scroll_indicator);
+        let final_text = format!("{help_text}{scroll_indicator}");
         
         let help_paragraph = Paragraph::new(final_text)
             .block(

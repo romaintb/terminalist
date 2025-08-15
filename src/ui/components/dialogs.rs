@@ -52,8 +52,7 @@ impl DeleteConfirmationDialog {
                 };
 
                 let confirm_text = format!(
-                    "Delete task?\n\n\"{}\"\n\nThis action cannot be undone!\n\nPress 'y' to confirm or 'n'/Esc to cancel",
-                    task_preview
+                    "Delete task?\n\n\"{task_preview}\"\n\nThis action cannot be undone!\n\nPress 'y' to confirm or 'n'/Esc to cancel",
                 );
 
                 let confirm_paragraph = Paragraph::new(confirm_text)

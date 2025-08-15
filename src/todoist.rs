@@ -13,8 +13,8 @@ pub struct TodoistWrapper {
 }
 
 impl TodoistWrapper {
-    /// Create a new Todoist wrapper with your API token
-    /// You can get your API token from: https://todoist.com/prefs/integrations
+    /// Create a new Todoist client
+    #[must_use]
     pub fn new(api_token: String) -> Self {
         let client = Client::builder()
             .timeout(std::time::Duration::from_secs(10))
@@ -267,7 +267,7 @@ impl From<Task> for TaskDisplay {
             priority: task.priority,
             due: task.due.as_ref().map(|d| d.string.clone()),
             due_datetime: task.due.as_ref().and_then(|d| d.datetime.clone()),
-            is_recurring: task.due.as_ref().map(|d| d.is_recurring).unwrap_or(false),
+            is_recurring: task.due.as_ref().is_some_and(|d| d.is_recurring),
             deadline: task.deadline.map(|d| d.date),
             duration: duration_string,
             labels: task.labels,

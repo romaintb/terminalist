@@ -72,7 +72,7 @@ impl TasksList {
                         Style::default().fg(Color::White)
                     };
                     line_spans.push(Span::styled(
-                        format!("{} ", status_icon),
+                        format!("{status_icon} "),
                         status_style
                     ));
                     

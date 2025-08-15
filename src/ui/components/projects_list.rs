@@ -40,7 +40,7 @@ impl ProjectsList {
                 };
 
                 ListItem::new(Line::from(vec![
-                    Span::styled(format!("{} ", icon), style),
+                    Span::styled(format!("{icon} "), style),
                     Span::styled(display_name, style),
                 ]))
             })

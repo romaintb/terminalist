@@ -3,6 +3,7 @@ use ratatui::{
     text::Span,
 };
 
+#[derive(Debug, Clone, Copy)]
 /// Badge styles for different types of information
 pub enum BadgeStyle {
     Primary,
@@ -14,7 +15,7 @@ pub enum BadgeStyle {
 }
 
 impl BadgeStyle {
-    fn to_style(&self) -> Style {
+    fn to_style(self) -> Style {
         match self {
             BadgeStyle::Primary => Style::default()
                 .bg(Color::Blue)
@@ -45,27 +46,30 @@ impl BadgeStyle {
 }
 
 /// Create a badge with text and style
+#[must_use]
 pub fn create_badge(text: &str, style: BadgeStyle) -> Span<'static> {
-    Span::styled(format!(" {} ", text), style.to_style())
+    Span::styled(format!(" {text} "), style.to_style())
 }
 
 /// Create a compact badge with icon and text
+#[must_use]
 pub fn create_compact_badge(icon: &str, text: &str, style: BadgeStyle) -> Span<'static> {
-    Span::styled(format!("{}{}", icon, text), style.to_style())
+    Span::styled(format!("{icon}{text}"), style.to_style())
 }
 
-/// Create a priority badge based on Todoist priority levels
+/// Create a priority badge based on priority level
+#[must_use]
 pub fn create_priority_badge(priority: i32) -> Option<Span<'static>> {
     match priority {
         4 => Some(create_badge("P1", BadgeStyle::Danger)),  // Urgent
         3 => Some(create_badge("P2", BadgeStyle::Warning)), // High
         2 => Some(create_badge("P3", BadgeStyle::Info)),    // Medium
-        1 => None,                                          // Normal priority - no badge
         _ => None,
     }
 }
 
-/// Create badges for task metadata
+/// Create a collection of task metadata badges
+#[must_use]
 pub fn create_task_badges(
     is_recurring: bool,
     has_deadline: bool,
@@ -87,30 +91,8 @@ pub fn create_task_badges(
     }
 
     if label_count > 0 {
-        badges.push(create_badge(&format!("{}L", label_count), BadgeStyle::Success));
+        badges.push(create_badge(&format!("{label_count}L"), BadgeStyle::Success));
     }
 
     badges
-}
-
-/// Create a status badge
-pub fn create_status_badge(is_completed: bool) -> Span<'static> {
-    if is_completed {
-        create_badge("DONE", BadgeStyle::Success)
-    } else {
-        create_badge("TODO", BadgeStyle::Secondary)
-    }
-}
-
-/// Create bordered badges using Unicode box drawing
-pub fn create_bordered_badge(text: &str, color: Color) -> Span<'static> {
-    Span::styled(
-        format!("┤{}├", text),
-        Style::default().fg(color).add_modifier(Modifier::BOLD),
-    )
-}
-
-/// Create pill-shaped badges
-pub fn create_pill_badge(text: &str, style: BadgeStyle) -> Span<'static> {
-    Span::styled(format!("◖{}◗", text), style.to_style())
 }
