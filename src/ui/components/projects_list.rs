@@ -18,13 +18,29 @@ impl ProjectsList {
     pub fn render(f: &mut Frame, area: ratatui::layout::Rect, app: &App) {
         let (_sidebar_width, max_name_width) = super::super::layout::LayoutManager::sidebar_constraints(area.width);
         
-        let project_items: Vec<ListItem> = app
-            .projects
+        // Sort projects: favorites first, then non-favorites, maintaining original order within each group
+        let mut sorted_projects: Vec<_> = app.projects.iter().enumerate().collect();
+        sorted_projects.sort_by(|(a_idx, a_project), (b_idx, b_project)| {
+            match (a_project.is_favorite, b_project.is_favorite) {
+                (true, false) => std::cmp::Ordering::Less,    // a (favorite) comes before b (non-favorite)
+                (false, true) => std::cmp::Ordering::Greater, // a (non-favorite) comes after b (favorite)
+                _ => {
+                    // Same favorite status, sort by name, then by original index for stability
+                    let name_cmp = a_project.name.cmp(&b_project.name);
+                    if name_cmp == std::cmp::Ordering::Equal {
+                        a_idx.cmp(b_idx)
+                    } else {
+                        name_cmp
+                    }
+                }
+            }
+        });
+        
+        let project_items: Vec<ListItem> = sorted_projects
             .iter()
-            .enumerate()
-            .map(|(i, project)| {
+            .map(|(original_index, project)| {
                 let icon = if project.is_favorite { "⭐" } else { "📁" };
-                let style = if i == app.selected_project_index {
+                let style = if *original_index == app.selected_project_index {
                     Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD)

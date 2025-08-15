@@ -62,6 +62,56 @@ impl App {
         }
     }
 
+    /// Get projects sorted with favorites first, maintaining original order within each group
+    #[must_use]
+    pub fn get_sorted_projects(&self) -> Vec<(usize, &ProjectDisplay)> {
+        let mut sorted_projects: Vec<_> = self.projects.iter().enumerate().collect();
+        sorted_projects.sort_by(|(a_idx, a_project), (b_idx, b_project)| {
+            match (a_project.is_favorite, b_project.is_favorite) {
+                (true, false) => std::cmp::Ordering::Less,    // a (favorite) comes before b (non-favorite)
+                (false, true) => std::cmp::Ordering::Greater, // a (non-favorite) comes after b (favorite)
+                _ => {
+                    // Same favorite status, sort by name, then by original index for stability
+                    let name_cmp = a_project.name.cmp(&b_project.name);
+                    if name_cmp == std::cmp::Ordering::Equal {
+                        a_idx.cmp(b_idx)
+                    } else {
+                        name_cmp
+                    }
+                }
+            }
+        });
+        sorted_projects
+    }
+
+    /// Get the currently selected project from the sorted display order
+    #[must_use]
+    pub fn get_selected_project_from_sorted(&self) -> Option<&ProjectDisplay> {
+        let sorted_projects = self.get_sorted_projects();
+        let display_index = sorted_projects
+            .iter()
+            .position(|(original_idx, _)| *original_idx == self.selected_project_index)?;
+        Some(sorted_projects[display_index].1)
+    }
+
+    /// Get the display index (position in sorted list) for the currently selected project
+    #[must_use]
+    pub fn get_selected_project_display_index(&self) -> Option<usize> {
+        let sorted_projects = self.get_sorted_projects();
+        sorted_projects
+            .iter()
+            .position(|(original_idx, _)| *original_idx == self.selected_project_index)
+    }
+
+    /// Select project by display index (position in sorted list)
+    pub fn select_project_by_display_index(&mut self, display_index: usize) {
+        let sorted_projects = self.get_sorted_projects();
+        if let Some((original_index, _)) = sorted_projects.get(display_index) {
+            self.selected_project_index = *original_index;
+            self.project_list_state.select(Some(display_index));
+        }
+    }
+
     pub async fn load_local_data(&mut self, sync_service: &SyncService) {
         self.loading = true;
         self.error_message = None;
@@ -139,19 +189,23 @@ impl App {
 
     pub fn next_project(&mut self) {
         if !self.projects.is_empty() {
-            self.selected_project_index = (self.selected_project_index + 1) % self.projects.len();
-            self.project_list_state.select(Some(self.selected_project_index));
+            let sorted_projects = self.get_sorted_projects();
+            let current_display_index = self.get_selected_project_display_index().unwrap_or(0);
+            let next_display_index = (current_display_index + 1) % sorted_projects.len();
+            self.select_project_by_display_index(next_display_index);
         }
     }
 
     pub fn previous_project(&mut self) {
         if !self.projects.is_empty() {
-            self.selected_project_index = if self.selected_project_index == 0 {
-                self.projects.len() - 1
+            let sorted_projects = self.get_sorted_projects();
+            let current_display_index = self.get_selected_project_display_index().unwrap_or(0);
+            let prev_display_index = if current_display_index == 0 {
+                sorted_projects.len() - 1
             } else {
-                self.selected_project_index - 1
+                current_display_index - 1
             };
-            self.project_list_state.select(Some(self.selected_project_index));
+            self.select_project_by_display_index(prev_display_index);
         }
     }
 
