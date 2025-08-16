@@ -3,8 +3,10 @@ use ratatui::{
     text::Span,
 };
 
-/// Alternative badge styles that work better in terminals with limited color support
+use crate::todoist::LabelDisplay;
+
 #[derive(Debug, Clone, Copy)]
+/// Badge styles optimized for terminal compatibility
 pub enum TerminalBadgeStyle {
     Primary,
     Success,
@@ -13,8 +15,8 @@ pub enum TerminalBadgeStyle {
     Info,
     Secondary,
     Bordered,
-    Underlined,
     Bold,
+    Underlined,
 }
 
 impl TerminalBadgeStyle {
@@ -73,13 +75,42 @@ pub fn create_paren_badge(text: &str, style: TerminalBadgeStyle) -> Span<'static
     Span::styled(format!("({text})"), style.to_style())
 }
 
+/// Create a label badge with custom color
+#[must_use]
+pub fn create_terminal_label_badge(name: &str, color: &str) -> Span<'static> {
+    // Convert Todoist color names to terminal colors
+    let bg_color = match color.to_lowercase().as_str() {
+        "red" => Color::Red,
+        "orange" => Color::Rgb(255, 165, 0), // Orange
+        "yellow" => Color::Yellow,
+        "green" => Color::Green,
+        "blue" => Color::Blue,
+        "purple" => Color::Magenta,
+        "pink" => Color::Rgb(255, 192, 203), // Pink
+        "brown" => Color::Rgb(139, 69, 19),  // Brown
+        "charcoal" => Color::DarkGray,
+        "gray" => Color::Gray,
+        "silver" => Color::White, // Changed from LightGray which doesn't exist
+        "teal" => Color::Cyan,
+        "navy" => Color::Rgb(0, 0, 128),    // Navy
+        _ => Color::Blue, // Default fallback
+    };
+
+    let style = Style::default()
+        .bg(bg_color)
+        .fg(Color::White)
+        .add_modifier(Modifier::BOLD);
+
+    Span::styled(format!(" {name} "), style)
+}
+
 /// Create task badges optimized for terminal compatibility
 #[must_use]
 pub fn create_terminal_task_badges(
     is_recurring: bool,
     has_deadline: bool,
     duration: Option<&str>,
-    label_count: usize,
+    labels: &[LabelDisplay],
 ) -> Vec<Span<'static>> {
     let mut badges = Vec::new();
 
@@ -95,11 +126,9 @@ pub fn create_terminal_task_badges(
         badges.push(create_paren_badge(duration, TerminalBadgeStyle::Warning));
     }
 
-    if label_count > 0 {
-        badges.push(create_bracket_badge(
-            &format!("{label_count}L"),
-            TerminalBadgeStyle::Success,
-        ));
+    // Add label badges
+    for label in labels {
+        badges.push(create_terminal_label_badge(&label.name, &label.color));
     }
 
     badges

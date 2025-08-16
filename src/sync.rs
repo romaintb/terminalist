@@ -138,6 +138,16 @@ impl SyncService {
             }
         };
 
+        // Fetch all labels from API
+        let labels = match self.todoist.get_labels().await {
+            Ok(labels) => labels,
+            Err(e) => {
+                return Ok(SyncStatus::Error {
+                    message: format!("Failed to fetch labels: {e}"),
+                });
+            }
+        };
+
         // Store in local database
         {
             let storage = self.storage.lock().await;
@@ -151,6 +161,12 @@ impl SyncService {
             if let Err(e) = storage.store_tasks(tasks).await {
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to store tasks: {e}"),
+                });
+            }
+
+            if let Err(e) = storage.store_labels(labels).await {
+                return Ok(SyncStatus::Error {
+                    message: format!("Failed to store labels: {e}"),
                 });
             }
         }

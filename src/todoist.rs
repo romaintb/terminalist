@@ -12,6 +12,13 @@ pub struct ProjectDisplay {
 }
 
 #[derive(Debug, Clone)]
+pub struct LabelDisplay {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+}
+
+#[derive(Debug, Clone)]
 pub struct TaskDisplay {
     pub id: String,
     pub content: String,
@@ -24,7 +31,7 @@ pub struct TaskDisplay {
     pub is_recurring: bool,
     pub deadline: Option<String>,
     pub duration: Option<String>,
-    pub labels: Vec<String>,
+    pub labels: Vec<LabelDisplay>,
     pub description: String,
 }
 
@@ -50,6 +57,13 @@ impl From<Task> for TaskDisplay {
             _ => format!("{} {}", d.amount, d.unit),
         });
 
+        // Convert label names to LabelDisplay objects (colors will be filled in later)
+        let labels = task.labels.into_iter().map(|name| LabelDisplay {
+            id: name.clone(), // Use name as ID for now
+            name,
+            color: "blue".to_string(), // Default color, will be updated from storage
+        }).collect();
+
         Self {
             id: task.id,
             content: task.content,
@@ -62,7 +76,7 @@ impl From<Task> for TaskDisplay {
             is_recurring: task.due.as_ref().map(|d| d.is_recurring).unwrap_or(false),
             deadline: task.deadline.as_ref().map(|d| d.date.clone()),
             duration: duration_string,
-            labels: task.labels,
+            labels,
             description: task.description,
         }
     }
@@ -136,6 +150,8 @@ mod tests {
         assert_eq!(display.due, Some("2023-01-02".to_string()));
         assert!(display.is_recurring);
         assert_eq!(display.duration, Some("30m".to_string()));
-        assert_eq!(display.labels, vec!["label1".to_string(), "label2".to_string()]);
+        assert_eq!(display.labels.len(), 2);
+        assert_eq!(display.labels[0].name, "label1");
+        assert_eq!(display.labels[1].name, "label2");
     }
 }

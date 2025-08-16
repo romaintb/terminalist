@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePool, Row};
 
-use crate::todoist::{Project, Task, ProjectDisplay, TaskDisplay};
+use crate::todoist::{Project, Task, ProjectDisplay, TaskDisplay, Label};
 
 /// Local project representation with sync metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -38,6 +38,17 @@ pub struct LocalTask {
     pub last_synced: String,
 }
 
+/// Local label representation with sync metadata
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct LocalLabel {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+    pub order_index: i32,
+    pub is_favorite: bool,
+    pub last_synced: DateTime<Utc>,
+}
+
 impl From<LocalProject> for ProjectDisplay {
     fn from(local: LocalProject) -> Self {
         Self {
@@ -52,6 +63,16 @@ impl From<LocalProject> for ProjectDisplay {
 
 impl From<LocalTask> for TaskDisplay {
     fn from(local: LocalTask) -> Self {
+        // Parse labels from JSON string
+        let label_names: Vec<String> = serde_json::from_str(&local.labels).unwrap_or_default();
+        
+        // Convert label names to LabelDisplay objects (colors will be filled in later)
+        let labels = label_names.into_iter().map(|name| crate::todoist::LabelDisplay {
+            id: name.clone(), // Use name as ID for now
+            name,
+            color: "blue".to_string(), // Default color, will be updated from storage
+        }).collect();
+
         Self {
             id: local.id,
             content: local.content,
@@ -64,7 +85,7 @@ impl From<LocalTask> for TaskDisplay {
             is_recurring: local.is_recurring,
             deadline: local.deadline,
             duration: local.duration,
-            labels: serde_json::from_str(&local.labels).unwrap_or_default(),
+            labels,
             description: local.description.unwrap_or_default(),
         }
     }
@@ -110,6 +131,19 @@ impl From<Task> for LocalTask {
             labels: serde_json::to_string(&task.labels).unwrap_or_default(),
             description: Some(task.description),
             last_synced: Utc::now().to_rfc3339(),
+        }
+    }
+}
+
+impl From<Label> for LocalLabel {
+    fn from(label: Label) -> Self {
+        Self {
+            id: label.id,
+            name: label.name,
+            color: label.color,
+            order_index: label.order,
+            is_favorite: label.is_favorite,
+            last_synced: Utc::now(),
         }
     }
 }
@@ -170,6 +204,22 @@ impl LocalStorage {
                 deadline TEXT,
                 duration TEXT,
                 labels TEXT NOT NULL DEFAULT '',
+                last_synced TEXT NOT NULL
+            )
+            ",
+        )
+        .execute(&self.pool)
+        .await?;
+
+        // Create labels table
+        sqlx::query(
+            r"
+            CREATE TABLE IF NOT EXISTS labels (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                color TEXT NOT NULL,
+                order_index INTEGER NOT NULL DEFAULT 0,
+                is_favorite BOOLEAN NOT NULL DEFAULT 0,
                 last_synced TEXT NOT NULL
             )
             ",
@@ -270,6 +320,113 @@ impl LocalStorage {
         Ok(())
     }
 
+    /// Store labels in local database
+    pub async fn store_labels(&self, labels: Vec<Label>) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        // Clear existing labels
+        sqlx::query("DELETE FROM labels")
+            .execute(&mut *tx)
+            .await?;
+
+        // Insert new labels
+        for label in labels {
+            let local_label: LocalLabel = label.into();
+            sqlx::query(
+                r"
+                INSERT INTO labels (id, name, color, order_index, is_favorite, last_synced)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ",
+            )
+            .bind(&local_label.id)
+            .bind(&local_label.name)
+            .bind(&local_label.color)
+            .bind(local_label.order_index)
+            .bind(local_label.is_favorite)
+            .bind(local_label.last_synced)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        self.update_sync_timestamp("labels").await?;
+        Ok(())
+    }
+
+    /// Get labels by their IDs
+    pub async fn get_labels_by_ids(&self, label_ids: &[String]) -> Result<Vec<LocalLabel>> {
+        if label_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Create placeholders for the IN clause
+        let placeholders = label_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let query = format!("SELECT * FROM labels WHERE id IN ({}) ORDER BY order_index", placeholders);
+        
+        let mut query_builder = sqlx::query_as::<_, LocalLabel>(&query);
+        for id in label_ids {
+            query_builder = query_builder.bind(id);
+        }
+        
+        let labels = query_builder.fetch_all(&self.pool).await?;
+        Ok(labels)
+    }
+
+    /// Get all labels from local storage
+    pub async fn get_all_labels(&self) -> Result<Vec<LocalLabel>> {
+        let rows = sqlx::query(
+            r"
+            SELECT id, name, color, order_index, is_favorite, last_synced
+            FROM labels 
+            ORDER BY order_index ASC, name ASC
+            ",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let labels = rows
+            .into_iter()
+            .map(|row| LocalLabel {
+                id: row.get("id"),
+                name: row.get("name"),
+                color: row.get("color"),
+                order_index: row.get("order_index"),
+                is_favorite: row.get("is_favorite"),
+                last_synced: row.get("last_synced"),
+            })
+            .collect();
+
+        Ok(labels)
+    }
+
+    /// Update task labels with proper color information
+    pub async fn update_task_labels(&self, task_display: &mut TaskDisplay) -> Result<()> {
+        if task_display.labels.is_empty() {
+            return Ok(());
+        }
+
+        // Extract label names from the task
+        let label_names: Vec<String> = task_display.labels.iter().map(|l| l.name.clone()).collect();
+        
+        // Get the actual label objects from storage
+        let stored_labels = self.get_labels_by_ids(&label_names).await?;
+        
+        // Create a map of label names to colors
+        let mut label_color_map = std::collections::HashMap::new();
+        for label in stored_labels {
+            label_color_map.insert(label.name, label.color);
+        }
+        
+        // Update the task labels with proper colors
+        for label_display in &mut task_display.labels {
+            if let Some(color) = label_color_map.get(&label_display.name) {
+                label_display.color = color.clone();
+            }
+        }
+        
+        Ok(())
+    }
+
     /// Delete a project and all its tasks
     pub async fn delete_project(&self, project_id: &str) -> Result<()> {
         let mut tx = self.pool.begin().await?;
@@ -323,24 +480,41 @@ impl LocalStorage {
         .fetch_all(&self.pool)
         .await?;
 
-        let tasks = rows
+        let mut tasks = rows
             .into_iter()
-            .map(|row| TaskDisplay {
-                id: row.get("id"),
-                content: row.get("content"),
-                project_id: row.get("project_id"),
-                is_completed: row.get("is_completed"),
-                is_deleted: row.get("is_deleted"),
-                priority: row.get("priority"),
-                due: row.get("due_date"),
-                due_datetime: row.get("due_datetime"),
-                is_recurring: row.get("is_recurring"),
-                deadline: row.get("deadline"),
-                duration: row.get("duration"),
-                labels: serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default(),
-                description: row.get("description"),
+            .map(|row| {
+                // Parse labels from JSON string
+                let label_names: Vec<String> = serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
+                
+                // Convert label names to LabelDisplay objects (colors will be filled in later)
+                let labels = label_names.into_iter().map(|name| crate::todoist::LabelDisplay {
+                    id: name.clone(), // Use name as ID for now
+                    name,
+                    color: "blue".to_string(), // Default color, will be updated from storage
+                }).collect();
+
+                TaskDisplay {
+                    id: row.get("id"),
+                    content: row.get("content"),
+                    project_id: row.get("project_id"),
+                    is_completed: row.get("is_completed"),
+                    is_deleted: row.get("is_deleted"),
+                    priority: row.get("priority"),
+                    due: row.get("due_date"),
+                    due_datetime: row.get("due_datetime"),
+                    is_recurring: row.get("is_recurring"),
+                    deadline: row.get("deadline"),
+                    duration: row.get("duration"),
+                    labels,
+                    description: row.get("description"),
+                }
             })
-            .collect();
+            .collect::<Vec<TaskDisplay>>();
+
+        // Update label colors for all tasks
+        for task in &mut tasks {
+            self.update_task_labels(task).await?;
+        }
 
         Ok(tasks)
     }
@@ -357,24 +531,41 @@ impl LocalStorage {
         .fetch_all(&self.pool)
         .await?;
 
-        let tasks = rows
+        let mut tasks = rows
             .into_iter()
-            .map(|row| TaskDisplay {
-                id: row.get("id"),
-                content: row.get("content"),
-                project_id: row.get("project_id"),
-                is_completed: row.get("is_completed"),
-                is_deleted: row.get("is_deleted"),
-                priority: row.get("priority"),
-                due: row.get("due_date"),
-                due_datetime: row.get("due_datetime"),
-                is_recurring: row.get("is_recurring"),
-                deadline: row.get("deadline"),
-                duration: row.get("duration"),
-                labels: serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default(),
-                description: row.get("description"),
+            .map(|row| {
+                // Parse labels from JSON string
+                let label_names: Vec<String> = serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
+                
+                // Convert label names to LabelDisplay objects (colors will be filled in later)
+                let labels = label_names.into_iter().map(|name| crate::todoist::LabelDisplay {
+                    id: name.clone(), // Use name as ID for now
+                    name,
+                    color: "blue".to_string(), // Default color, will be updated from storage
+                }).collect();
+
+                TaskDisplay {
+                    id: row.get("id"),
+                    content: row.get("content"),
+                    project_id: row.get("project_id"),
+                    is_completed: row.get("is_completed"),
+                    is_deleted: row.get("is_deleted"),
+                    priority: row.get("priority"),
+                    due: row.get("due_date"),
+                    due_datetime: row.get("due_datetime"),
+                    is_recurring: row.get("is_recurring"),
+                    deadline: row.get("deadline"),
+                    duration: row.get("duration"),
+                    labels,
+                    description: row.get("description"),
+                }
             })
-            .collect();
+            .collect::<Vec<TaskDisplay>>();
+
+        // Update label colors for all tasks
+        for task in &mut tasks {
+            self.update_task_labels(task).await?;
+        }
 
         Ok(tasks)
     }

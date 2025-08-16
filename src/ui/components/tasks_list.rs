@@ -57,7 +57,7 @@ impl TasksList {
                         task.is_recurring,
                         task.due.is_some() || task.deadline.is_some(),
                         task.duration.as_deref(),
-                        task.labels.len(),
+                        &task.labels,
                     );
                     
                     // Build the line with multiple spans for proper color rendering
