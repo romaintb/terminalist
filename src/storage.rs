@@ -123,28 +123,8 @@ pub struct LocalStorage {
 impl LocalStorage {
     /// Initialize the local storage with `SQLite` database
     pub async fn new() -> Result<Self> {
-        // Create data directory if it doesn't exist
-        let data_dir = dirs::data_dir()
-            .unwrap_or_else(|| std::env::current_dir().unwrap())
-            .join("terminalist");
-
-        // Ensure directory exists and is writable
-        if let Err(e) = std::fs::create_dir_all(&data_dir) {
-            eprintln!("Warning: Could not create data directory {}: {}", data_dir.display(), e);
-            eprintln!("Falling back to current directory for database storage.");
-
-            // Fallback to current directory
-            let fallback_path = std::env::current_dir()?.join("terminalist.db");
-            let database_url = format!("sqlite:{}?mode=rwc", fallback_path.display());
-            let pool = SqlitePool::connect(&database_url).await?;
-            let storage = LocalStorage { pool };
-            storage.init_schema().await?;
-            storage.run_migrations().await?;
-            return Ok(storage);
-        }
-
-        let db_path = data_dir.join("terminalist.db");
-        let database_url = format!("sqlite:{}?mode=rwc", db_path.display());
+        // Use in-memory SQLite database for ephemeral storage
+        let database_url = "sqlite::memory:".to_string();
         let pool = SqlitePool::connect(&database_url).await?;
         let storage = LocalStorage { pool };
         storage.init_schema().await?;

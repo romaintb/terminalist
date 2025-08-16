@@ -25,5 +25,4 @@ sqlx = { version = "0.7", features = [
     "uuid",
 ] }
 chrono = { version = "0.4", features = ["serde"] }
-dirs = "5.0"
 todoist-api = "0.2.0"
