@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePool, Row};
 
-use crate::todoist::{Project, Task, ProjectDisplay, TaskDisplay, Label};
+use crate::todoist::{Label, Project, ProjectDisplay, Task, TaskDisplay};
 
 /// Local project representation with sync metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -65,13 +65,16 @@ impl From<LocalTask> for TaskDisplay {
     fn from(local: LocalTask) -> Self {
         // Parse labels from JSON string
         let label_names: Vec<String> = serde_json::from_str(&local.labels).unwrap_or_default();
-        
+
         // Convert label names to LabelDisplay objects (colors will be filled in later)
-        let labels = label_names.into_iter().map(|name| crate::todoist::LabelDisplay {
-            id: name.clone(), // Use name as ID for now
-            name,
-            color: "blue".to_string(), // Default color, will be updated from storage
-        }).collect();
+        let labels = label_names
+            .into_iter()
+            .map(|name| crate::todoist::LabelDisplay {
+                id: name.clone(), // Use name as ID for now
+                name,
+                color: "blue".to_string(), // Default color, will be updated from storage
+            })
+            .collect();
 
         Self {
             id: local.id,
@@ -239,7 +242,7 @@ impl LocalStorage {
         )
         .execute(&self.pool)
         .await?;
-        
+
         Ok(())
     }
 
@@ -283,9 +286,7 @@ impl LocalStorage {
         let mut tx = self.pool.begin().await?;
 
         // Clear existing tasks
-        sqlx::query("DELETE FROM tasks")
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query("DELETE FROM tasks").execute(&mut *tx).await?;
 
         // Insert new tasks
         for task in tasks {
@@ -325,9 +326,7 @@ impl LocalStorage {
         let mut tx = self.pool.begin().await?;
 
         // Clear existing labels
-        sqlx::query("DELETE FROM labels")
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query("DELETE FROM labels").execute(&mut *tx).await?;
 
         // Insert new labels
         for label in labels {
@@ -361,13 +360,13 @@ impl LocalStorage {
 
         // Create placeholders for the IN clause
         let placeholders = label_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-        let query = format!("SELECT * FROM labels WHERE id IN ({}) ORDER BY order_index", placeholders);
-        
+        let query = format!("SELECT * FROM labels WHERE id IN ({placeholders}) ORDER BY order_index");
+
         let mut query_builder = sqlx::query_as::<_, LocalLabel>(&query);
         for id in label_ids {
             query_builder = query_builder.bind(id);
         }
-        
+
         let labels = query_builder.fetch_all(&self.pool).await?;
         Ok(labels)
     }
@@ -407,50 +406,51 @@ impl LocalStorage {
 
         // Extract label names from the task
         let label_names: Vec<String> = task_display.labels.iter().map(|l| l.name.clone()).collect();
-        
+
         // Get the actual label objects from storage
         let stored_labels = self.get_labels_by_ids(&label_names).await?;
-        
+
         // Create a map of label names to colors
         let mut label_color_map = std::collections::HashMap::new();
         for label in stored_labels {
             label_color_map.insert(label.name, label.color);
         }
-        
+
         // Update the task labels with proper colors
         for label_display in &mut task_display.labels {
             if let Some(color) = label_color_map.get(&label_display.name) {
                 label_display.color = color.clone();
             }
         }
-        
+
         Ok(())
     }
 
     /// Delete a project and all its tasks
     pub async fn delete_project(&self, project_id: &str) -> Result<()> {
         let mut tx = self.pool.begin().await?;
-        
+
         // Delete tasks first, then the project
         sqlx::query("DELETE FROM tasks WHERE project_id = ?")
             .bind(project_id)
             .execute(&mut *tx)
             .await?;
-        
+
         sqlx::query("DELETE FROM projects WHERE id = ?")
             .bind(project_id)
             .execute(&mut *tx)
             .await?;
-        
+
         tx.commit().await?;
         Ok(())
     }
 
     /// Get all projects from local storage
     pub async fn get_projects(&self) -> Result<Vec<ProjectDisplay>> {
-        let rows = sqlx::query("SELECT id, name, color, is_favorite, parent_id FROM projects ORDER BY order_index, name")
-            .fetch_all(&self.pool)
-            .await?;
+        let rows =
+            sqlx::query("SELECT id, name, color, is_favorite, parent_id FROM projects ORDER BY order_index, name")
+                .fetch_all(&self.pool)
+                .await?;
 
         let projects = rows
             .into_iter()
@@ -484,14 +484,18 @@ impl LocalStorage {
             .into_iter()
             .map(|row| {
                 // Parse labels from JSON string
-                let label_names: Vec<String> = serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
-                
+                let label_names: Vec<String> =
+                    serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
+
                 // Convert label names to LabelDisplay objects (colors will be filled in later)
-                let labels = label_names.into_iter().map(|name| crate::todoist::LabelDisplay {
-                    id: name.clone(), // Use name as ID for now
-                    name,
-                    color: "blue".to_string(), // Default color, will be updated from storage
-                }).collect();
+                let labels = label_names
+                    .into_iter()
+                    .map(|name| crate::todoist::LabelDisplay {
+                        id: name.clone(), // Use name as ID for now
+                        name,
+                        color: "blue".to_string(), // Default color, will be updated from storage
+                    })
+                    .collect();
 
                 TaskDisplay {
                     id: row.get("id"),
@@ -535,14 +539,18 @@ impl LocalStorage {
             .into_iter()
             .map(|row| {
                 // Parse labels from JSON string
-                let label_names: Vec<String> = serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
-                
+                let label_names: Vec<String> =
+                    serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
+
                 // Convert label names to LabelDisplay objects (colors will be filled in later)
-                let labels = label_names.into_iter().map(|name| crate::todoist::LabelDisplay {
-                    id: name.clone(), // Use name as ID for now
-                    name,
-                    color: "blue".to_string(), // Default color, will be updated from storage
-                }).collect();
+                let labels = label_names
+                    .into_iter()
+                    .map(|name| crate::todoist::LabelDisplay {
+                        id: name.clone(), // Use name as ID for now
+                        name,
+                        color: "blue".to_string(), // Default color, will be updated from storage
+                    })
+                    .collect();
 
                 TaskDisplay {
                     id: row.get("id"),
@@ -663,7 +671,7 @@ impl LocalStorage {
     async fn run_migrations(&self) -> Result<()> {
         // Check if parent_id column exists in projects table
         let has_parent_id = sqlx::query_scalar::<_, Option<String>>(
-            "SELECT name FROM pragma_table_info('projects') WHERE name = 'parent_id'"
+            "SELECT name FROM pragma_table_info('projects') WHERE name = 'parent_id'",
         )
         .fetch_optional(&self.pool)
         .await?

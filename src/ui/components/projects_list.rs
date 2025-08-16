@@ -18,10 +18,10 @@ impl ProjectsList {
     /// Render the projects list
     pub fn render(f: &mut Frame, area: ratatui::layout::Rect, app: &App) {
         let (_sidebar_width, max_name_width) = super::super::layout::LayoutManager::sidebar_constraints(area.width);
-        
+
         // Sort projects: favorites first within their own hierarchical level
         let mut sorted_projects: Vec<_> = app.projects.iter().enumerate().collect();
-        
+
         // Helper function to get the root project ID (top-level parent)
         fn get_root_project_id(project: &ProjectDisplay, projects: &[ProjectDisplay]) -> String {
             let mut current = project;
@@ -34,12 +34,12 @@ impl ProjectsList {
             }
             current.id.clone()
         }
-        
+
         // Helper function to get the immediate parent ID
         fn get_immediate_parent_id(project: &ProjectDisplay) -> Option<String> {
             project.parent_id.clone()
         }
-        
+
         sorted_projects.sort_by(|(_a_idx, a_project), (_b_idx, b_project)| {
             // First, sort by root project to keep tree structures together
             let a_root = get_root_project_id(a_project, &app.projects);
@@ -48,7 +48,7 @@ impl ProjectsList {
             if root_cmp != std::cmp::Ordering::Equal {
                 return root_cmp;
             }
-            
+
             // Same root, now sort by immediate parent to keep siblings together
             let a_parent = get_immediate_parent_id(a_project);
             let b_parent = get_immediate_parent_id(b_project);
@@ -56,15 +56,15 @@ impl ProjectsList {
             if parent_cmp != std::cmp::Ordering::Equal {
                 return parent_cmp;
             }
-            
+
             // Same immediate parent (siblings), sort favorites first, then by name
             match (a_project.is_favorite, b_project.is_favorite) {
-                (true, false) => std::cmp::Ordering::Less,    // a (favorite) comes before b (non-favorite)
+                (true, false) => std::cmp::Ordering::Less, // a (favorite) comes before b (non-favorite)
                 (false, true) => std::cmp::Ordering::Greater, // a (non-favorite) comes after b (favorite)
-                _ => a_project.name.cmp(&b_project.name),     // Same favorite status, sort by name
+                _ => a_project.name.cmp(&b_project.name),  // Same favorite status, sort by name
             }
         });
-        
+
         let project_items: Vec<ListItem> = sorted_projects
             .iter()
             .map(|(original_index, project)| {

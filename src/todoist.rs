@@ -58,11 +58,15 @@ impl From<Task> for TaskDisplay {
         });
 
         // Convert label names to LabelDisplay objects (colors will be filled in later)
-        let labels = task.labels.into_iter().map(|name| LabelDisplay {
-            id: name.clone(), // Use name as ID for now
-            name,
-            color: "blue".to_string(), // Default color, will be updated from storage
-        }).collect();
+        let labels = task
+            .labels
+            .into_iter()
+            .map(|name| LabelDisplay {
+                id: name.clone(), // Use name as ID for now
+                name,
+                color: "blue".to_string(), // Default color, will be updated from storage
+            })
+            .collect();
 
         Self {
             id: task.id,

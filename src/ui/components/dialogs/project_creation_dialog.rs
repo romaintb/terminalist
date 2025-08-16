@@ -2,10 +2,10 @@
 
 use ratatui::{
     layout::Alignment,
+    prelude::Rect,
     style::{Color, Style},
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
-    prelude::Rect,
 };
 
 use super::super::super::app::App;
@@ -26,7 +26,7 @@ impl ProjectCreationDialog {
             let parent_height = 6;
             let instructions_height = 3;
             let total_height = name_height + parent_height + instructions_height + 4; // +4 for spacing
-            
+
             // If dialog is too small, reduce heights
             let available_height = dialog_area.height.saturating_sub(4); // Account for borders
             let scale_factor = if available_height < total_height {
@@ -34,7 +34,7 @@ impl ProjectCreationDialog {
             } else {
                 1.0
             };
-            
+
             let scaled_name_height = (name_height as f32 * scale_factor).max(3.0) as u16;
             let scaled_parent_height = (parent_height as f32 * scale_factor).max(3.0) as u16;
             let scaled_instructions_height = (instructions_height as f32 * scale_factor).max(2.0) as u16;
@@ -44,9 +44,9 @@ impl ProjectCreationDialog {
                 dialog_area.x + 2,
                 dialog_area.y + 2,
                 dialog_area.width.saturating_sub(4),
-                scaled_name_height
+                scaled_name_height,
             );
-            
+
             let name_text = if app.new_project_name.is_empty() {
                 "Enter project name: "
             } else {
@@ -69,9 +69,9 @@ impl ProjectCreationDialog {
                 dialog_area.x + 2,
                 parent_y,
                 dialog_area.width.saturating_sub(4),
-                scaled_parent_height
+                scaled_parent_height,
             );
-            
+
             let parent_text = if let Some(parent_id) = &app.new_project_parent_id {
                 if let Some(parent) = app.projects.iter().find(|p| p.id == *parent_id) {
                     format!("Parent: {}", parent.name)
@@ -81,7 +81,7 @@ impl ProjectCreationDialog {
             } else {
                 "Parent: None\nPress 'p' to select".to_string()
             };
-            
+
             let parent_paragraph = Paragraph::new(parent_text)
                 .block(
                     Block::default()
@@ -100,9 +100,9 @@ impl ProjectCreationDialog {
                     dialog_area.x + 2,
                     instructions_y,
                     dialog_area.width.saturating_sub(4),
-                    scaled_instructions_height
+                    scaled_instructions_height,
                 );
-                
+
                 let instructions = "Press Enter to create, Esc to cancel, 'p' to select parent";
                 let instructions_paragraph = Paragraph::new(instructions)
                     .style(Style::default().fg(Color::Yellow))

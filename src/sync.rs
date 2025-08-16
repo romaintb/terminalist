@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::storage::LocalStorage;
-use crate::todoist::{ProjectDisplay, TaskDisplay, TodoistWrapper, CreateProjectArgs};
+use crate::todoist::{CreateProjectArgs, ProjectDisplay, TaskDisplay, TodoistWrapper};
 
 /// Sync service that manages data synchronization between API and local storage
 #[derive(Clone)]
@@ -76,7 +76,7 @@ impl SyncService {
             view_style: None,
         };
         let _project = self.todoist.create_project(&project_args).await?;
-        
+
         // The UI will handle the sync separately to ensure proper error handling
         Ok(())
     }
@@ -104,7 +104,7 @@ impl SyncService {
             duration_unit: None,
         };
         let _task = self.todoist.create_task(&task_args).await?;
-        
+
         // The UI will handle the sync separately to ensure proper error handling
         Ok(())
     }
@@ -113,11 +113,11 @@ impl SyncService {
     pub async fn delete_project(&self, project_id: &str) -> Result<()> {
         // Delete project via API
         self.todoist.delete_project(project_id).await?;
-        
+
         // Remove from local storage
         let storage = self.storage.lock().await;
         storage.delete_project(project_id).await?;
-        
+
         Ok(())
     }
 
@@ -129,7 +129,7 @@ impl SyncService {
             return Ok(SyncStatus::InProgress);
         }
         *sync_guard = true;
-        
+
         // Release the lock before performing sync to avoid holding it during the long operation
         drop(sync_guard);
 

@@ -11,22 +11,22 @@ impl LayoutManager {
     pub fn main_layout(area: Rect) -> Vec<Rect> {
         let screen_width = area.width;
         let screen_height = area.height;
-        
+
         // Top area: projects + tasks (all height except 1 line for status)
         let top_height = screen_height.saturating_sub(1);
         let top_area = Rect::new(0, 0, screen_width, top_height);
-        
+
         // Bottom area: status bar (1 line height, full width)
         let status_area = Rect::new(0, top_height, screen_width, 1);
-        
+
         vec![top_area, status_area]
     }
 
     /// Calculate the top pane layout (projects + tasks side by side)
     #[must_use]
     pub fn top_pane_layout(area: Rect) -> Vec<Rect> {
-        let projects_width = std::cmp::min(area.width * 1 / 3, 30);  // Projects: 1/3 of width, max 30
-        let tasks_width = area.width.saturating_sub(projects_width);   // Tasks: remaining width
+        let projects_width = std::cmp::min(area.width / 3, 30); // Projects: 1/3 of width, max 30
+        let tasks_width = area.width.saturating_sub(projects_width); // Tasks: remaining width
 
         Layout::default()
             .direction(Direction::Horizontal)

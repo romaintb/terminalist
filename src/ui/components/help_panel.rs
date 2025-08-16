@@ -2,10 +2,10 @@
 
 use ratatui::{
     layout::Alignment,
+    prelude::Rect,
     style::{Color, Style},
     widgets::{Block, Borders, Clear, Paragraph, Wrap},
     Frame,
-    prelude::Rect,
 };
 
 use super::super::app::App;
@@ -21,7 +21,7 @@ impl HelpPanel {
             // Use a large centered rectangle that covers most of the screen
             let help_area = LayoutManager::centered_rect(90, 90, f.size());
             f.render_widget(Clear, help_area);
-            
+
             // Calculate help content area with margins
             let margin_x = 2;
             let margin_y = 1;
@@ -29,9 +29,9 @@ impl HelpPanel {
                 help_area.x + margin_x,
                 help_area.y + margin_y,
                 help_area.width.saturating_sub(margin_x * 2),
-                help_area.height.saturating_sub(margin_y * 2)
+                help_area.height.saturating_sub(margin_y * 2),
             );
-            
+
             let help_content = r"
 TERMINALIST - Todoist Terminal Client
 ====================================
@@ -91,16 +91,16 @@ Tasks are ordered: pending, then completed, then deleted
 
 Press 'Esc' or '?' to close this help panel
 ";
-            
+
             // Apply scroll offset to the content
             let lines: Vec<&str> = help_content.lines().collect();
             let total_lines = lines.len();
             let visible_height = help_content_area.height.saturating_sub(2) as usize; // Account for borders
-            
+
             // Clamp scroll offset to valid range
             let max_scroll = total_lines.saturating_sub(visible_height);
             let scroll_offset = app.help_scroll_offset.min(max_scroll);
-            
+
             // Extract visible portion of content
             let visible_lines: Vec<&str> = lines
                 .iter()
@@ -108,9 +108,9 @@ Press 'Esc' or '?' to close this help panel
                 .take(visible_height)
                 .copied()
                 .collect();
-            
+
             let help_text = visible_lines.join("\n");
-            
+
             // Add scroll indicator if content is scrollable
             let scroll_indicator = if total_lines > visible_height {
                 let scroll_percent = if max_scroll > 0 {
@@ -122,9 +122,9 @@ Press 'Esc' or '?' to close this help panel
             } else {
                 String::new()
             };
-            
+
             let final_text = format!("{help_text}{scroll_indicator}");
-            
+
             // Create a bordered paragraph for the help content
             let help_paragraph = Paragraph::new(final_text)
                 .block(
@@ -136,7 +136,7 @@ Press 'Esc' or '?' to close this help panel
                 .style(Style::default().fg(Color::White))
                 .alignment(Alignment::Left)
                 .wrap(Wrap { trim: true });
-            
+
             f.render_widget(help_paragraph, help_content_area);
         }
     }

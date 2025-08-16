@@ -2,10 +2,10 @@
 
 use ratatui::{
     layout::Alignment,
+    prelude::Rect,
     style::{Color, Style},
     widgets::{Block, Borders, Clear, Paragraph},
     Frame,
-    prelude::Rect,
 };
 
 use super::super::super::app::App;
@@ -26,7 +26,7 @@ impl TaskCreationDialog {
             let project_height = 6;
             let instructions_height = 3;
             let total_height = content_height + project_height + instructions_height + 4; // +4 for spacing
-            
+
             // If dialog is too small, reduce heights
             let available_height = dialog_area.height.saturating_sub(4); // Account for borders
             let scale_factor = if available_height < total_height {
@@ -34,7 +34,7 @@ impl TaskCreationDialog {
             } else {
                 1.0
             };
-            
+
             let scaled_content_height = (content_height as f32 * scale_factor).max(3.0) as u16;
             let scaled_project_height = (project_height as f32 * scale_factor).max(3.0) as u16;
             let scaled_instructions_height = (instructions_height as f32 * scale_factor).max(2.0) as u16;
@@ -44,9 +44,9 @@ impl TaskCreationDialog {
                 dialog_area.x + 2,
                 dialog_area.y + 2,
                 dialog_area.width.saturating_sub(4),
-                scaled_content_height
+                scaled_content_height,
             );
-            
+
             let content_text = if app.new_task_content.is_empty() {
                 "Enter task content: "
             } else {
@@ -69,9 +69,9 @@ impl TaskCreationDialog {
                 dialog_area.x + 2,
                 project_y,
                 dialog_area.width.saturating_sub(4),
-                scaled_project_height
+                scaled_project_height,
             );
-            
+
             let project_text = if let Some(project_id) = &app.new_task_project_id {
                 if let Some(project) = app.projects.iter().find(|p| p.id == *project_id) {
                     format!("Project: {}", project.name)
@@ -81,7 +81,7 @@ impl TaskCreationDialog {
             } else {
                 "Project: None".to_string()
             };
-            
+
             let project_paragraph = Paragraph::new(project_text)
                 .block(
                     Block::default()
@@ -100,9 +100,9 @@ impl TaskCreationDialog {
                     dialog_area.x + 2,
                     instructions_y,
                     dialog_area.width.saturating_sub(4),
-                    scaled_instructions_height
+                    scaled_instructions_height,
                 );
-                
+
                 let instructions = "Press Enter to create, Esc to cancel";
                 let instructions_paragraph = Paragraph::new(instructions)
                     .style(Style::default().fg(Color::Yellow))

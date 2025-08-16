@@ -1,15 +1,11 @@
 //! Event handling and key bindings
 
-use crossterm::event::{Event, KeyCode, KeyEventKind};
-use crate::sync::SyncService;
 use super::app::App;
+use crate::sync::SyncService;
+use crossterm::event::{Event, KeyCode, KeyEventKind};
 
 /// Handle all user input events
-pub async fn handle_events(
-    event: Event,
-    app: &mut App,
-    sync_service: &SyncService,
-) -> Result<bool, anyhow::Error> {
+pub async fn handle_events(event: Event, app: &mut App, sync_service: &SyncService) -> Result<bool, anyhow::Error> {
     if let Event::Key(key) = event {
         if key.kind == KeyEventKind::Press {
             // Handle project deletion confirmation dialog
@@ -165,9 +161,9 @@ fn handle_help_panel(key: crossterm::event::KeyEvent, app: &mut App) -> bool {
 
 /// Handle events in task creation mode
 async fn handle_task_creation_mode(
-    key: crossterm::event::KeyEvent, 
-    app: &mut App, 
-    sync_service: &SyncService
+    key: crossterm::event::KeyEvent,
+    app: &mut App,
+    sync_service: &SyncService,
 ) -> Result<bool, anyhow::Error> {
     match key.code {
         KeyCode::Char(c) if c.is_ascii_graphic() => {
@@ -198,11 +194,15 @@ async fn handle_normal_mode(
     sync_service: &SyncService,
 ) -> Result<bool, anyhow::Error> {
     // Check for Ctrl+C first
-    if key.code == KeyCode::Char('c') && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+    if key.code == KeyCode::Char('c')
+        && key
+            .modifiers
+            .contains(crossterm::event::KeyModifiers::CONTROL)
+    {
         app.should_quit = true;
         return Ok(true);
     }
-    
+
     match key.code {
         KeyCode::Char('q') => {
             app.should_quit = true;

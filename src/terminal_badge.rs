@@ -92,8 +92,8 @@ pub fn create_terminal_label_badge(name: &str, color: &str) -> Span<'static> {
         "gray" => Color::Gray,
         "silver" => Color::White, // Changed from LightGray which doesn't exist
         "teal" => Color::Cyan,
-        "navy" => Color::Rgb(0, 0, 128),    // Navy
-        _ => Color::Blue, // Default fallback
+        "navy" => Color::Rgb(0, 0, 128), // Navy
+        _ => Color::Blue,                // Default fallback
     };
 
     let style = Style::default()
@@ -142,6 +142,6 @@ pub fn create_terminal_priority_badge(priority: i32) -> Option<Span<'static>> {
         3 => Some(create_terminal_badge("P1", TerminalBadgeStyle::Warning)), // High
         2 => Some(create_terminal_badge("P2", TerminalBadgeStyle::Info)),   // Medium
         1 => Some(create_terminal_badge("P3", TerminalBadgeStyle::Secondary)), // Low
-        _ => None,                                                         // No priority
+        _ => None,                                                          // No priority
     }
 }

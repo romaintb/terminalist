@@ -74,8 +74,8 @@ pub fn create_label_badge(name: &str, color: &str) -> Span<'static> {
         "gray" => Color::Gray,
         "silver" => Color::White, // Changed from LightGray which doesn't exist
         "teal" => Color::Cyan,
-        "navy" => Color::Rgb(0, 0, 128),    // Navy
-        _ => Color::Blue, // Default fallback
+        "navy" => Color::Rgb(0, 0, 128), // Navy
+        _ => Color::Blue,                // Default fallback
     };
 
     let style = Style::default()

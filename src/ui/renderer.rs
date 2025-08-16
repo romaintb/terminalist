@@ -6,17 +6,17 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
+use ratatui::{backend::CrosstermBackend, Terminal};
 use tokio::time::Duration;
 
-use crate::sync::SyncService;
 use super::app::App;
+use super::components::{
+    DeleteConfirmationDialog, ErrorDialog, HelpPanel, ProjectCreationDialog, ProjectDeleteConfirmationDialog,
+    ProjectsList, StatusBar, TaskCreationDialog, TasksList,
+};
 use super::events::handle_events;
 use super::layout::LayoutManager;
-use super::components::{ProjectsList, TasksList, StatusBar, HelpPanel, ErrorDialog, DeleteConfirmationDialog, TaskCreationDialog, ProjectCreationDialog, ProjectDeleteConfirmationDialog};
+use crate::sync::SyncService;
 
 /// Run the main TUI application
 pub async fn run_app() -> Result<()> {
@@ -29,8 +29,7 @@ pub async fn run_app() -> Result<()> {
 
     // Create application state
     let mut app = App::new();
-    let api_token = std::env::var("TODOIST_API_TOKEN")
-        .expect("TODOIST_API_TOKEN environment variable must be set");
+    let api_token = std::env::var("TODOIST_API_TOKEN").expect("TODOIST_API_TOKEN environment variable must be set");
     let sync_service = SyncService::new(api_token).await?;
 
     // Load initial data
@@ -41,11 +40,7 @@ pub async fn run_app() -> Result<()> {
 
     // Cleanup
     disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
     terminal.show_cursor()?;
 
     res

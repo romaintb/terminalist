@@ -21,7 +21,7 @@ pub struct App {
     pub error_message: Option<String>,
     pub sync_stats: Option<SyncStats>,
     pub last_sync_status: SyncStatus,
-    pub show_help: bool, // Toggle for help panel
+    pub show_help: bool,           // Toggle for help panel
     pub help_scroll_offset: usize, // Scroll position for help panel
     // Project management
     pub creating_project: bool,
@@ -84,7 +84,7 @@ impl App {
     #[must_use]
     pub fn get_sorted_projects(&self) -> Vec<(usize, &ProjectDisplay)> {
         let mut sorted_projects: Vec<_> = self.projects.iter().enumerate().collect();
-        
+
         // Helper function to get the root project ID (top-level parent)
         fn get_root_project_id(project: &ProjectDisplay, projects: &[ProjectDisplay]) -> String {
             let mut current = project;
@@ -97,12 +97,12 @@ impl App {
             }
             current.id.clone()
         }
-        
+
         // Helper function to get the immediate parent ID
         fn get_immediate_parent_id(project: &ProjectDisplay) -> Option<String> {
             project.parent_id.clone()
         }
-        
+
         sorted_projects.sort_by(|(_a_idx, a_project), (_b_idx, b_project)| {
             // First, sort by root project to keep tree structures together
             let a_root = get_root_project_id(a_project, &self.projects);
@@ -111,7 +111,7 @@ impl App {
             if root_cmp != std::cmp::Ordering::Equal {
                 return root_cmp;
             }
-            
+
             // Same root, now sort by immediate parent to keep siblings together
             let a_parent = get_immediate_parent_id(a_project);
             let b_parent = get_immediate_parent_id(b_project);
@@ -119,12 +119,12 @@ impl App {
             if parent_cmp != std::cmp::Ordering::Equal {
                 return parent_cmp;
             }
-            
+
             // Same immediate parent (siblings), sort favorites first, then by name
             match (a_project.is_favorite, b_project.is_favorite) {
-                (true, false) => std::cmp::Ordering::Less,    // a (favorite) comes before b (non-favorite)
+                (true, false) => std::cmp::Ordering::Less, // a (favorite) comes before b (non-favorite)
                 (false, true) => std::cmp::Ordering::Greater, // a (non-favorite) comes after b (favorite)
-                _ => a_project.name.cmp(&b_project.name),     // Same favorite status, sort by name
+                _ => a_project.name.cmp(&b_project.name),  // Same favorite status, sort by name
             }
         });
         sorted_projects
@@ -214,11 +214,11 @@ impl App {
                         // Create priority scores: pending=0, completed=1, deleted=2
                         let a_score = if a.is_deleted { 2 } else { i32::from(a.is_completed) };
                         let b_score = if b.is_deleted { 2 } else { i32::from(b.is_completed) };
-                        
+
                         // Sort by score (lower score = higher priority)
                         a_score.cmp(&b_score)
                     });
-                    
+
                     self.tasks = sorted_tasks;
                     // Reset task selection to first task
                     self.selected_task_index = 0;
@@ -399,7 +399,10 @@ impl App {
         self.creating_project = false;
         self.error_message = None;
 
-        match sync_service.create_project(&self.new_project_name.trim(), self.new_project_parent_id.as_deref()).await {
+        match sync_service
+            .create_project(self.new_project_name.trim(), self.new_project_parent_id.as_deref())
+            .await
+        {
             Ok(_) => {
                 // Try to sync first, but if it fails, at least reload local data
                 match sync_service.force_sync().await {
@@ -410,12 +413,12 @@ impl App {
                     }
                     Err(e) => {
                         // Sync failed, but try to reload local data anyway
-                        eprintln!("Warning: Sync failed after project creation: {}", e);
+                        eprintln!("Warning: Sync failed after project creation: {e}");
                         self.load_local_data(sync_service).await;
                         self.error_message = Some("Project created but sync failed - data may be stale".to_string());
                     }
                 }
-                
+
                 // Clear the success message after a short delay
                 tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                 self.error_message = None;
@@ -507,7 +510,10 @@ impl App {
 
         // Create the task in the currently selected project
         if let Some(project) = self.projects.get(self.selected_project_index) {
-            match sync_service.create_task(&self.new_task_content.trim(), Some(&project.id)).await {
+            match sync_service
+                .create_task(self.new_task_content.trim(), Some(&project.id))
+                .await
+            {
                 Ok(_) => {
                     // Try to sync first, but if it fails, at least reload local data
                     match sync_service.force_sync().await {
@@ -518,12 +524,12 @@ impl App {
                         }
                         Err(e) => {
                             // Sync failed, but try to reload local data anyway
-                            eprintln!("Warning: Sync failed after task creation: {}", e);
+                            eprintln!("Warning: Sync failed after task creation: {e}");
                             self.load_local_data(sync_service).await;
                             self.error_message = Some("Task created but sync failed - data may be stale".to_string());
                         }
                     }
-                    
+
                     // Clear the success message after a short delay
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                     self.error_message = None;
