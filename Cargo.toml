@@ -11,26 +11,6 @@ path = "src/main.rs"
 name = "terminalist"
 path = "src/lib.rs"
 
-[[example]]
-name = "badge_demo"
-path = "examples/badge_demo.rs"
-
-[[example]]
-name = "simple_badge_demo"
-path = "examples/simple_badge_demo.rs"
-
-[[example]]
-name = "color_test"
-path = "examples/color_test.rs"
-
-[[example]]
-name = "terminal_badge_test"
-path = "examples/terminal_badge_test.rs"
-
-[[example]]
-name = "interactive_badge_demo"
-path = "examples/interactive_badge_demo.rs"
-
 [dependencies]
 tokio = { version = "1.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }

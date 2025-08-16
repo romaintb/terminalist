@@ -65,16 +65,38 @@ impl SyncService {
         storage.get_last_sync("projects").await
     }
 
+    /// Create a new project
+    pub async fn create_project(&self, name: &str, parent_id: Option<&str>) -> Result<()> {
+        // Create project via API
+        let _project = self.todoist.create_project(name, parent_id).await?;
+        
+        // The UI will handle the sync separately to ensure proper error handling
+        Ok(())
+    }
+
+    /// Delete a project
+    pub async fn delete_project(&self, project_id: &str) -> Result<()> {
+        // Delete project via API
+        self.todoist.delete_project(project_id).await?;
+        
+        // Remove from local storage
+        let storage = self.storage.lock().await;
+        storage.delete_project(project_id).await?;
+        
+        Ok(())
+    }
+
     /// Perform full sync with Todoist API
     pub async fn sync(&self) -> Result<SyncStatus> {
-        // Check if sync is already in progress
-        {
-            let mut sync_guard = self.sync_in_progress.lock().await;
-            if *sync_guard {
-                return Ok(SyncStatus::InProgress);
-            }
-            *sync_guard = true;
+        // Check if sync is already in progress and acquire lock
+        let mut sync_guard = self.sync_in_progress.lock().await;
+        if *sync_guard {
+            return Ok(SyncStatus::InProgress);
         }
+        *sync_guard = true;
+        
+        // Release the lock before performing sync to avoid holding it during the long operation
+        drop(sync_guard);
 
         let result = self.perform_sync().await;
 

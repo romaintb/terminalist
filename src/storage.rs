@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePool, Row};
 
-use crate::todoist::{Project, ProjectDisplay, Task, TaskDisplay};
+use crate::todoist::{Project, Task, ProjectDisplay, TaskDisplay};
 
 /// Local project representation with sync metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -19,10 +19,11 @@ pub struct LocalProject {
 }
 
 /// Local task representation with sync metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct LocalTask {
     pub id: String,
     pub content: String,
+    pub description: Option<String>,
     pub project_id: String,
     pub is_completed: bool,
     pub is_deleted: bool,
@@ -33,9 +34,8 @@ pub struct LocalTask {
     pub is_recurring: bool,
     pub deadline: Option<String>,
     pub duration: Option<String>,
-    pub labels: String, // JSON serialized array
-    pub description: String,
-    pub last_synced: DateTime<Utc>,
+    pub labels: String,
+    pub last_synced: String,
 }
 
 impl From<LocalProject> for ProjectDisplay {
@@ -65,7 +65,7 @@ impl From<LocalTask> for TaskDisplay {
             deadline: local.deadline,
             duration: local.duration,
             labels: serde_json::from_str(&local.labels).unwrap_or_default(),
-            description: local.description,
+            description: local.description.unwrap_or_default(),
         }
     }
 }
@@ -108,13 +108,14 @@ impl From<Task> for LocalTask {
             deadline: task.deadline.map(|d| d.date),
             duration: duration_string,
             labels: serde_json::to_string(&task.labels).unwrap_or_default(),
-            description: task.description,
-            last_synced: Utc::now(),
+            description: Some(task.description),
+            last_synced: Utc::now().to_rfc3339(),
         }
     }
 }
 
 /// Local storage manager for Todoist data
+#[derive(Clone)]
 pub struct LocalStorage {
     pool: SqlitePool,
 }
@@ -134,38 +135,21 @@ impl LocalStorage {
 
             // Fallback to current directory
             let fallback_path = std::env::current_dir()?.join("terminalist.db");
-            let database_url = format!("sqlite://{}?mode=rwc", fallback_path.display());
-
+            let database_url = format!("sqlite:{}?mode=rwc", fallback_path.display());
             let pool = SqlitePool::connect(&database_url).await?;
-            let storage = Self { pool };
+            let storage = LocalStorage { pool };
             storage.init_schema().await?;
+            storage.run_migrations().await?;
             return Ok(storage);
         }
 
         let db_path = data_dir.join("terminalist.db");
-        let database_url = format!("sqlite://{}?mode=rwc", db_path.display());
-
-        // Try to connect to the database
-        match SqlitePool::connect(&database_url).await {
-            Ok(pool) => {
-                let storage = Self { pool };
-                storage.init_schema().await?;
-                Ok(storage)
-            }
-            Err(e) => {
-                eprintln!("Warning: Could not create database in data directory: {e}");
-                eprintln!("Falling back to current directory for database storage.");
-
-                // Fallback to current directory
-                let fallback_path = std::env::current_dir()?.join("terminalist.db");
-                let database_url = format!("sqlite://{}?mode=rwc", fallback_path.display());
-
-                let pool = SqlitePool::connect(&database_url).await?;
-                let storage = Self { pool };
-                storage.init_schema().await?;
-                Ok(storage)
-            }
-        }
+        let database_url = format!("sqlite:{}?mode=rwc", db_path.display());
+        let pool = SqlitePool::connect(&database_url).await?;
+        let storage = LocalStorage { pool };
+        storage.init_schema().await?;
+        storage.run_migrations().await?;
+        Ok(storage)
     }
 
     /// Initialize database schema
@@ -177,9 +161,9 @@ impl LocalStorage {
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 color TEXT,
-                is_favorite BOOLEAN NOT NULL,
-                is_inbox_project BOOLEAN NOT NULL,
-                order_index INTEGER NOT NULL,
+                is_favorite BOOLEAN NOT NULL DEFAULT 0,
+                is_inbox_project BOOLEAN NOT NULL DEFAULT 0,
+                order_index INTEGER NOT NULL DEFAULT 0,
                 parent_id TEXT,
                 last_synced TEXT NOT NULL
             )
@@ -194,20 +178,19 @@ impl LocalStorage {
             CREATE TABLE IF NOT EXISTS tasks (
                 id TEXT PRIMARY KEY,
                 content TEXT NOT NULL,
+                description TEXT,
                 project_id TEXT NOT NULL,
-                is_completed BOOLEAN NOT NULL,
-                is_deleted BOOLEAN NOT NULL,
-                priority INTEGER NOT NULL,
-                order_index INTEGER NOT NULL,
+                is_completed BOOLEAN NOT NULL DEFAULT 0,
+                is_deleted BOOLEAN NOT NULL DEFAULT 0,
+                priority INTEGER NOT NULL DEFAULT 1,
+                order_index INTEGER NOT NULL DEFAULT 0,
                 due_date TEXT,
                 due_datetime TEXT,
-                is_recurring BOOLEAN NOT NULL,
+                is_recurring BOOLEAN NOT NULL DEFAULT 0,
                 deadline TEXT,
                 duration TEXT,
-                labels TEXT NOT NULL,
-                description TEXT,
-                last_synced TEXT NOT NULL,
-                FOREIGN KEY (project_id) REFERENCES projects(id)
+                labels TEXT NOT NULL DEFAULT '',
+                last_synced TEXT NOT NULL
             )
             ",
         )
@@ -226,7 +209,7 @@ impl LocalStorage {
         )
         .execute(&self.pool)
         .await?;
-
+        
         Ok(())
     }
 
@@ -240,8 +223,8 @@ impl LocalStorage {
             .await?;
 
         // Insert new projects
-        for project in projects {
-            let local_project: LocalProject = project.into();
+        for project in projects.iter() {
+            let local_project: LocalProject = project.clone().into();
             sqlx::query(
                 r"
                 INSERT INTO projects (id, name, color, is_favorite, is_inbox_project, order_index, parent_id, last_synced)
@@ -270,15 +253,16 @@ impl LocalStorage {
         let mut tx = self.pool.begin().await?;
 
         // Clear existing tasks
-        sqlx::query("DELETE FROM tasks").execute(&mut *tx).await?;
+        sqlx::query("DELETE FROM tasks")
+            .execute(&mut *tx)
+            .await?;
 
         // Insert new tasks
         for task in tasks {
             let local_task: LocalTask = task.into();
-
             sqlx::query(
                 r"
-                INSERT OR REPLACE INTO tasks (id, content, project_id, is_completed, is_deleted, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description, last_synced)
+                INSERT INTO tasks (id, content, project_id, is_completed, is_deleted, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description, last_synced)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ",
             )
@@ -303,6 +287,25 @@ impl LocalStorage {
 
         tx.commit().await?;
         self.update_sync_timestamp("tasks").await?;
+        Ok(())
+    }
+
+    /// Delete a project and all its tasks
+    pub async fn delete_project(&self, project_id: &str) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+        
+        // Delete tasks first, then the project
+        sqlx::query("DELETE FROM tasks WHERE project_id = ?")
+            .bind(project_id)
+            .execute(&mut *tx)
+            .await?;
+        
+        sqlx::query("DELETE FROM projects WHERE id = ?")
+            .bind(project_id)
+            .execute(&mut *tx)
+            .await?;
+        
+        tx.commit().await?;
         Ok(())
     }
 
@@ -485,4 +488,24 @@ impl LocalStorage {
         tx.commit().await?;
         Ok(())
     }
+
+    async fn run_migrations(&self) -> Result<()> {
+        // Check if parent_id column exists in projects table
+        let has_parent_id = sqlx::query_scalar::<_, Option<String>>(
+            "SELECT name FROM pragma_table_info('projects') WHERE name = 'parent_id'"
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .is_some();
+
+        if !has_parent_id {
+            sqlx::query("ALTER TABLE projects ADD COLUMN parent_id TEXT")
+                .execute(&self.pool)
+                .await?;
+        }
+
+        Ok(())
+    }
 }
+
+// Unit tests will be recreated later for proper testing

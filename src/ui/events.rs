@@ -12,18 +12,28 @@ pub async fn handle_events(
 ) -> Result<bool, anyhow::Error> {
     if let Event::Key(key) = event {
         if key.kind == KeyEventKind::Press {
+            // Handle project deletion confirmation dialog
+            if app.delete_project_confirmation.is_some() {
+                return handle_project_delete_confirmation(key, app, sync_service).await;
+            }
+
+            // Handle project creation dialog
+            if app.creating_project {
+                return handle_project_creation(key, app, sync_service).await;
+            }
+
             // Handle delete confirmation dialog
             if app.delete_confirmation.is_some() {
-                return handle_delete_confirmation(key.code, app, sync_service).await;
+                return handle_delete_confirmation(key, app, sync_service).await;
             }
 
             // Handle help panel - block all other shortcuts when help is open
             if app.show_help {
-                return Ok(handle_help_panel(key.code, app));
+                return Ok(handle_help_panel(key, app));
             }
 
             // Handle normal navigation and actions
-            return handle_normal_mode(key.code, app, sync_service).await;
+            return handle_normal_mode(key, app, sync_service).await;
         }
     }
     Ok(false)
@@ -31,11 +41,11 @@ pub async fn handle_events(
 
 /// Handle events when delete confirmation dialog is open
 async fn handle_delete_confirmation(
-    key_code: KeyCode,
+    key: crossterm::event::KeyEvent,
     app: &mut App,
     sync_service: &SyncService,
 ) -> Result<bool, anyhow::Error> {
-    match key_code {
+    match key.code {
         KeyCode::Char('y' | 'Y') => {
             // Confirm delete
             app.delete_selected_task(sync_service).await;
@@ -50,19 +60,73 @@ async fn handle_delete_confirmation(
     }
 }
 
+/// Handle events when project deletion confirmation dialog is open
+async fn handle_project_delete_confirmation(
+    key: crossterm::event::KeyEvent,
+    app: &mut App,
+    sync_service: &SyncService,
+) -> Result<bool, anyhow::Error> {
+    match key.code {
+        KeyCode::Char('y' | 'Y') => {
+            // Confirm delete
+            app.delete_project(sync_service).await;
+            Ok(true)
+        }
+        KeyCode::Char('n' | 'N') | KeyCode::Esc => {
+            // Cancel delete
+            app.cancel_delete_project();
+            Ok(true)
+        }
+        _ => Ok(false), // Ignore other keys during confirmation
+    }
+}
+
+/// Handle events when project creation dialog is open
+async fn handle_project_creation(
+    key: crossterm::event::KeyEvent,
+    app: &mut App,
+    sync_service: &SyncService,
+) -> Result<bool, anyhow::Error> {
+    match key.code {
+        KeyCode::Char(c) if c.is_ascii() && !c.is_control() => {
+            // Add character to project name
+            app.add_char_to_project_name(c);
+            Ok(true)
+        }
+        KeyCode::Backspace => {
+            // Remove last character from project name
+            app.remove_char_from_project_name();
+            Ok(true)
+        }
+        KeyCode::Char('p' | 'P') => {
+            // Cycle through parent project options
+            app.cycle_parent_project();
+            Ok(true)
+        }
+        KeyCode::Enter => {
+            // Create the project
+            app.create_project(sync_service).await;
+            Ok(true)
+        }
+        KeyCode::Esc => {
+            // Cancel project creation
+            app.cancel_create_project();
+            Ok(true)
+        }
+        _ => Ok(false), // Ignore other keys during creation
+    }
+}
+
 /// Handle events when help panel is open
-fn handle_help_panel(key_code: KeyCode, app: &mut App) -> bool {
-    match key_code {
+fn handle_help_panel(key: crossterm::event::KeyEvent, app: &mut App) -> bool {
+    match key.code {
         KeyCode::Char('?') | KeyCode::Esc => {
             app.show_help = false;
-            app.help_scroll_offset = 0; // Reset scroll when closing
             true
         }
         KeyCode::Up | KeyCode::Char('k') => {
             // Scroll up in help panel
-            if app.help_scroll_offset > 0 {
-                app.help_scroll_offset = app.help_scroll_offset.saturating_sub(1);
-            }
+            app.help_scroll_offset = app.help_scroll_offset.saturating_sub(1);
             true
         }
         KeyCode::Down | KeyCode::Char('j') => {
@@ -96,14 +160,24 @@ fn handle_help_panel(key_code: KeyCode, app: &mut App) -> bool {
 
 /// Handle events in normal mode
 async fn handle_normal_mode(
-    key_code: KeyCode,
+    key: crossterm::event::KeyEvent,
     app: &mut App,
     sync_service: &SyncService,
 ) -> Result<bool, anyhow::Error> {
-    match key_code {
+    // Check for Ctrl+C first
+    if key.code == KeyCode::Char('c') && key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) {
+        app.should_quit = true;
+        return Ok(true);
+    }
+    
+    match key.code {
         KeyCode::Char('q') => {
             app.should_quit = true;
             Ok(true)
+        }
+        KeyCode::Char('c') => {
+            // Normal 'c' key (not Ctrl+C)
+            Ok(false)
         }
         KeyCode::Up | KeyCode::Char('k') => {
             app.previous_task();
@@ -150,6 +224,16 @@ async fn handle_normal_mode(
         }
         KeyCode::Char('?') => {
             app.show_help = true;
+            Ok(true)
+        }
+        KeyCode::Char('N') => {
+            // Create new project
+            app.start_create_project();
+            Ok(true)
+        }
+        KeyCode::Char('D') => {
+            // Delete selected project (capital D to distinguish from task deletion)
+            app.start_delete_project();
             Ok(true)
         }
         _ => Ok(false),

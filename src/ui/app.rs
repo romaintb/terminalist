@@ -23,6 +23,11 @@ pub struct App {
     pub last_sync_status: SyncStatus,
     pub show_help: bool, // Toggle for help panel
     pub help_scroll_offset: usize, // Scroll position for help panel
+    // Project management
+    pub creating_project: bool,
+    pub new_project_name: String,
+    pub new_project_parent_id: Option<String>,
+    pub delete_project_confirmation: Option<String>, // Project ID to delete if confirmed
 }
 
 impl Default for App {
@@ -59,6 +64,11 @@ impl App {
             last_sync_status: SyncStatus::Idle,
             show_help: false,
             help_scroll_offset: 0,
+            // Project management
+            creating_project: false,
+            new_project_name: String::new(),
+            new_project_parent_id: None,
+            delete_project_confirmation: None,
         }
     }
 
@@ -320,5 +330,129 @@ impl App {
         }
 
         self.syncing = false;
+    }
+
+    /// Start creating a new project
+    pub fn start_create_project(&mut self) {
+        self.creating_project = true;
+        self.new_project_name.clear();
+        self.new_project_parent_id = None;
+    }
+
+    /// Cancel project creation
+    pub fn cancel_create_project(&mut self) {
+        self.creating_project = false;
+        self.new_project_name.clear();
+        self.new_project_parent_id = None;
+    }
+
+    /// Add a character to the project name
+    pub fn add_char_to_project_name(&mut self, c: char) {
+        if self.creating_project {
+            self.new_project_name.push(c);
+        }
+    }
+
+    /// Remove the last character from the project name
+    pub fn remove_char_from_project_name(&mut self) {
+        if self.creating_project && !self.new_project_name.is_empty() {
+            self.new_project_name.pop();
+        }
+    }
+
+    /// Cycle through parent project options
+    pub fn cycle_parent_project(&mut self) {
+        if !self.creating_project || self.projects.is_empty() {
+            return;
+        }
+
+        if let Some(current_parent) = &self.new_project_parent_id {
+            // Find current parent index and move to next
+            if let Some(current_idx) = self.projects.iter().position(|p| p.id == *current_parent) {
+                let next_idx = (current_idx + 1) % self.projects.len();
+                self.new_project_parent_id = Some(self.projects[next_idx].id.clone());
+            } else {
+                // Current parent not found, start with first project
+                self.new_project_parent_id = Some(self.projects[0].id.clone());
+            }
+        } else {
+            // No parent selected, start with first project
+            self.new_project_parent_id = Some(self.projects[0].id.clone());
+        }
+    }
+
+    /// Create the new project
+    pub async fn create_project(&mut self, sync_service: &SyncService) {
+        if self.new_project_name.trim().is_empty() {
+            self.error_message = Some("Project name cannot be empty".to_string());
+            return;
+        }
+
+        self.creating_project = false;
+        self.error_message = None;
+
+        match sync_service.create_project(&self.new_project_name.trim(), self.new_project_parent_id.as_deref()).await {
+            Ok(_) => {
+                // Try to sync first, but if it fails, at least reload local data
+                match sync_service.force_sync().await {
+                    Ok(_) => {
+                        // Sync succeeded, reload local data
+                        self.load_local_data(sync_service).await;
+                        self.error_message = Some("Project created successfully!".to_string());
+                    }
+                    Err(e) => {
+                        // Sync failed, but try to reload local data anyway
+                        eprintln!("Warning: Sync failed after project creation: {}", e);
+                        self.load_local_data(sync_service).await;
+                        self.error_message = Some("Project created but sync failed - data may be stale".to_string());
+                    }
+                }
+                
+                // Clear the success message after a short delay
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                self.error_message = None;
+            }
+            Err(e) => {
+                self.error_message = Some(format!("Error creating project: {e}"));
+            }
+        }
+
+        self.new_project_name.clear();
+        self.new_project_parent_id = None;
+    }
+
+    /// Start project deletion confirmation
+    pub fn start_delete_project(&mut self) {
+        if let Some(project) = self.projects.get(self.selected_project_index) {
+            self.delete_project_confirmation = Some(project.id.clone());
+        }
+    }
+
+    /// Cancel project deletion
+    pub fn cancel_delete_project(&mut self) {
+        self.delete_project_confirmation = None;
+    }
+
+    /// Delete the confirmed project
+    pub async fn delete_project(&mut self, sync_service: &SyncService) {
+        if let Some(project_id) = &self.delete_project_confirmation {
+            self.error_message = None;
+
+            match sync_service.delete_project(project_id).await {
+                Ok(_) => {
+                    // Force a full sync to ensure all data is up to date
+                    self.force_clear_and_sync(sync_service).await;
+                    self.error_message = Some("Project deleted successfully!".to_string());
+                    // Clear the success message after a short delay
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    self.error_message = None;
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Error deleting project: {e}"));
+                }
+            }
+
+            self.delete_project_confirmation = None;
+        }
     }
 }

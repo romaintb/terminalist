@@ -17,6 +17,7 @@ use super::app::App;
 use super::events::handle_events;
 use super::layout::LayoutManager;
 use super::components::{ProjectsList, TasksList, StatusBar, HelpPanel, ErrorDialog, DeleteConfirmationDialog};
+use super::components::dialogs::{ProjectCreationDialog, ProjectDeleteConfirmationDialog};
 
 /// Run the main TUI application
 pub async fn run_app() -> Result<()> {
@@ -62,10 +63,18 @@ async fn run_ui(
 
         // Handle events with a timeout to allow for async operations
         if event::poll(Duration::from_millis(100))? {
-            if let Event::Key(key) = event::read()? {
-                if key.kind == crossterm::event::KeyEventKind::Press {
-                    // Handle the event
-                    let _handled = handle_events(Event::Key(key), app, sync_service).await?;
+            match event::read()? {
+                Event::Key(key) => {
+                    if key.kind == crossterm::event::KeyEventKind::Press {
+                        // Handle the event
+                        let _handled = handle_events(Event::Key(key), app, sync_service).await?;
+                    }
+                }
+                Event::Resize(_, _) => {
+                    // Handle terminal resize events
+                }
+                _ => {
+                    // Handle other event types if needed
                 }
             }
         }
@@ -108,5 +117,13 @@ fn render_ui(f: &mut ratatui::Frame, app: &mut App) {
 
     if app.delete_confirmation.is_some() {
         DeleteConfirmationDialog::render(f, app);
+    }
+
+    if app.creating_project {
+        ProjectCreationDialog::render(f, app);
+    }
+
+    if app.delete_project_confirmation.is_some() {
+        ProjectDeleteConfirmationDialog::render(f, app);
     }
 }

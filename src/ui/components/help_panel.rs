@@ -41,6 +41,8 @@ impl HelpPanel {
         ------------------
         p           Previous project
         n           Next project
+        N           Create new project
+        D           Delete selected project (with confirmation)
         s           Sync projects and tasks
         
         TASK MANAGEMENT

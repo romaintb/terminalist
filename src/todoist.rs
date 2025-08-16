@@ -124,6 +124,41 @@ impl TodoistWrapper {
         Ok(())
     }
 
+    /// Create a new project
+    pub async fn create_project(&self, name: &str, parent_id: Option<&str>) -> Result<Project> {
+        let url = format!("{TODOIST_API_BASE}/projects");
+
+        let mut body = HashMap::new();
+        body.insert("name", name);
+        if let Some(pid) = parent_id {
+            body.insert("parent_id", pid);
+        }
+
+        let response = self
+            .client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await?;
+
+        let project: Project = response.json().await?;
+        Ok(project)
+    }
+
+    /// Delete a project
+    pub async fn delete_project(&self, project_id: &str) -> Result<()> {
+        let url = format!("{TODOIST_API_BASE}/projects/{project_id}");
+        self.client
+            .delete(&url)
+            .header("Authorization", format!("Bearer {}", self.api_token))
+            .send()
+            .await?;
+
+        Ok(())
+    }
+
     /// Get all labels
     pub async fn get_labels(&self) -> Result<Vec<Label>> {
         let url = format!("{TODOIST_API_BASE}/labels");
