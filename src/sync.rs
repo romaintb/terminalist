@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::storage::LocalStorage;
-use crate::todoist::{ProjectDisplay, TaskDisplay, TodoistWrapper};
+use crate::todoist::{ProjectDisplay, TaskDisplay, TodoistWrapper, CreateProjectArgs};
 
 /// Sync service that manages data synchronization between API and local storage
 #[derive(Clone)]
@@ -67,8 +67,15 @@ impl SyncService {
 
     /// Create a new project
     pub async fn create_project(&self, name: &str, parent_id: Option<&str>) -> Result<()> {
-        // Create project via API
-        let _project = self.todoist.create_project(name, parent_id).await?;
+        // Create project via API using the new CreateProjectArgs structure
+        let project_args = CreateProjectArgs {
+            name: name.to_string(),
+            color: None,
+            parent_id: parent_id.map(|s| s.to_string()),
+            is_favorite: None,
+            view_style: None,
+        };
+        let _project = self.todoist.create_project(&project_args).await?;
         
         // The UI will handle the sync separately to ensure proper error handling
         Ok(())
