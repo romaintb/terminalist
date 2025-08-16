@@ -16,8 +16,7 @@ use crate::sync::SyncService;
 use super::app::App;
 use super::events::handle_events;
 use super::layout::LayoutManager;
-use super::components::{ProjectsList, TasksList, StatusBar, HelpPanel, ErrorDialog, DeleteConfirmationDialog, TaskCreationDialog};
-use super::components::dialogs::{ProjectCreationDialog, ProjectDeleteConfirmationDialog};
+use super::components::{ProjectsList, TasksList, StatusBar, HelpPanel, ErrorDialog, DeleteConfirmationDialog, TaskCreationDialog, ProjectCreationDialog, ProjectDeleteConfirmationDialog};
 
 /// Run the main TUI application
 pub async fn run_app() -> Result<()> {
