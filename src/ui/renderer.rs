@@ -91,26 +91,14 @@ async fn run_ui(
 fn render_ui(f: &mut ratatui::Frame, app: &mut App) {
     // Calculate layouts
     let chunks = LayoutManager::main_layout(f.size());
-    let status_height = LayoutManager::calculate_status_height(
-        app.loading,
-        app.syncing,
-        app.completing_task,
-        app.deleting_task,
-        app.delete_confirmation.as_ref(),
-        app.error_message.as_ref(),
-    );
-    let right_chunks = LayoutManager::right_pane_layout(chunks[1], status_height);
+    let top_chunks = LayoutManager::top_pane_layout(chunks[0]);
 
     // Render components
-    ProjectsList::render(f, chunks[0], app);
-    TasksList::render(f, right_chunks[0], app);
-    StatusBar::render(f, right_chunks[1], app);
+    ProjectsList::render(f, top_chunks[0], app);
+    TasksList::render(f, top_chunks[1], app);
+    StatusBar::render(f, chunks[1], app);
 
     // Render overlays
-    if app.show_help {
-        HelpPanel::render(f, app);
-    }
-
     if app.error_message.is_some() {
         ErrorDialog::render(f, app);
     }
@@ -129,5 +117,10 @@ fn render_ui(f: &mut ratatui::Frame, app: &mut App) {
 
     if app.delete_project_confirmation.is_some() {
         ProjectDeleteConfirmationDialog::render(f, app);
+    }
+
+    // Render help panel last to ensure it's on top of everything
+    if app.show_help {
+        HelpPanel::render(f, app);
     }
 }

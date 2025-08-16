@@ -6,18 +6,33 @@ use ratatui::layout::{Constraint, Direction, Layout, Rect};
 pub struct LayoutManager;
 
 impl LayoutManager {
-    /// Calculate the main layout areas (sidebar + main content)
+    /// Calculate the main layout areas (projects+tasks on top, status bar below)
     #[must_use]
     pub fn main_layout(area: Rect) -> Vec<Rect> {
         let screen_width = area.width;
-        let sidebar_width = std::cmp::min(screen_width * 30 / 100, 25);
-        let main_width = screen_width.saturating_sub(sidebar_width);
+        let screen_height = area.height;
+        
+        // Top area: projects + tasks (all height except 1 line for status)
+        let top_height = screen_height.saturating_sub(1);
+        let top_area = Rect::new(0, 0, screen_width, top_height);
+        
+        // Bottom area: status bar (1 line height, full width)
+        let status_area = Rect::new(0, top_height, screen_width, 1);
+        
+        vec![top_area, status_area]
+    }
+
+    /// Calculate the top pane layout (projects + tasks side by side)
+    #[must_use]
+    pub fn top_pane_layout(area: Rect) -> Vec<Rect> {
+        let projects_width = std::cmp::min(area.width * 1 / 3, 30);  // Projects: 1/3 of width, max 30
+        let tasks_width = area.width.saturating_sub(projects_width);   // Tasks: remaining width
 
         Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Length(sidebar_width),
-                Constraint::Length(main_width),
+                Constraint::Length(projects_width),
+                Constraint::Length(tasks_width),
             ])
             .split(area)
             .to_vec()
