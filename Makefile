@@ -1,10 +1,10 @@
 # Rust development tasks (similar to Rake tasks in Ruby)
 
-.PHONY: help format lint fix check test build run clean all
+.PHONY: help format lint fix check test build run clean all security-audit
 
 help: ## Show this help message
 	@echo "Available commands:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-15s\033[0m %s\n", $$1, $$1, $$2}'
 
 format: ## Format code with rustfmt (like rubocop --auto-correct)
 	cargo fmt
@@ -29,6 +29,9 @@ run: ## Run the main application
 
 clean: ## Clean build artifacts
 	cargo clean
+
+security-audit: ## Run security audit (like bundler-audit in Ruby)
+	cargo audit
 
 all: format fix check test build ## Run format, fix, check, test, and build
 
