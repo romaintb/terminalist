@@ -81,6 +81,34 @@ impl SyncService {
         Ok(())
     }
 
+    /// Create a new task
+    pub async fn create_task(&self, content: &str, project_id: Option<&str>) -> Result<()> {
+        // Create task via API using the new CreateTaskArgs structure
+        let task_args = todoist_api::CreateTaskArgs {
+            content: content.to_string(),
+            description: None,
+            project_id: project_id.map(|s| s.to_string()),
+            section_id: None,
+            parent_id: None,
+            order: None,
+            priority: None,
+            labels: None,
+            due_string: None,
+            due_date: None,
+            due_datetime: None,
+            due_lang: None,
+            deadline_date: None,
+            deadline_lang: None,
+            assignee_id: None,
+            duration: None,
+            duration_unit: None,
+        };
+        let _task = self.todoist.create_task(&task_args).await?;
+        
+        // The UI will handle the sync separately to ensure proper error handling
+        Ok(())
+    }
+
     /// Delete a project
     pub async fn delete_project(&self, project_id: &str) -> Result<()> {
         // Delete project via API

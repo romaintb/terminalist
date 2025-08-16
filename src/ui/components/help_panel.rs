@@ -26,69 +26,64 @@ impl HelpPanel {
         f.render_widget(Clear, help_area);
         
         let help_content = r"
-        TERMINALIST - Todoist Terminal Client
-        ====================================
-        
-        NAVIGATION
-        ----------
-        ↑↓          Navigate projects/tasks
-        ←→          Switch between projects and tasks
-        Tab         Switch focus between panes
-        Enter       Select project/task or confirm action
-        Esc         Cancel action or close dialogs
-        
-        PROJECT MANAGEMENT
-        ------------------
-        p           Previous project
-        n           Next project
-        N           Create new project
-        D           Delete selected project (with confirmation)
-        s           Sync projects and tasks
-        
-        TASK MANAGEMENT
-        ---------------
-        Space       Toggle task completion
-        d           Delete task (with confirmation)
-        r           Reopen completed task
-        c           Mark task as completed
-        
-        SYNC & DATA
-        ------------
-        s           Force sync with Todoist
-        Ctrl+C      Quit application
-        
-        GENERAL CONTROLS
-        ----------------
-        ?           Toggle help panel
-        q           Quit application
-        
-        HELP PANEL SCROLLING
-        --------------------
-        ↑↓          Scroll help content up/down
-        Home        Jump to top of help
-        End         Jump to bottom of help
-        
-        STATUS INDICATORS & BADGES
-        ---------------------------
-        🔳          Pending task
-        ✅          Completed task
-        ❌          Deleted task
-        
-        Priority badges: [P0] (urgent), [P1] (high), [P2] (medium), [P3] (low), no badge (normal)
-        
-        LAYOUT DETAILS
-        ---------------
-        Left pane:  Projects list with selection
-        Right pane: Tasks for selected project
-        Bottom:     Status bar with shortcuts
-        Help:       Modal overlay with scrollable content
-        
-        TASK ORDERING
-        --------------
-        Tasks are ordered: pending, then completed, then deleted
-        
-        Press 'Esc' or '?' to close this help panel
-        ";
+TERMINALIST - Todoist Terminal Client
+====================================
+
+NAVIGATION
+----------
+j/k         Navigate tasks (down/up)
+J/K         Navigate projects (down/up)
+Enter       Select project/task or confirm action
+Esc         Cancel action or close dialogs
+
+PROJECT MANAGEMENT
+-----------------
+A           Create new project
+D           Delete selected project (with confirmation)
+
+TASK MANAGEMENT
+--------------
+Space       Toggle task completion
+a           Create new task
+d           Delete task (with confirmation)
+
+SYNC & DATA
+-----------
+r           Force sync with Todoist
+Ctrl+C      Quit application
+
+GENERAL CONTROLS
+----------------
+?           Toggle help panel
+q           Quit application
+
+HELP PANEL SCROLLING
+--------------------
+↑↓          Scroll help content up/down
+Home        Jump to top of help
+End         Jump to bottom of help
+
+TASK STATUS INDICATORS
+----------------------
+🔳          Pending task
+✅          Completed task
+❌          Deleted task
+
+Priority badges: [P0] (urgent), [P1] (high), [P2] (medium), [P3] (low), no badge (normal)
+
+LAYOUT DETAILS
+--------------
+Left pane:  Projects list with selection
+Right pane: Tasks for selected project
+Bottom:     Status bar with shortcuts
+Help:       Modal overlay with scrollable content
+
+NOTES
+-----
+Tasks are ordered: pending, then completed, then deleted
+
+Press 'Esc' or '?' to close this help panel
+";
         
         // Apply scroll offset to the content
         let lines: Vec<&str> = help_content.lines().collect();

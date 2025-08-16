@@ -22,6 +22,11 @@ pub async fn handle_events(
                 return handle_project_creation(key, app, sync_service).await;
             }
 
+            // Handle task creation dialog
+            if app.creating_task {
+                return handle_task_creation_mode(key, app, sync_service).await;
+            }
+
             // Handle delete confirmation dialog
             if app.delete_confirmation.is_some() {
                 return handle_delete_confirmation(key, app, sync_service).await;
@@ -158,6 +163,34 @@ fn handle_help_panel(key: crossterm::event::KeyEvent, app: &mut App) -> bool {
     }
 }
 
+/// Handle events in task creation mode
+async fn handle_task_creation_mode(
+    key: crossterm::event::KeyEvent, 
+    app: &mut App, 
+    sync_service: &SyncService
+) -> Result<bool, anyhow::Error> {
+    match key.code {
+        KeyCode::Char(c) if c.is_ascii_graphic() => {
+            app.add_char_to_task_content(c);
+            Ok(true)
+        }
+        KeyCode::Backspace => {
+            app.remove_char_from_task_content();
+            Ok(true)
+        }
+        KeyCode::Enter => {
+            // Create the task directly here
+            app.create_task(sync_service).await;
+            Ok(true)
+        }
+        KeyCode::Esc => {
+            app.cancel_create_task();
+            Ok(true)
+        }
+        _ => Ok(false), // Ignore all other keys when creating task
+    }
+}
+
 /// Handle events in normal mode
 async fn handle_normal_mode(
     key: crossterm::event::KeyEvent,
@@ -187,14 +220,14 @@ async fn handle_normal_mode(
             app.next_task();
             Ok(true)
         }
-        KeyCode::Left | KeyCode::Char('h') => {
+        KeyCode::Char('K') => {
             app.previous_project();
             if let Err(e) = app.load_tasks_for_selected_project(sync_service).await {
                 app.error_message = Some(format!("Error loading tasks: {e}"));
             }
             Ok(true)
         }
-        KeyCode::Right | KeyCode::Char('l') => {
+        KeyCode::Char('J') => {
             app.next_project();
             if let Err(e) = app.load_tasks_for_selected_project(sync_service).await {
                 app.error_message = Some(format!("Error loading tasks: {e}"));
@@ -209,8 +242,13 @@ async fn handle_normal_mode(
             Ok(true)
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
-            app.toggle_selected_task(sync_service).await;
-            Ok(true)
+            if app.creating_task {
+                app.create_task(sync_service).await;
+                Ok(true)
+            } else {
+                app.toggle_selected_task(sync_service).await;
+                Ok(true)
+            }
         }
         KeyCode::Char('d') => {
             // Trigger delete confirmation only if task is not already deleted
@@ -226,7 +264,12 @@ async fn handle_normal_mode(
             app.show_help = true;
             Ok(true)
         }
-        KeyCode::Char('N') => {
+        KeyCode::Char('a') => {
+            // Create new task
+            app.start_create_task();
+            Ok(true)
+        }
+        KeyCode::Char('A') => {
             // Create new project
             app.start_create_project();
             Ok(true)

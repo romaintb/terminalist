@@ -16,7 +16,7 @@ use crate::sync::SyncService;
 use super::app::App;
 use super::events::handle_events;
 use super::layout::LayoutManager;
-use super::components::{ProjectsList, TasksList, StatusBar, HelpPanel, ErrorDialog, DeleteConfirmationDialog};
+use super::components::{ProjectsList, TasksList, StatusBar, HelpPanel, ErrorDialog, DeleteConfirmationDialog, TaskCreationDialog};
 use super::components::dialogs::{ProjectCreationDialog, ProjectDeleteConfirmationDialog};
 
 /// Run the main TUI application
@@ -121,6 +121,10 @@ fn render_ui(f: &mut ratatui::Frame, app: &mut App) {
 
     if app.creating_project {
         ProjectCreationDialog::render(f, app);
+    }
+
+    if app.creating_task {
+        TaskCreationDialog::render(f, app);
     }
 
     if app.delete_project_confirmation.is_some() {

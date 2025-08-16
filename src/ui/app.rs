@@ -28,6 +28,10 @@ pub struct App {
     pub new_project_name: String,
     pub new_project_parent_id: Option<String>,
     pub delete_project_confirmation: Option<String>, // Project ID to delete if confirmed
+    // Task management
+    pub creating_task: bool,
+    pub new_task_content: String,
+    pub new_task_project_id: Option<String>,
 }
 
 impl Default for App {
@@ -69,6 +73,10 @@ impl App {
             new_project_name: String::new(),
             new_project_parent_id: None,
             delete_project_confirmation: None,
+            // Task management
+            creating_task: false,
+            new_task_content: String::new(),
+            new_task_project_id: None,
         }
     }
 
@@ -454,5 +462,81 @@ impl App {
 
             self.delete_project_confirmation = None;
         }
+    }
+
+    /// Start creating a new task
+    pub fn start_create_task(&mut self) {
+        self.creating_task = true;
+        self.new_task_content.clear();
+        // Set the current project as the default project for the new task
+        if let Some(project) = self.projects.get(self.selected_project_index) {
+            self.new_task_project_id = Some(project.id.clone());
+        }
+    }
+
+    /// Cancel task creation
+    pub fn cancel_create_task(&mut self) {
+        self.creating_task = false;
+        self.new_task_content.clear();
+        self.new_task_project_id = None;
+    }
+
+    /// Add a character to the task content
+    pub fn add_char_to_task_content(&mut self, c: char) {
+        if self.creating_task {
+            self.new_task_content.push(c);
+        }
+    }
+
+    /// Remove the last character from the task content
+    pub fn remove_char_from_task_content(&mut self) {
+        if self.creating_task && !self.new_task_content.is_empty() {
+            self.new_task_content.pop();
+        }
+    }
+
+    /// Create the new task
+    pub async fn create_task(&mut self, sync_service: &SyncService) {
+        if self.new_task_content.trim().is_empty() {
+            self.error_message = Some("Task content cannot be empty".to_string());
+            return;
+        }
+
+        self.creating_task = false;
+        self.error_message = None;
+
+        // Create the task in the currently selected project
+        if let Some(project) = self.projects.get(self.selected_project_index) {
+            match sync_service.create_task(&self.new_task_content.trim(), Some(&project.id)).await {
+                Ok(_) => {
+                    // Try to sync first, but if it fails, at least reload local data
+                    match sync_service.force_sync().await {
+                        Ok(_) => {
+                            // Sync succeeded, reload local data
+                            self.load_local_data(sync_service).await;
+                            self.error_message = Some("Task created successfully!".to_string());
+                        }
+                        Err(e) => {
+                            // Sync failed, but try to reload local data anyway
+                            eprintln!("Warning: Sync failed after task creation: {}", e);
+                            self.load_local_data(sync_service).await;
+                            self.error_message = Some("Task created but sync failed - data may be stale".to_string());
+                        }
+                    }
+                    
+                    // Clear the success message after a short delay
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    self.error_message = None;
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Error creating task: {e}"));
+                }
+            }
+        } else {
+            self.error_message = Some("No project selected for task creation".to_string());
+        }
+
+        self.new_task_content.clear();
+        self.new_task_project_id = None;
     }
 }

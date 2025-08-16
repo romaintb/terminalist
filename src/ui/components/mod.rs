@@ -10,4 +10,4 @@ pub use projects_list::ProjectsList;
 pub use tasks_list::TasksList;
 pub use status_bar::StatusBar;
 pub use help_panel::HelpPanel;
-pub use dialogs::{ErrorDialog, DeleteConfirmationDialog};
+pub use dialogs::{ErrorDialog, DeleteConfirmationDialog, TaskCreationDialog};
