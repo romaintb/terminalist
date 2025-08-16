@@ -1,26 +1,19 @@
 # Terminalist - Todoist Terminal Client
 
-A terminal application for interacting with Todoist, built in Rust.
+A terminal application for interacting with Todoist, built in Rust with a modern TUI interface.
 
 ## Features
 
-- ✅ **Interactive TUI Interface** - Beautiful terminal user interface
-- ✅ **Local Data Caching** - Fast, responsive UI with SQLite local storage
+- ✅ **Interactive TUI Interface** - Beautiful terminal user interface with ratatui
+- ✅ **Local Data Caching** - Fast, responsive UI with in-memory SQLite storage
 - ✅ **Smart Sync** - Automatic sync on startup and manual refresh with 'r'
-- ✅ **Offline Support** - Browse cached data when offline
-- ✅ **Project Sidebar** - Browse projects in a dedicated left sidebar
-- ✅ **Task Management** - View, navigate, and complete tasks in the main pane
-- ✅ **Interactive Task Toggle** - Complete and reopen tasks with Space/Enter
+- ✅ **Project Management** - Browse projects with hierarchical display
+- ✅ **Task Management** - View, navigate, complete, and create tasks
 - ✅ **Keyboard Navigation** - Efficient keyboard-only operation
-- ✅ **Sync Status** - Real-time sync indicators and data freshness info
-- ✅ List all your Todoist projects
-- ✅ View your tasks
-- ✅ Filter tasks by project
-- ✅ Create new tasks (API ready)
-- ✅ Complete tasks (API ready)
-- ✅ Delete tasks (API ready)
-- ✅ Update task content (API ready)
-- ✅ View labels (API ready)
+- ✅ **Real-time Updates** - Create, complete, and delete tasks/projects
+- ✅ **Label Support** - View task labels with colored badges
+- ✅ **Responsive Layout** - Adapts to terminal size with smart scaling
+- ✅ **Help System** - Built-in help panel with keyboard shortcuts
 
 ## Setup
 
@@ -47,40 +40,65 @@ cargo run
 
 Once the application is running, you can use these keyboard shortcuts:
 
-- **← →** Navigate between projects (left sidebar)
-- **↑ ↓** Navigate between tasks (main pane)
-- **Space/Enter** Toggle task completion (complete ↔ reopen)
-- **r** Refresh data from Todoist
-- **q** Quit the application
+### **Navigation**
+- **`j/k`** Navigate between tasks (down/up)
+- **`J/K`** Navigate between projects (down/up)
+- **`Tab`** Switch focus between panes
+
+### **Task Management**
+- **`Space`** or **`Enter`** Toggle task completion (complete ↔ reopen)
+- **`a`** Create new task
+- **`d`** Delete selected task (with confirmation)
+
+### **Project Management**
+- **`A`** Create new project
+- **`D`** Delete selected project (with confirmation)
+
+### **System**
+- **`r`** Force sync with Todoist
+- **`?`** Toggle help panel
+- **`q`** Quit the application
+- **`Esc`** Cancel action or close dialogs
+- **`Ctrl+C`** Quit application
+
+### **Help Panel Scrolling**
+- **`↑/↓`** Scroll help content up/down
+- **`Home/End`** Jump to top/bottom of help
 
 The interface consists of:
-- **Left Sidebar**: Lists all your Todoist projects with favorites marked with ⭐
-  - Responsive width: 30% of screen with a maximum of 25 characters
-  - Long project names are automatically truncated with ellipsis (…)
-- **Main Pane**: Shows tasks for the currently selected project
-- **Status Bar**: Displays available keyboard shortcuts and current status
 
+### **Layout Structure**
+- **Top Area**: Projects list (1/3 width) | Tasks list (2/3 width) - side by side
+- **Bottom Area**: Status bar (full width, 1 line height)
+
+### **Components**
+- **Projects List (Left)**: Hierarchical display of all Todoist projects
+  - Responsive width: 1/3 of screen with a maximum of 30 characters
+  - Long project names are automatically truncated with ellipsis (…)
+  - Parent-child relationships clearly shown
+- **Tasks List (Right)**: Shows tasks for the currently selected project
+  - Takes remaining width after projects list
+  - Displays task content, priority, labels, and status
+- **Status Bar (Bottom)**: Full-width bar showing available shortcuts and current status
+- **Help Panel**: Modal overlay accessible with `?` key
+
+### **Task Display Features**
 Tasks are displayed with:
-- **Status Icons**: ✅ (completed) or ⏳ (pending)
-- **Priority Indicators**: [P0] (urgent), [P1] (high), [P2] (medium), [P3] (low), no badge (normal)
-- **Task Content**: Truncated to fit the display
-- **Rich Metadata Badges**:
-  - `🔄REC` Recurring tasks (blue badge)
-  - `⏰DUE` Tasks with deadlines (red badge)
-  - `2h`, `30m` Duration estimates (yellow badge)
-  - `3L` Tasks with labels (green badge)
-  - `P1`, `P2`, `P3` Priority levels (colored badges)
-- **Completion Visual**: Completed tasks appear dimmed and green
-- **Interactive**: Press Space or Enter to toggle task completion (complete/reopen)
+- **Status Icons**: 🔳 (pending), ✅ (completed), ❌ (deleted)
+- **Priority Badges**: [P0] (urgent), [P1] (high), [P2] (medium), [P3] (low), no badge (normal)
+- **Label Badges**: Colored badges showing task labels
+- **Task Content**: Truncated to fit the display width
+- **Completion Visual**: Completed tasks appear dimmed
+- **Interactive**: Press Space or Enter to toggle completion
 
 ## Sync Mechanism
 
 Terminalist uses a smart sync mechanism for optimal performance:
 
 ### **Local Storage**
-- All data is cached locally in a SQLite database
-- Located in your system's data directory (`~/.local/share/terminalist/` on Linux)
-- Provides instant loading and offline browsing capabilities
+- All data is cached locally in an **in-memory SQLite database**
+- **No persistence between sessions** - data is fresh on each launch
+- Provides instant loading and fast response times
 
 ### **Sync Behavior**
 - **First Run**: Automatically syncs all data from Todoist
@@ -88,106 +106,69 @@ Terminalist uses a smart sync mechanism for optimal performance:
 - **Manual Sync**: Press `r` to force refresh from Todoist API
 - **Sync Indicators**: Status bar shows sync progress and data freshness
 
-### **Offline Support**
-- Browse cached projects and tasks when offline
-- Sync status clearly indicates when data is stale
-- Graceful error handling for network issues
-
-## Usage Examples
-
-### Using the TodoistWrapper in your code
-
-```rust
-use terminalist::todoist::TodoistWrapper;
-
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let todoist = TodoistWrapper::new("your_api_token".to_string());
-    
-    // Get all projects
-    let projects = todoist.get_projects().await?;
-    println!("Found {} projects", projects.len());
-    
-    // Get all tasks
-    let tasks = todoist.get_tasks().await?;
-    println!("Found {} tasks", tasks.len());
-    
-    // Create a new task
-    let new_task = todoist.create_task("Learn Rust", None).await?;
-    println!("Created task: {}", new_task.content);
-    
-    // Complete a task
-    todoist.complete_task(&new_task.id).await?;
-    println!("Task completed!");
-    
-    Ok(())
-}
-```
-
-### Available Methods
-
-The `TodoistWrapper` provides these methods:
-
-- `get_projects()` - Get all projects
-- `get_tasks()` - Get all tasks
-- `get_tasks_for_project(project_id)` - Get tasks for a specific project
-- `create_task(content, project_id)` - Create a new task
-- `complete_task(task_id)` - Mark a task as complete
-- `delete_task(task_id)` - Delete a task
-- `update_task(task_id, content)` - Update task content
-- `get_labels()` - Get all labels
+### **Data Management**
+- **Projects**: Hierarchical structure with parent-child relationships
+- **Tasks**: Full task details including labels, priority, and status
+- **Labels**: Colored badges for task categorization
+- **Real-time Updates**: Create, modify, and delete tasks/projects immediately
 
 
 ## Dependencies
 
 This project uses the following Rust crates:
 
-- `reqwest` - HTTP client for making API requests
-- `tokio` - Async runtime
+- `todoist-api = "0.2.0"` - Unofficial Todoist API client
+- `ratatui = "0.24"` - Terminal UI framework
+- `crossterm = "0.27"` - Cross-platform terminal handling
+- `tokio = "1.0"` - Async runtime
+- `sqlx = "0.7"` - Database toolkit with SQLite support
 - `serde` - Serialization/deserialization
-- `serde_json` - JSON serialization
-- `anyhow` - Error handling
+- `chrono = "0.4"` - Date and time handling
+- `anyhow = "1.0"` - Error handling
 
 ## Project Structure
 
 ```
 src/
-├── main.rs        # Main application entry point
-└── todoist.rs     # Todoist API wrapper module
+├── main.rs                    # Main application entry point
+├── lib.rs                     # Library exports
+├── todoist.rs                 # Todoist API models & display structs
+├── sync.rs                    # Sync service
+├── storage.rs                 # SQLite storage (in-memory)
+├── badge.rs                   # Badge creation utilities
+├── terminal_badge.rs          # Terminal-optimized badges
+└── ui/                        # TUI components
+    ├── app.rs                 # Application state management
+    ├── events.rs              # Event handling & keyboard shortcuts
+    ├── layout.rs              # Layout management
+    ├── renderer.rs            # Main rendering loop
+    └── components/            # UI components
+        ├── projects_list.rs   # Projects display
+        ├── tasks_list.rs      # Tasks display
+        ├── status_bar.rs      # Status bar
+        ├── help_panel.rs      # Help overlay
+        └── dialogs/           # Dialog components
+            ├── error_dialog.rs
+            ├── delete_confirmation_dialog.rs
+            ├── project_creation_dialog.rs
+            ├── task_creation_dialog.rs
+            └── project_delete_confirmation_dialog.rs
 ```
 
-## Error Handling
+## Development Setup
 
-All API calls return `Result<T>` types. Make sure to handle errors appropriately:
-
-```rust
-match todoist.get_tasks().await {
-    Ok(tasks) => {
-        // Handle successful response
-        for task in tasks {
-            println!("{}", task.content);
-        }
-    }
-    Err(e) => {
-        eprintln!("Error: {}", e);
-    }
-}
-```
-
-## Development Setup (Ruby Developer Friendly! 🚀)
-
-This project is set up with Rust tooling that works similarly to RuboCop and other Ruby development tools:
+This project is set up with modern Rust development tooling:
 
 ### Quick Start
 ```bash
-# Install Rust components (like installing gems)
+# Install Rust components
 rustup component add rustfmt clippy
 
-# Development workflow (like running rubocop)
+# Development workflow
 make dev          # Format + lint + check
-make format       # Format code (like rubocop --auto-correct)
-make lint         # Run linter (like rubocop)
-make fix          # Auto-fix issues (like rubocop --auto-correct)
+make format       # Format code with rustfmt
+make lint         # Run clippy linter
+make fix          # Auto-fix clippy issues
 ```
 
 ### Available Commands
@@ -200,7 +181,6 @@ make check        # Check code without building
 make test         # Run tests
 make build        # Build the project
 make run          # Run the main application
-make example      # Run the basic usage example
 make clean        # Clean build artifacts
 make all          # Run format, fix, check, test, and build
 make dev          # Quick development check (format + fix + check)
@@ -208,51 +188,29 @@ make strict-lint  # Run all clippy lints (very strict)
 make docs         # Generate and open documentation
 ```
 
-### IDE Setup (VS Code)
-
-The project includes VS Code configuration for:
-- **Format on save** (like RuboCop auto-correct)
-- **Inline linting** (like RuboCop in your editor)
-- **Auto-imports** and helpful hints
-- **Debugging support**
-
-Recommended extensions are configured in `.vscode/extensions.json`.
-
 ### Configuration Files
 
-- `rustfmt.toml` - Code formatting rules (like `.rubocop.yml`)
-- `clippy.toml` - Linting rules (like RuboCop cops configuration)
-- `.vscode/settings.json` - IDE settings for format-on-save
-- `Makefile` - Development commands (like Rake tasks)
-
-### Rust Tools vs Ruby Tools
-
-| Ruby Tool | Rust Equivalent | Purpose |
-|-----------|----------------|---------|
-| RuboCop | clippy | Linting and style checking |
-| RuboCop --auto-correct | rustfmt | Code formatting |
-| bundle exec | cargo | Running tools and commands |
-| Rake | make (Makefile) | Task runner |
-| RSpec | cargo test | Testing framework |
-| bundler-audit | cargo audit | Security auditing |
+- `rustfmt.toml` - Code formatting rules
+- `clippy.toml` - Linting rules
+- `Makefile` - Development commands
 
 ### CI/CD
 
 GitHub Actions workflow is configured in `.github/workflows/ci.yml` with:
-- Format checking (like RuboCop in CI)
+- Format checking with rustfmt
 - Linting with clippy
 - Testing on multiple Rust versions
 - Security auditing
 
 ## Contributing
 
-This is a basic wrapper to get you started. You can extend it by:
+This is a fully-featured TUI application for Todoist. You can extend it by:
 
-- Adding more API endpoints
-- Implementing better error handling
-- Adding command-line argument parsing
-- Creating a proper TUI interface
+- Adding more keyboard shortcuts
+- Implementing additional task filters
 - Adding configuration file support
+- Enhancing the badge system
+- Adding more dialog types
 
 ### Development Workflow
 
