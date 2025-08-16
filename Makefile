@@ -27,9 +27,6 @@ build: ## Build the project
 run: ## Run the main application
 	cargo run
 
-example: ## Run the basic usage example
-	cargo run --example basic_usage
-
 clean: ## Clean build artifacts
 	cargo clean
 
