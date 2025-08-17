@@ -19,7 +19,7 @@ impl HelpPanel {
     pub fn render(f: &mut Frame, app: &App) {
         if app.show_help {
             // Use a large centered rectangle that covers most of the screen
-            let help_area = LayoutManager::centered_rect(90, 90, f.size());
+            let help_area = LayoutManager::centered_rect(90, 90, f.area());
             f.render_widget(Clear, help_area);
 
             // Calculate help content area with margins

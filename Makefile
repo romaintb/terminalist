@@ -1,6 +1,6 @@
 # Rust development tasks (similar to Rake tasks in Ruby)
 
-.PHONY: help format lint fix check test build run clean all security-audit
+.PHONY: help format lint fix check test build run clean all security-audit outdated
 
 help: ## Show this help message
 	@echo "Available commands:"
@@ -32,6 +32,9 @@ clean: ## Clean build artifacts
 
 security-audit: ## Run security audit (like bundler-audit in Ruby)
 	cargo audit
+
+outdated: ## Check for outdated dependencies
+	cargo outdated
 
 all: format fix check test build ## Run format, fix, check, test, and build
 

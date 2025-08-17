@@ -18,7 +18,7 @@ impl ProjectDeleteConfirmationDialog {
     pub fn render(f: &mut Frame, app: &App) {
         if let Some(project_id) = &app.delete_project_confirmation {
             if let Some(project) = app.projects.iter().find(|p| p.id == *project_id) {
-                let confirm_area = LayoutManager::centered_rect(70, 20, f.size());
+                let confirm_area = LayoutManager::centered_rect(70, 20, f.area());
                 f.render_widget(Clear, confirm_area);
 
                 let confirm_text = format!(

@@ -18,7 +18,7 @@ impl ProjectCreationDialog {
     /// Render the project creation dialog
     pub fn render(f: &mut Frame, app: &App) {
         if app.creating_project {
-            let dialog_area = LayoutManager::centered_rect(60, 20, f.size());
+            let dialog_area = LayoutManager::centered_rect(60, 20, f.area());
             f.render_widget(Clear, dialog_area);
 
             // Ensure we don't exceed dialog bounds

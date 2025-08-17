@@ -17,7 +17,7 @@ impl ErrorDialog {
     /// Render the error dialog
     pub fn render(f: &mut Frame, app: &App) {
         if let Some(error_msg) = &app.error_message {
-            let error_area = LayoutManager::centered_rect(60, 20, f.size());
+            let error_area = LayoutManager::centered_rect(60, 20, f.area());
             f.render_widget(Clear, error_area);
             let error_paragraph = Paragraph::new(error_msg.as_str())
                 .block(

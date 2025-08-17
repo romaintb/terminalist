@@ -84,7 +84,7 @@ async fn run_ui(
 /// Main UI rendering function
 fn render_ui(f: &mut ratatui::Frame, app: &mut App) {
     // Calculate layouts
-    let chunks = LayoutManager::main_layout(f.size());
+    let chunks = LayoutManager::main_layout(f.area());
     let top_chunks = LayoutManager::top_pane_layout(chunks[0]);
 
     // Render components

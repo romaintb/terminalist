@@ -18,7 +18,7 @@ impl DeleteConfirmationDialog {
     pub fn render(f: &mut Frame, app: &App) {
         if let Some(_task_id) = &app.delete_confirmation {
             if let Some(task) = app.tasks.get(app.selected_task_index) {
-                let confirm_area = LayoutManager::centered_rect(60, 25, f.size());
+                let confirm_area = LayoutManager::centered_rect(60, 25, f.area());
                 f.render_widget(Clear, confirm_area);
 
                 let task_preview = if task.content.len() > 40 {
