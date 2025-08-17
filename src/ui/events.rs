@@ -221,15 +221,15 @@ async fn handle_normal_mode(
             Ok(true)
         }
         KeyCode::Char('K') => {
-            app.previous_project();
-            if let Err(e) = app.load_tasks_for_selected_project(sync_service).await {
+            app.previous_sidebar_item();
+            if let Err(e) = app.load_tasks_for_selected_item(sync_service).await {
                 app.error_message = Some(format!("Error loading tasks: {e}"));
             }
             Ok(true)
         }
         KeyCode::Char('J') => {
-            app.next_project();
-            if let Err(e) = app.load_tasks_for_selected_project(sync_service).await {
+            app.next_sidebar_item();
+            if let Err(e) = app.load_tasks_for_selected_item(sync_service).await {
                 app.error_message = Some(format!("Error loading tasks: {e}"));
             }
             Ok(true)

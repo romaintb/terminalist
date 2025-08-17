@@ -12,7 +12,7 @@ use tokio::time::Duration;
 use super::app::App;
 use super::components::{
     DeleteConfirmationDialog, ErrorDialog, HelpPanel, ProjectCreationDialog, ProjectDeleteConfirmationDialog,
-    ProjectsList, StatusBar, TaskCreationDialog, TasksList,
+    Sidebar, StatusBar, TaskCreationDialog, TasksList,
 };
 use super::events::handle_events;
 use super::layout::LayoutManager;
@@ -88,7 +88,7 @@ fn render_ui(f: &mut ratatui::Frame, app: &mut App) {
     let top_chunks = LayoutManager::top_pane_layout(chunks[0]);
 
     // Render components
-    ProjectsList::render(f, top_chunks[0], app);
+    Sidebar::render(f, top_chunks[0], app);
     TasksList::render(f, top_chunks[1], app);
     StatusBar::render(f, chunks[1], app);
 

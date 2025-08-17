@@ -1,5 +1,6 @@
-//! Projects list component
+//! Sidebar component for projects and labels
 
+use super::super::app::{App, SidebarSelection};
 use ratatui::{
     layout::Alignment,
     style::{Color, Modifier, Style},
@@ -8,16 +9,54 @@ use ratatui::{
     Frame,
 };
 
-use super::super::app::App;
 use crate::todoist::ProjectDisplay;
 
-/// Projects list component
-pub struct ProjectsList;
+/// Sidebar component for projects and labels
+pub struct Sidebar;
 
-impl ProjectsList {
-    /// Render the projects list
+impl Sidebar {
+    /// Render the sidebar with projects and labels
     pub fn render(f: &mut Frame, area: ratatui::layout::Rect, app: &App) {
         let (_sidebar_width, max_name_width) = super::super::layout::LayoutManager::sidebar_constraints(area.width);
+
+        // Create list items: labels first, then projects
+        let mut all_items: Vec<ListItem> = Vec::new();
+
+        // Add labels section header if there are labels
+        if !app.labels.is_empty() {
+            all_items.push(ListItem::new(Line::from(vec![
+                Span::styled("🏷️ Labels", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            ])));
+
+            // Add labels
+            for (label_index, label) in app.labels.iter().enumerate() {
+                let is_selected = matches!(app.sidebar_selection, SidebarSelection::Label(idx) if idx == label_index);
+                let style = if is_selected {
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default().fg(Color::White)
+                };
+                
+                // Truncate label name to fit sidebar
+                let display_name = if label.name.len() > max_name_width as usize {
+                    format!("{}…", &label.name[..max_name_width.saturating_sub(1) as usize])
+                } else {
+                    label.name.clone()
+                };
+
+                all_items.push(ListItem::new(Line::from(vec![
+                    Span::styled("  🏷️ ", style),
+                    Span::styled(display_name, style),
+                ])));
+            }
+
+            // Add separator
+            all_items.push(ListItem::new(Line::from(vec![
+                Span::styled("", Style::default())
+            ])));
+        }
 
         // Sort projects: favorites first within their own hierarchical level
         let mut sorted_projects: Vec<_> = app.projects.iter().enumerate().collect();
@@ -65,11 +104,22 @@ impl ProjectsList {
             }
         });
 
+        // Add projects section header
+        all_items.push(ListItem::new(Line::from(vec![
+            Span::styled("📁 Projects", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+        ])));
+
+        // Add projects
         let project_items: Vec<ListItem> = sorted_projects
             .iter()
             .map(|(original_index, project)| {
-                let icon = if project.is_favorite { "⭐" } else { "📁" };
-                let style = if *original_index == app.selected_project_index {
+                let icon = if project.is_favorite { 
+                    "⭐" 
+                } else { 
+                    "📁" 
+                };
+                let is_selected = matches!(app.sidebar_selection, SidebarSelection::Project(idx) if idx == *original_index);
+                let style = if is_selected {
                     Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD)
@@ -91,11 +141,13 @@ impl ProjectsList {
 
                 ListItem::new(Line::from(vec![
                     Span::styled(indent, style),
-                    Span::styled(format!("{icon} "), style),
+                    Span::styled(format!("{} ", icon), style),
                     Span::styled(display_name, style),
                 ]))
             })
             .collect();
+
+        all_items.extend(project_items);
 
         // Helper function to calculate the actual tree depth of a project
         fn calculate_tree_depth(project: &ProjectDisplay, projects: &[ProjectDisplay]) -> usize {
@@ -112,20 +164,16 @@ impl ProjectsList {
             depth
         }
 
-        let projects_list = List::new(project_items)
+        let projects_list = List::new(all_items)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title("📁 Projects")
+                    .title("📁 Projects & Labels")
                     .title_alignment(Alignment::Center),
-            )
-            .highlight_style(
-                Style::default()
-                    .bg(Color::DarkGray)
-                    .add_modifier(Modifier::BOLD),
-            )
-            .highlight_symbol("→ ");
+            );
 
-        f.render_stateful_widget(projects_list, area, &mut app.project_list_state.clone());
+        // Render without stateful widget to avoid built-in highlighting
+        // Our manual styling handles the selection indication
+        f.render_widget(projects_list, area);
     }
 }
