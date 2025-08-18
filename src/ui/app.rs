@@ -508,7 +508,7 @@ impl App {
             .create_project(self.new_project_name.trim(), self.new_project_parent_id.as_deref())
             .await
         {
-            Ok(_) => {
+            Ok(()) => {
                 // Try to sync first, but if it fails, at least reload local data
                 match sync_service.force_sync().await {
                     Ok(_) => {
@@ -555,7 +555,7 @@ impl App {
             self.error_message = None;
 
             match sync_service.delete_project(project_id).await {
-                Ok(_) => {
+                Ok(()) => {
                     // Force a full sync to ensure all data is up to date
                     self.force_clear_and_sync(sync_service).await;
                     self.error_message = Some("Project deleted successfully!".to_string());
@@ -619,7 +619,7 @@ impl App {
                 .create_task(self.new_task_content.trim(), Some(&project.id))
                 .await
             {
-                Ok(_) => {
+                Ok(()) => {
                     // Try to sync first, but if it fails, at least reload local data
                     match sync_service.force_sync().await {
                         Ok(_) => {

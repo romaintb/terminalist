@@ -84,11 +84,13 @@ impl Default for IconService {
 
 impl IconService {
     /// Create a new icon service with the specified theme
+    #[must_use]
     pub fn new(theme: IconTheme) -> Self {
         Self { current_theme: theme }
     }
 
     /// Get the current theme
+    #[must_use]
     pub fn theme(&self) -> IconTheme {
         self.current_theme
     }
@@ -99,6 +101,7 @@ impl IconService {
     }
 
     /// Get the complete icon set for the current theme
+    #[must_use]
     pub fn icons(&self) -> IconSet {
         match self.current_theme {
             IconTheme::Emoji => Self::emoji_icons(),
@@ -207,43 +210,53 @@ impl IconService {
     }
 
     /// Convenience methods for commonly used icons
+    #[must_use]
     pub fn task_pending(&self) -> &'static str {
         self.icons().task_status.pending
     }
 
+    #[must_use]
     pub fn task_completed(&self) -> &'static str {
         self.icons().task_status.completed
     }
 
+    #[must_use]
     pub fn task_deleted(&self) -> &'static str {
         self.icons().task_status.deleted
     }
 
+    #[must_use]
     pub fn tasks_title(&self) -> &'static str {
         self.icons().ui.tasks_title
     }
 
+    #[must_use]
     pub fn projects_title(&self) -> &'static str {
         self.icons().ui.projects_title
     }
 
+    #[must_use]
     pub fn error(&self) -> &'static str {
         self.icons().ui.error
     }
 
+    #[must_use]
     pub fn info(&self) -> &'static str {
         self.icons().ui.info
     }
 
+    #[must_use]
     pub fn warning(&self) -> &'static str {
         self.icons().ui.warning
     }
 
+    #[must_use]
     pub fn success(&self) -> &'static str {
         self.icons().ui.success
     }
 
     /// Convenience methods for project and label icons
+    #[must_use]
     pub fn project_regular(&self) -> &'static str {
         match self.current_theme {
             IconTheme::Emoji => "📁",
@@ -252,6 +265,7 @@ impl IconService {
         }
     }
 
+    #[must_use]
     pub fn project_favorite(&self) -> &'static str {
         match self.current_theme {
             IconTheme::Emoji => "⭐",
@@ -260,6 +274,7 @@ impl IconService {
         }
     }
 
+    #[must_use]
     pub fn label(&self) -> &'static str {
         match self.current_theme {
             IconTheme::Emoji => "🏷️",

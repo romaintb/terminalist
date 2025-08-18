@@ -50,7 +50,7 @@ impl Sidebar {
                 };
 
                 all_items.push(ListItem::new(Line::from(vec![
-                    Span::styled(format!("{}", app.icons.label()), style),
+                    Span::styled(app.icons.label().to_string(), style),
                     Span::styled(display_name, style),
                 ])));
             }
@@ -146,7 +146,7 @@ impl Sidebar {
 
                 ListItem::new(Line::from(vec![
                     Span::styled(indent, style),
-                    Span::styled(format!("{}", icon), style),
+                    Span::styled(icon.to_string(), style),
                     Span::styled(display_name, style),
                 ]))
             })

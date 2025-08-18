@@ -103,7 +103,7 @@ impl SyncService {
         let project_args = CreateProjectArgs {
             name: name.to_string(),
             color: None,
-            parent_id: parent_id.map(|s| s.to_string()),
+            parent_id: parent_id.map(std::string::ToString::to_string),
             is_favorite: None,
             view_style: None,
         };
@@ -119,7 +119,7 @@ impl SyncService {
         let task_args = todoist_api::CreateTaskArgs {
             content: content.to_string(),
             description: None,
-            project_id: project_id.map(|s| s.to_string()),
+            project_id: project_id.map(std::string::ToString::to_string),
             section_id: None,
             parent_id: None,
             order: None,
