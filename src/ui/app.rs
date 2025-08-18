@@ -1,17 +1,25 @@
 //! Application state and business logic
 
 use crate::sync::{SyncService, SyncStats, SyncStatus};
-use crate::todoist::{ProjectDisplay, TaskDisplay};
+use crate::todoist::{LabelDisplay, ProjectDisplay, TaskDisplay};
 use ratatui::widgets::ListState;
+
+/// Represents the currently selected item in the sidebar
+#[derive(Debug, Clone, PartialEq)]
+pub enum SidebarSelection {
+    Label(usize),   // Index into labels vector
+    Project(usize), // Index into projects vector
+}
 
 /// Application state
 pub struct App {
     pub should_quit: bool,
     pub projects: Vec<ProjectDisplay>,
     pub tasks: Vec<TaskDisplay>,
-    pub selected_project_index: usize,
+    pub labels: Vec<LabelDisplay>,
+    pub sidebar_selection: SidebarSelection,
     pub selected_task_index: usize,
-    pub project_list_state: ListState,
+
     pub task_list_state: ListState,
     pub loading: bool,
     pub syncing: bool,
@@ -44,8 +52,7 @@ impl App {
     /// Create a new App instance
     #[must_use]
     pub fn new() -> Self {
-        let mut project_list_state = ListState::default();
-        project_list_state.select(Some(0));
+        // Selection will be set when data is loaded
 
         let mut task_list_state = ListState::default();
         task_list_state.select(Some(0));
@@ -54,9 +61,9 @@ impl App {
             should_quit: false,
             projects: Vec::new(),
             tasks: Vec::new(),
-            selected_project_index: 0,
+            labels: Vec::new(),
+            sidebar_selection: SidebarSelection::Project(0), // Will be properly set when data is loaded
             selected_task_index: 0,
-            project_list_state,
             task_list_state,
             loading: true,
             syncing: false,
@@ -77,6 +84,106 @@ impl App {
             creating_task: false,
             new_task_content: String::new(),
             new_task_project_id: None,
+        }
+    }
+
+    /// Get the currently selected project (if a project is selected)
+    #[must_use]
+    pub fn get_selected_project(&self) -> Option<&ProjectDisplay> {
+        match &self.sidebar_selection {
+            SidebarSelection::Project(index) => self.projects.get(*index),
+            SidebarSelection::Label(_) => None,
+        }
+    }
+
+    /// Get the currently selected label (if a label is selected)
+    #[must_use]
+    pub fn get_selected_label(&self) -> Option<&LabelDisplay> {
+        match &self.sidebar_selection {
+            SidebarSelection::Label(index) => self.labels.get(*index),
+            SidebarSelection::Project(_) => None,
+        }
+    }
+
+    /// Navigate to the next item in the sidebar
+    pub fn next_sidebar_item(&mut self) {
+        match &self.sidebar_selection {
+            SidebarSelection::Label(index) => {
+                let next_index = index + 1;
+                if next_index < self.labels.len() {
+                    // Move to next label
+                    self.sidebar_selection = SidebarSelection::Label(next_index);
+                } else if !self.projects.is_empty() {
+                    // Move to first project (use first in sorted order)
+                    let sorted_projects = self.get_sorted_projects();
+                    if let Some((original_index, _)) = sorted_projects.first() {
+                        self.sidebar_selection = SidebarSelection::Project(*original_index);
+                    }
+                }
+            }
+            SidebarSelection::Project(index) => {
+                let sorted_projects = self.get_sorted_projects();
+                if let Some(current_sorted_index) = sorted_projects
+                    .iter()
+                    .position(|(orig_idx, _)| orig_idx == index)
+                {
+                    let next_sorted_index = current_sorted_index + 1;
+                    if next_sorted_index < sorted_projects.len() {
+                        // Move to next project
+                        if let Some((original_index, _)) = sorted_projects.get(next_sorted_index) {
+                            self.sidebar_selection = SidebarSelection::Project(*original_index);
+                        }
+                    } else if !self.labels.is_empty() {
+                        // Wrap to first label
+                        self.sidebar_selection = SidebarSelection::Label(0);
+                    } else {
+                        // Wrap to first project
+                        if let Some((original_index, _)) = sorted_projects.first() {
+                            self.sidebar_selection = SidebarSelection::Project(*original_index);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Navigate to the previous item in the sidebar
+    pub fn previous_sidebar_item(&mut self) {
+        match &self.sidebar_selection {
+            SidebarSelection::Label(index) => {
+                if *index > 0 {
+                    // Move to previous label
+                    self.sidebar_selection = SidebarSelection::Label(index - 1);
+                } else if !self.projects.is_empty() {
+                    // Wrap to last project
+                    let sorted_projects = self.get_sorted_projects();
+                    if let Some((original_index, _)) = sorted_projects.last() {
+                        self.sidebar_selection = SidebarSelection::Project(*original_index);
+                    }
+                }
+            }
+            SidebarSelection::Project(index) => {
+                let sorted_projects = self.get_sorted_projects();
+                if let Some(current_sorted_index) = sorted_projects
+                    .iter()
+                    .position(|(orig_idx, _)| orig_idx == index)
+                {
+                    if current_sorted_index > 0 {
+                        // Move to previous project
+                        if let Some((original_index, _)) = sorted_projects.get(current_sorted_index - 1) {
+                            self.sidebar_selection = SidebarSelection::Project(*original_index);
+                        }
+                    } else if !self.labels.is_empty() {
+                        // Wrap to last label
+                        self.sidebar_selection = SidebarSelection::Label(self.labels.len() - 1);
+                    } else {
+                        // Wrap to last project
+                        if let Some((original_index, _)) = sorted_projects.last() {
+                            self.sidebar_selection = SidebarSelection::Project(*original_index);
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -130,70 +237,64 @@ impl App {
         sorted_projects
     }
 
-    /// Get the currently selected project from the sorted display order
-    #[must_use]
-    pub fn get_selected_project_from_sorted(&self) -> Option<&ProjectDisplay> {
-        let sorted_projects = self.get_sorted_projects();
-        let display_index = sorted_projects
-            .iter()
-            .position(|(original_idx, _)| *original_idx == self.selected_project_index)?;
-        Some(sorted_projects[display_index].1)
-    }
-
-    /// Get the display index (position in sorted list) for the currently selected project
-    #[must_use]
-    pub fn get_selected_project_display_index(&self) -> Option<usize> {
-        let sorted_projects = self.get_sorted_projects();
-        sorted_projects
-            .iter()
-            .position(|(original_idx, _)| *original_idx == self.selected_project_index)
-    }
-
-    /// Select project by display index (position in sorted list)
-    pub fn select_project_by_display_index(&mut self, display_index: usize) {
-        let sorted_projects = self.get_sorted_projects();
-        if let Some((original_index, _)) = sorted_projects.get(display_index) {
-            self.selected_project_index = *original_index;
-            self.project_list_state.select(Some(display_index));
-        }
-    }
-
     pub async fn load_local_data(&mut self, sync_service: &SyncService) {
         self.loading = true;
         self.error_message = None;
 
-        // Remember the current project selection
-        let current_project_id = self
-            .projects
-            .get(self.selected_project_index)
-            .map(|p| p.id.clone());
+        // Remember the current selection
+        let current_selection = self.sidebar_selection.clone();
+
+        // Load labels from local storage (fast)
+        match sync_service.get_labels().await {
+            Ok(labels) => {
+                self.labels = labels;
+            }
+            Err(e) => {
+                self.error_message = Some(format!("Error loading labels: {e}"));
+            }
+        }
 
         // Load projects from local storage (fast)
         match sync_service.get_projects().await {
             Ok(projects) => {
                 self.projects = projects;
-                if !self.projects.is_empty() {
-                    // Try to maintain the current project selection
-                    if let Some(current_id) = current_project_id {
-                        // Find the previously selected project in the new list
-                        if let Some(index) = self.projects.iter().position(|p| p.id == current_id) {
-                            self.selected_project_index = index;
-                            self.project_list_state.select(Some(index));
-                        } else {
-                            // If the project no longer exists, default to first project
-                            self.selected_project_index = 0;
-                            self.project_list_state.select(Some(0));
-                        }
-                    } else {
-                        // No previous selection, default to first project
-                        self.selected_project_index = 0;
-                        self.project_list_state.select(Some(0));
-                    }
 
-                    // Load tasks for the selected project
-                    if let Err(e) = self.load_tasks_for_selected_project(sync_service).await {
-                        self.error_message = Some(format!("Error loading tasks: {e}"));
+                // Try to restore the previous selection or set a sensible default
+                let mut selection_restored = false;
+
+                match current_selection {
+                    SidebarSelection::Label(index) => {
+                        if index < self.labels.len() {
+                            self.sidebar_selection = SidebarSelection::Label(index);
+                            selection_restored = true;
+                        }
                     }
+                    SidebarSelection::Project(index) => {
+                        if index < self.projects.len() {
+                            self.sidebar_selection = SidebarSelection::Project(index);
+                            selection_restored = true;
+                        }
+                    }
+                }
+
+                // If we couldn't restore the selection, set a sensible default
+                if !selection_restored {
+                    if !self.labels.is_empty() {
+                        self.sidebar_selection = SidebarSelection::Label(0);
+                    } else if !self.projects.is_empty() {
+                        // Use first project in sorted order
+                        let sorted_projects = self.get_sorted_projects();
+                        if let Some((original_index, _)) = sorted_projects.first() {
+                            self.sidebar_selection = SidebarSelection::Project(*original_index);
+                        }
+                    }
+                }
+
+                // Update the list state to match the selection
+
+                // Load tasks for the selected item
+                if let Err(e) = self.load_tasks_for_selected_item(sync_service).await {
+                    self.error_message = Some(format!("Error loading tasks: {e}"));
                 }
             }
             Err(e) => {
@@ -204,55 +305,54 @@ impl App {
         self.loading = false;
     }
 
-    pub async fn load_tasks_for_selected_project(&mut self, sync_service: &SyncService) -> Result<(), anyhow::Error> {
-        if let Some(project) = self.projects.get(self.selected_project_index) {
-            match sync_service.get_tasks_for_project(&project.id).await {
-                Ok(tasks) => {
-                    // Sort tasks: pending first, then completed, then deleted
-                    let mut sorted_tasks = tasks;
-                    sorted_tasks.sort_by(|a, b| {
-                        // Create priority scores: pending=0, completed=1, deleted=2
-                        let a_score = if a.is_deleted { 2 } else { i32::from(a.is_completed) };
-                        let b_score = if b.is_deleted { 2 } else { i32::from(b.is_completed) };
-
-                        // Sort by score (lower score = higher priority)
-                        a_score.cmp(&b_score)
-                    });
-
-                    self.tasks = sorted_tasks;
-                    // Reset task selection to first task
-                    self.selected_task_index = 0;
-                    self.task_list_state.select(Some(0));
+    /// Load tasks for the currently selected sidebar item (label or project)
+    pub async fn load_tasks_for_selected_item(&mut self, sync_service: &SyncService) -> Result<(), anyhow::Error> {
+        match &self.sidebar_selection {
+            SidebarSelection::Label(index) => {
+                if let Some(label) = self.labels.get(*index) {
+                    match sync_service.get_tasks_with_label(&label.name).await {
+                        Ok(tasks) => {
+                            self.tasks = self.sort_tasks(tasks);
+                            self.selected_task_index = 0;
+                            self.task_list_state.select(Some(0));
+                        }
+                        Err(e) => {
+                            self.error_message = Some(format!("Error loading tasks for label: {e}"));
+                            return Err(e);
+                        }
+                    }
                 }
-                Err(e) => {
-                    self.error_message = Some(format!("Error loading tasks: {e}"));
-                    return Err(e);
+            }
+            SidebarSelection::Project(index) => {
+                if let Some(project) = self.projects.get(*index) {
+                    match sync_service.get_tasks_for_project(&project.id).await {
+                        Ok(tasks) => {
+                            self.tasks = self.sort_tasks(tasks);
+                            self.selected_task_index = 0;
+                            self.task_list_state.select(Some(0));
+                        }
+                        Err(e) => {
+                            self.error_message = Some(format!("Error loading tasks for project: {e}"));
+                            return Err(e);
+                        }
+                    }
                 }
             }
         }
         Ok(())
     }
 
-    pub fn next_project(&mut self) {
-        if !self.projects.is_empty() {
-            let sorted_projects = self.get_sorted_projects();
-            let current_display_index = self.get_selected_project_display_index().unwrap_or(0);
-            let next_display_index = (current_display_index + 1) % sorted_projects.len();
-            self.select_project_by_display_index(next_display_index);
-        }
-    }
+    /// Sort tasks: pending first, then completed, then deleted
+    fn sort_tasks(&self, mut tasks: Vec<TaskDisplay>) -> Vec<TaskDisplay> {
+        tasks.sort_by(|a, b| {
+            // Create priority scores: pending=0, completed=1, deleted=2
+            let a_score = if a.is_deleted { 2 } else { i32::from(a.is_completed) };
+            let b_score = if b.is_deleted { 2 } else { i32::from(b.is_completed) };
 
-    pub fn previous_project(&mut self) {
-        if !self.projects.is_empty() {
-            let sorted_projects = self.get_sorted_projects();
-            let current_display_index = self.get_selected_project_display_index().unwrap_or(0);
-            let prev_display_index = if current_display_index == 0 {
-                sorted_projects.len() - 1
-            } else {
-                current_display_index - 1
-            };
-            self.select_project_by_display_index(prev_display_index);
-        }
+            // Sort by score (lower score = higher priority)
+            a_score.cmp(&b_score)
+        });
+        tasks
     }
 
     pub fn next_task(&mut self) {
@@ -287,7 +387,7 @@ impl App {
             match result {
                 Ok(()) => {
                     // Reload tasks to reflect the change
-                    if let Err(e) = self.load_tasks_for_selected_project(sync_service).await {
+                    if let Err(e) = self.load_tasks_for_selected_item(sync_service).await {
                         self.error_message = Some(format!("Error reloading tasks: {e}"));
                     }
                 }
@@ -308,7 +408,7 @@ impl App {
             match sync_service.delete_task(&task.id).await {
                 Ok(()) => {
                     // Reload tasks to reflect the change
-                    if let Err(e) = self.load_tasks_for_selected_project(sync_service).await {
+                    if let Err(e) = self.load_tasks_for_selected_item(sync_service).await {
                         self.error_message = Some(format!("Error reloading tasks: {e}"));
                     }
                 }
@@ -434,7 +534,7 @@ impl App {
 
     /// Start project deletion confirmation
     pub fn start_delete_project(&mut self) {
-        if let Some(project) = self.projects.get(self.selected_project_index) {
+        if let Some(project) = self.get_selected_project() {
             self.delete_project_confirmation = Some(project.id.clone());
         }
     }
@@ -471,8 +571,8 @@ impl App {
     pub fn start_create_task(&mut self) {
         self.creating_task = true;
         self.new_task_content.clear();
-        // Set the current project as the default project for the new task
-        if let Some(project) = self.projects.get(self.selected_project_index) {
+        // Set the current project as the default project for the new task (only if a project is selected)
+        if let Some(project) = self.get_selected_project() {
             self.new_task_project_id = Some(project.id.clone());
         }
     }
@@ -508,8 +608,8 @@ impl App {
         self.creating_task = false;
         self.error_message = None;
 
-        // Create the task in the currently selected project
-        if let Some(project) = self.projects.get(self.selected_project_index) {
+        // Create the task in the currently selected project (if a project is selected)
+        if let Some(project) = self.get_selected_project() {
             match sync_service
                 .create_task(self.new_task_content.trim(), Some(&project.id))
                 .await
@@ -539,7 +639,8 @@ impl App {
                 }
             }
         } else {
-            self.error_message = Some("No project selected for task creation".to_string());
+            self.error_message =
+                Some("Please select a project to create a task (labels cannot contain tasks directly)".to_string());
         }
 
         self.new_task_content.clear();

@@ -4,7 +4,7 @@ use ratatui::{
     layout::Alignment,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{Block, Borders, List, ListItem},
     Frame,
 };
 
@@ -17,26 +17,22 @@ pub struct TasksList;
 impl TasksList {
     /// Render the tasks list
     pub fn render(f: &mut Frame, area: ratatui::layout::Rect, app: &App) {
-        if app.loading {
-            let loading_text = Paragraph::new("Loading...")
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("📝 Tasks")
-                        .title_alignment(Alignment::Center),
-                )
-                .alignment(Alignment::Center);
-            f.render_widget(loading_text, area);
-        } else if app.tasks.is_empty() {
-            let empty_text = Paragraph::new("No tasks in this project")
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("📝 Tasks")
-                        .title_alignment(Alignment::Center),
-                )
-                .alignment(Alignment::Center);
-            f.render_widget(empty_text, area);
+        if app.tasks.is_empty() {
+            // Show empty state message
+            let empty_message = if app.projects.is_empty() {
+                "No projects available. Press 'r' to sync or 'A' to create a project."
+            } else {
+                "No tasks in this project. Press 'a' to create a task."
+            };
+
+            let empty_list = List::new(vec![ListItem::new(empty_message)]).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("📝 Tasks")
+                    .title_alignment(Alignment::Center),
+            );
+
+            f.render_stateful_widget(empty_list, area, &mut app.task_list_state.clone());
         } else {
             // Create list items from tasks using Line::from with multiple Spans
             let items: Vec<ListItem> = app
