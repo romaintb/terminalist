@@ -30,14 +30,14 @@ impl ProjectCreationDialog {
             // If dialog is too small, reduce heights
             let available_height = dialog_area.height.saturating_sub(4); // Account for borders
             let scale_factor = if available_height < total_height {
-                available_height as f32 / total_height as f32
+                f32::from(available_height) / f32::from(total_height)
             } else {
                 1.0
             };
 
-            let scaled_name_height = (name_height as f32 * scale_factor).max(3.0) as u16;
-            let scaled_parent_height = (parent_height as f32 * scale_factor).max(3.0) as u16;
-            let scaled_instructions_height = (instructions_height as f32 * scale_factor).max(2.0) as u16;
+            let scaled_name_height = (f32::from(name_height) * scale_factor).max(3.0) as u16;
+            let scaled_parent_height = (f32::from(parent_height) * scale_factor).max(3.0) as u16;
+            let scaled_instructions_height = (f32::from(instructions_height) * scale_factor).max(2.0) as u16;
 
             // Project name input - positioned at top with dynamic height
             let name_rect = Rect::new(

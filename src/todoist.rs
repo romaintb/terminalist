@@ -77,7 +77,7 @@ impl From<Task> for TaskDisplay {
             priority: task.priority,
             due: task.due.as_ref().map(|d| d.date.clone()),
             due_datetime: task.due.as_ref().and_then(|d| d.datetime.clone()),
-            is_recurring: task.due.as_ref().map(|d| d.is_recurring).unwrap_or(false),
+            is_recurring: task.due.as_ref().is_some_and(|d| d.is_recurring),
             deadline: task.deadline.as_ref().map(|d| d.date.clone()),
             duration: duration_string,
             labels,

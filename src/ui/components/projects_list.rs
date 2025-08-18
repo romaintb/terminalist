@@ -24,12 +24,12 @@ impl Sidebar {
 
         // Add labels section header if there are labels
         if !app.labels.is_empty() {
-            all_items.push(ListItem::new(Line::from(vec![Span::styled(
-                format!("{} Labels", app.icons.label()),
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            )])));
+            // all_items.push(ListItem::new(Line::from(vec![Span::styled(
+            //     format!("{} Labels", app.icons.label()),
+            //     Style::default()
+            //         .fg(Color::Cyan)
+            //         .add_modifier(Modifier::BOLD),
+            // )])));
 
             // Add labels
             for (label_index, label) in app.labels.iter().enumerate() {
@@ -50,7 +50,7 @@ impl Sidebar {
                 };
 
                 all_items.push(ListItem::new(Line::from(vec![
-                    Span::styled(format!("  {} ", app.icons.label()), style),
+                    Span::styled(app.icons.label().to_string(), style),
                     Span::styled(display_name, style),
                 ])));
             }
@@ -106,21 +106,21 @@ impl Sidebar {
         });
 
         // Add projects section header
-        all_items.push(ListItem::new(Line::from(vec![Span::styled(
-            format!("{} Projects", app.icons.projects_title()),
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )])));
+        // all_items.push(ListItem::new(Line::from(vec![Span::styled(
+        //     format!("{} Projects", app.icons.projects_title()),
+        //     Style::default()
+        //         .fg(Color::Cyan)
+        //         .add_modifier(Modifier::BOLD),
+        // )])));
 
         // Add projects
         let project_items: Vec<ListItem> = sorted_projects
             .iter()
             .map(|(original_index, project)| {
-                let icon = if project.is_favorite { 
-                    app.icons.project_favorite() 
-                } else { 
-                    app.icons.project_regular() 
+                let icon = if project.is_favorite {
+                    app.icons.project_favorite()
+                } else {
+                    app.icons.project_regular()
                 };
                 let is_selected =
                     matches!(app.sidebar_selection, SidebarSelection::Project(idx) if idx == *original_index);
@@ -146,7 +146,7 @@ impl Sidebar {
 
                 ListItem::new(Line::from(vec![
                     Span::styled(indent, style),
-                    Span::styled(format!("{} ", icon), style),
+                    Span::styled(icon.to_string(), style),
                     Span::styled(display_name, style),
                 ]))
             })

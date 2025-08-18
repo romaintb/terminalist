@@ -30,14 +30,14 @@ impl TaskCreationDialog {
             // If dialog is too small, reduce heights
             let available_height = dialog_area.height.saturating_sub(4); // Account for borders
             let scale_factor = if available_height < total_height {
-                available_height as f32 / total_height as f32
+                f32::from(available_height) / f32::from(total_height)
             } else {
                 1.0
             };
 
-            let scaled_content_height = (content_height as f32 * scale_factor).max(3.0) as u16;
-            let scaled_project_height = (project_height as f32 * scale_factor).max(3.0) as u16;
-            let scaled_instructions_height = (instructions_height as f32 * scale_factor).max(2.0) as u16;
+            let scaled_content_height = (f32::from(content_height) * scale_factor).max(3.0) as u16;
+            let scaled_project_height = (f32::from(project_height) * scale_factor).max(3.0) as u16;
+            let scaled_instructions_height = (f32::from(instructions_height) * scale_factor).max(2.0) as u16;
 
             // Task content input - positioned at top with dynamic height
             let content_rect = Rect::new(

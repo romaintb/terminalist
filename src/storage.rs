@@ -128,7 +128,7 @@ impl From<Task> for LocalTask {
             order_index: task.order,
             due_date: task.due.as_ref().map(|d| d.string.clone()),
             due_datetime: task.due.as_ref().and_then(|d| d.datetime.clone()),
-            is_recurring: task.due.as_ref().map(|d| d.is_recurring).unwrap_or(false),
+            is_recurring: task.due.as_ref().is_some_and(|d| d.is_recurring),
             deadline: task.deadline.map(|d| d.date),
             duration: duration_string,
             labels: serde_json::to_string(&task.labels).unwrap_or_default(),
@@ -256,7 +256,7 @@ impl LocalStorage {
             .await?;
 
         // Insert new projects
-        for project in projects.iter() {
+        for project in &projects {
             let local_project: LocalProject = project.clone().into();
             sqlx::query(
                 r"
