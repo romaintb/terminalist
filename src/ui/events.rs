@@ -235,10 +235,12 @@ async fn handle_normal_mode(
             Ok(true)
         }
         KeyCode::Char('r') => {
-            // Set syncing state immediately so UI shows indicator
-            app.syncing = true;
-            // Now perform the sync
-            app.force_clear_and_sync(sync_service).await;
+            // If not already syncing, start a background sync so the UI can keep rendering the dialog
+            if app.sync_task.is_none() {
+                app.syncing = true;
+                let svc = sync_service.clone();
+                app.sync_task = Some(tokio::spawn(async move { svc.force_sync().await }));
+            }
             Ok(true)
         }
         KeyCode::Enter | KeyCode::Char(' ') => {
