@@ -12,7 +12,7 @@ use tokio::time::Duration;
 use super::app::App;
 use super::components::{
     DeleteConfirmationDialog, ErrorDialog, HelpPanel, ProjectCreationDialog, ProjectDeleteConfirmationDialog, Sidebar,
-    StatusBar, TaskCreationDialog, TasksList,
+    StatusBar, SyncingDialog, TaskCreationDialog, TasksList,
 };
 use super::events::handle_events;
 use super::layout::LayoutManager;
@@ -32,8 +32,21 @@ pub async fn run_app() -> Result<()> {
     let api_token = std::env::var("TODOIST_API_TOKEN").expect("TODOIST_API_TOKEN environment variable must be set");
     let sync_service = SyncService::new(api_token).await?;
 
-    // Load initial data
+    // Load initial local data so we can render the UI immediately
     app.load_local_data(&sync_service).await;
+
+    // If local DB is empty, start an initial sync in the background
+    match sync_service.has_local_data().await {
+        Ok(false) => {
+            app.syncing = true;
+            let svc = sync_service.clone();
+            app.sync_task = Some(tokio::spawn(async move { svc.force_sync().await }));
+        }
+        Ok(true) => {}
+        Err(e) => {
+            app.error_message = Some(format!("Failed to check local data: {e}"));
+        }
+    }
 
     // Main application loop
     let res = run_ui(&mut terminal, &mut app, &sync_service).await;
@@ -73,6 +86,27 @@ async fn run_ui(
             }
         }
 
+        // If a background sync task finished, process its result and reload data
+        if let Some(handle_ref) = app.sync_task.as_ref() {
+            if handle_ref.is_finished() {
+                if let Some(handle) = app.sync_task.take() {
+                    match handle.await {
+                        Ok(Ok(status)) => {
+                            app.last_sync_status = status;
+                            app.load_local_data(sync_service).await;
+                        }
+                        Ok(Err(e)) => {
+                            app.error_message = Some(format!("Sync failed: {e}"));
+                        }
+                        Err(join_err) => {
+                            app.error_message = Some(format!("Sync task error: {join_err}"));
+                        }
+                    }
+                    app.syncing = false;
+                }
+            }
+        }
+
         if app.should_quit {
             break;
         }
@@ -91,6 +125,10 @@ fn render_ui(f: &mut ratatui::Frame, app: &mut App) {
     Sidebar::render(f, top_chunks[0], app);
     TasksList::render(f, top_chunks[1], app);
     StatusBar::render(f, chunks[1], app);
+    // Render syncing dialog if loading or syncing
+    if app.loading || app.syncing {
+        SyncingDialog::render(f, app);
+    }
 
     // Render overlays
     if app.error_message.is_some() {

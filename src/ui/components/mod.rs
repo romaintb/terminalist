@@ -7,7 +7,8 @@ pub mod status_bar;
 pub mod tasks_list;
 
 pub use dialogs::{
-    DeleteConfirmationDialog, ErrorDialog, ProjectCreationDialog, ProjectDeleteConfirmationDialog, TaskCreationDialog,
+    DeleteConfirmationDialog, ErrorDialog, ProjectCreationDialog, ProjectDeleteConfirmationDialog, SyncingDialog,
+    TaskCreationDialog,
 };
 pub use help_panel::HelpPanel;
 pub use projects_list::Sidebar;

@@ -4,6 +4,7 @@ use crate::icons::IconService;
 use crate::sync::{SyncService, SyncStats, SyncStatus};
 use crate::todoist::{LabelDisplay, ProjectDisplay, TaskDisplay};
 use ratatui::widgets::ListState;
+use tokio::task::JoinHandle;
 
 /// Represents the currently selected item in the sidebar
 #[derive(Debug, Clone, PartialEq)]
@@ -32,6 +33,8 @@ pub struct App {
     pub last_sync_status: SyncStatus,
     pub show_help: bool,           // Toggle for help panel
     pub help_scroll_offset: usize, // Scroll position for help panel
+    // Background sync task handle (if a sync is in progress)
+    pub sync_task: Option<JoinHandle<anyhow::Result<crate::sync::SyncStatus>>>,
     // Project management
     pub creating_project: bool,
     pub new_project_name: String,
@@ -78,6 +81,7 @@ impl App {
             last_sync_status: SyncStatus::Idle,
             show_help: false,
             help_scroll_offset: 0,
+            sync_task: None,
             // Project management
             creating_project: false,
             new_project_name: String::new(),
