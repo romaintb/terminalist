@@ -25,7 +25,7 @@ impl Sidebar {
         // Add labels section header if there are labels
         if !app.labels.is_empty() {
             all_items.push(ListItem::new(Line::from(vec![Span::styled(
-                "🏷️ Labels",
+                format!("{} Labels", app.icons.label()),
                 Style::default()
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
@@ -50,7 +50,7 @@ impl Sidebar {
                 };
 
                 all_items.push(ListItem::new(Line::from(vec![
-                    Span::styled("  🏷️ ", style),
+                    Span::styled(format!("  {} ", app.icons.label()), style),
                     Span::styled(display_name, style),
                 ])));
             }
@@ -107,7 +107,7 @@ impl Sidebar {
 
         // Add projects section header
         all_items.push(ListItem::new(Line::from(vec![Span::styled(
-            "📁 Projects",
+            format!("{} Projects", app.icons.projects_title()),
             Style::default()
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
@@ -117,7 +117,11 @@ impl Sidebar {
         let project_items: Vec<ListItem> = sorted_projects
             .iter()
             .map(|(original_index, project)| {
-                let icon = if project.is_favorite { "⭐" } else { "📁" };
+                let icon = if project.is_favorite { 
+                    app.icons.project_favorite() 
+                } else { 
+                    app.icons.project_regular() 
+                };
                 let is_selected =
                     matches!(app.sidebar_selection, SidebarSelection::Project(idx) if idx == *original_index);
                 let style = if is_selected {
@@ -168,7 +172,7 @@ impl Sidebar {
         let projects_list = List::new(all_items).block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("📁 Projects & Labels")
+                .title(format!("{} Projects & Labels", app.icons.projects_title()))
                 .title_alignment(Alignment::Center),
         );
 
