@@ -276,7 +276,7 @@ mod tests {
     #[test]
     fn test_default_theme() {
         let service = IconService::default();
-        assert_eq!(service.theme(), IconTheme::Unicode);
+        assert_eq!(service.theme(), IconTheme::Ascii);
     }
 
     #[test]
