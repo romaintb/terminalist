@@ -11,8 +11,8 @@ use tokio::time::Duration;
 
 use super::app::App;
 use super::components::{
-    DeleteConfirmationDialog, ErrorDialog, HelpPanel, ProjectCreationDialog, ProjectDeleteConfirmationDialog,
-    Sidebar, StatusBar, TaskCreationDialog, TasksList,
+    DeleteConfirmationDialog, ErrorDialog, HelpPanel, ProjectCreationDialog, ProjectDeleteConfirmationDialog, Sidebar,
+    StatusBar, TaskCreationDialog, TasksList,
 };
 use super::events::handle_events;
 use super::layout::LayoutManager;

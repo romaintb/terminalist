@@ -1,7 +1,7 @@
 //! Application state and business logic
 
 use crate::sync::{SyncService, SyncStats, SyncStatus};
-use crate::todoist::{ProjectDisplay, TaskDisplay, LabelDisplay};
+use crate::todoist::{LabelDisplay, ProjectDisplay, TaskDisplay};
 use ratatui::widgets::ListState;
 
 /// Represents the currently selected item in the sidebar
@@ -10,8 +10,6 @@ pub enum SidebarSelection {
     Label(usize),   // Index into labels vector
     Project(usize), // Index into projects vector
 }
-
-
 
 /// Application state
 pub struct App {
@@ -125,7 +123,10 @@ impl App {
             }
             SidebarSelection::Project(index) => {
                 let sorted_projects = self.get_sorted_projects();
-                if let Some(current_sorted_index) = sorted_projects.iter().position(|(orig_idx, _)| orig_idx == index) {
+                if let Some(current_sorted_index) = sorted_projects
+                    .iter()
+                    .position(|(orig_idx, _)| orig_idx == index)
+                {
                     let next_sorted_index = current_sorted_index + 1;
                     if next_sorted_index < sorted_projects.len() {
                         // Move to next project
@@ -144,7 +145,6 @@ impl App {
                 }
             }
         }
-
     }
 
     /// Navigate to the previous item in the sidebar
@@ -164,7 +164,10 @@ impl App {
             }
             SidebarSelection::Project(index) => {
                 let sorted_projects = self.get_sorted_projects();
-                if let Some(current_sorted_index) = sorted_projects.iter().position(|(orig_idx, _)| orig_idx == index) {
+                if let Some(current_sorted_index) = sorted_projects
+                    .iter()
+                    .position(|(orig_idx, _)| orig_idx == index)
+                {
                     if current_sorted_index > 0 {
                         // Move to previous project
                         if let Some((original_index, _)) = sorted_projects.get(current_sorted_index - 1) {
@@ -182,10 +185,7 @@ impl App {
                 }
             }
         }
-
     }
-
-
 
     /// Get projects sorted with favorites first within their own hierarchical level
     #[must_use]
@@ -237,8 +237,6 @@ impl App {
         sorted_projects
     }
 
-
-
     pub async fn load_local_data(&mut self, sync_service: &SyncService) {
         self.loading = true;
         self.error_message = None;
@@ -260,10 +258,10 @@ impl App {
         match sync_service.get_projects().await {
             Ok(projects) => {
                 self.projects = projects;
-                
+
                 // Try to restore the previous selection or set a sensible default
                 let mut selection_restored = false;
-                
+
                 match current_selection {
                     SidebarSelection::Label(index) => {
                         if index < self.labels.len() {
@@ -278,7 +276,7 @@ impl App {
                         }
                     }
                 }
-                
+
                 // If we couldn't restore the selection, set a sensible default
                 if !selection_restored {
                     if !self.labels.is_empty() {
@@ -291,9 +289,8 @@ impl App {
                         }
                     }
                 }
-                
+
                 // Update the list state to match the selection
-        
 
                 // Load tasks for the selected item
                 if let Err(e) = self.load_tasks_for_selected_item(sync_service).await {
@@ -357,10 +354,6 @@ impl App {
         });
         tasks
     }
-
-
-
-
 
     pub fn next_task(&mut self) {
         if !self.tasks.is_empty() {
@@ -646,7 +639,8 @@ impl App {
                 }
             }
         } else {
-            self.error_message = Some("Please select a project to create a task (labels cannot contain tasks directly)".to_string());
+            self.error_message =
+                Some("Please select a project to create a task (labels cannot contain tasks directly)".to_string());
         }
 
         self.new_task_content.clear();

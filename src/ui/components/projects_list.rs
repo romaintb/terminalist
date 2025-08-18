@@ -24,9 +24,12 @@ impl Sidebar {
 
         // Add labels section header if there are labels
         if !app.labels.is_empty() {
-            all_items.push(ListItem::new(Line::from(vec![
-                Span::styled("🏷️ Labels", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
-            ])));
+            all_items.push(ListItem::new(Line::from(vec![Span::styled(
+                "🏷️ Labels",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )])));
 
             // Add labels
             for (label_index, label) in app.labels.iter().enumerate() {
@@ -38,7 +41,7 @@ impl Sidebar {
                 } else {
                     Style::default().fg(Color::White)
                 };
-                
+
                 // Truncate label name to fit sidebar
                 let display_name = if label.name.len() > max_name_width as usize {
                     format!("{}…", &label.name[..max_name_width.saturating_sub(1) as usize])
@@ -53,9 +56,7 @@ impl Sidebar {
             }
 
             // Add separator
-            all_items.push(ListItem::new(Line::from(vec![
-                Span::styled("", Style::default())
-            ])));
+            all_items.push(ListItem::new(Line::from(vec![Span::styled("", Style::default())])));
         }
 
         // Sort projects: favorites first within their own hierarchical level
@@ -105,20 +106,20 @@ impl Sidebar {
         });
 
         // Add projects section header
-        all_items.push(ListItem::new(Line::from(vec![
-            Span::styled("📁 Projects", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
-        ])));
+        all_items.push(ListItem::new(Line::from(vec![Span::styled(
+            "📁 Projects",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )])));
 
         // Add projects
         let project_items: Vec<ListItem> = sorted_projects
             .iter()
             .map(|(original_index, project)| {
-                let icon = if project.is_favorite { 
-                    "⭐" 
-                } else { 
-                    "📁" 
-                };
-                let is_selected = matches!(app.sidebar_selection, SidebarSelection::Project(idx) if idx == *original_index);
+                let icon = if project.is_favorite { "⭐" } else { "📁" };
+                let is_selected =
+                    matches!(app.sidebar_selection, SidebarSelection::Project(idx) if idx == *original_index);
                 let style = if is_selected {
                     Style::default()
                         .fg(Color::Yellow)
@@ -164,13 +165,12 @@ impl Sidebar {
             depth
         }
 
-        let projects_list = List::new(all_items)
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("📁 Projects & Labels")
-                    .title_alignment(Alignment::Center),
-            );
+        let projects_list = List::new(all_items).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("📁 Projects & Labels")
+                .title_alignment(Alignment::Center),
+        );
 
         // Render without stateful widget to avoid built-in highlighting
         // Our manual styling handles the selection indication

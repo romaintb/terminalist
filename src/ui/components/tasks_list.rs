@@ -25,13 +25,12 @@ impl TasksList {
                 "No tasks in this project. Press 'a' to create a task."
             };
 
-            let empty_list = List::new(vec![ListItem::new(empty_message)])
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title("📝 Tasks")
-                        .title_alignment(Alignment::Center),
-                );
+            let empty_list = List::new(vec![ListItem::new(empty_message)]).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("📝 Tasks")
+                    .title_alignment(Alignment::Center),
+            );
 
             f.render_stateful_widget(empty_list, area, &mut app.task_list_state.clone());
         } else {

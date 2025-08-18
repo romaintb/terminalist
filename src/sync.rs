@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use crate::storage::LocalStorage;
-use crate::todoist::{CreateProjectArgs, ProjectDisplay, TaskDisplay, TodoistWrapper, LabelDisplay};
+use crate::todoist::{CreateProjectArgs, LabelDisplay, ProjectDisplay, TaskDisplay, TodoistWrapper};
 
 /// Sync service that manages data synchronization between API and local storage
 #[derive(Clone)]
@@ -52,14 +52,17 @@ impl SyncService {
     pub async fn get_labels(&self) -> Result<Vec<LabelDisplay>> {
         let storage = self.storage.lock().await;
         let local_labels = storage.get_all_labels().await?;
-        
+
         // Convert LocalLabel to LabelDisplay
-        let labels = local_labels.into_iter().map(|local| LabelDisplay {
-            id: local.id,
-            name: local.name,
-            color: local.color,
-        }).collect();
-        
+        let labels = local_labels
+            .into_iter()
+            .map(|local| LabelDisplay {
+                id: local.id,
+                name: local.name,
+                color: local.color,
+            })
+            .collect();
+
         Ok(labels)
     }
 
@@ -67,12 +70,13 @@ impl SyncService {
     pub async fn get_tasks_with_label(&self, label_name: &str) -> Result<Vec<TaskDisplay>> {
         let storage = self.storage.lock().await;
         let all_tasks = storage.get_all_tasks().await?;
-        
+
         // Filter tasks that have the specified label
-        let filtered_tasks = all_tasks.into_iter()
+        let filtered_tasks = all_tasks
+            .into_iter()
             .filter(|task| task.labels.iter().any(|label| label.name == label_name))
             .collect();
-        
+
         Ok(filtered_tasks)
     }
 
