@@ -18,7 +18,7 @@ pub enum IconTheme {
 
 impl Default for IconTheme {
     fn default() -> Self {
-        Self::Unicode
+        Self::Ascii
     }
 }
 
@@ -85,9 +85,7 @@ impl Default for IconService {
 impl IconService {
     /// Create a new icon service with the specified theme
     pub fn new(theme: IconTheme) -> Self {
-        Self {
-            current_theme: theme,
-        }
+        Self { current_theme: theme }
     }
 
     /// Get the current theme
