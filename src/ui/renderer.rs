@@ -32,7 +32,19 @@ pub async fn run_app() -> Result<()> {
     let api_token = std::env::var("TODOIST_API_TOKEN").expect("TODOIST_API_TOKEN environment variable must be set");
     let sync_service = SyncService::new(api_token).await?;
 
-    // Load initial data
+    // Perform an initial fetch
+    app.syncing = true;
+    match sync_service.force_sync().await {
+        Ok(status) => {
+            app.last_sync_status = status;
+        }
+        Err(e) => {
+            app.error_message = Some(format!("Initial sync failed: {e}"));
+        }
+    }
+    app.syncing = false;
+
+    // Load initial data (from local storage, possibly after the initial sync)
     app.load_local_data(&sync_service).await;
 
     // Main application loop
