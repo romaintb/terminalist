@@ -28,7 +28,7 @@ impl TasksList {
             let empty_list = List::new(vec![ListItem::new(empty_message)]).block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title("📝 Tasks")
+                    .title(format!("{} Tasks", app.icons.tasks_title()))
                     .title_alignment(Alignment::Center),
             );
 
@@ -44,11 +44,11 @@ impl TasksList {
 
                     // Create status indicator
                     let status_icon = if task.is_deleted {
-                        "❌"
+                        app.icons.task_deleted()
                     } else if task.is_completed {
-                        "✅"
+                        app.icons.task_completed()
                     } else {
-                        "🔳"
+                        app.icons.task_pending()
                     };
 
                     // Create priority badge using the proper function
@@ -119,7 +119,7 @@ impl TasksList {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .title("📝 Tasks")
+                        .title(format!("{} Tasks", app.icons.tasks_title()))
                         .title_alignment(Alignment::Center),
                 )
                 .highlight_style(

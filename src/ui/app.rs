@@ -1,5 +1,6 @@
 //! Application state and business logic
 
+use crate::icons::IconService;
 use crate::sync::{SyncService, SyncStats, SyncStatus};
 use crate::todoist::{LabelDisplay, ProjectDisplay, TaskDisplay};
 use ratatui::widgets::ListState;
@@ -40,6 +41,8 @@ pub struct App {
     pub creating_task: bool,
     pub new_task_content: String,
     pub new_task_project_id: Option<String>,
+    // Icons
+    pub icons: IconService,
 }
 
 impl Default for App {
@@ -84,6 +87,8 @@ impl App {
             creating_task: false,
             new_task_content: String::new(),
             new_task_project_id: None,
+            // Icons
+            icons: IconService::default(),
         }
     }
 
