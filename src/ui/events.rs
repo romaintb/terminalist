@@ -28,6 +28,11 @@ pub async fn handle_events(event: Event, app: &mut App, sync_service: &SyncServi
                 return handle_task_editing_mode(key, app, sync_service).await;
             }
 
+            // Handle project editing dialog
+            if app.editing_project {
+                return handle_project_editing_mode(key, app, sync_service).await;
+            }
+
             // Handle error/info message dialogs
             if app.error_message.is_some() || app.info_message.is_some() {
                 return handle_message_dialog(key, app);
@@ -237,6 +242,34 @@ async fn handle_task_editing_mode(
     }
 }
 
+/// Handle events when editing a project
+async fn handle_project_editing_mode(
+    key: crossterm::event::KeyEvent,
+    app: &mut App,
+    sync_service: &SyncService,
+) -> Result<bool, anyhow::Error> {
+    match key.code {
+        KeyCode::Char(c) if c.is_ascii_graphic() || c == ' ' => {
+            app.add_char_to_project_name(c);
+            Ok(true)
+        }
+        KeyCode::Backspace => {
+            app.remove_char_from_project_name();
+            Ok(true)
+        }
+        KeyCode::Enter => {
+            // Save the edited project
+            app.save_edit_project(sync_service).await;
+            Ok(true)
+        }
+        KeyCode::Esc => {
+            app.cancel_edit_project();
+            Ok(true)
+        }
+        _ => Ok(false), // Ignore all other keys when editing project
+    }
+}
+
 /// Handle events in normal mode
 async fn handle_normal_mode(
     key: crossterm::event::KeyEvent,
@@ -329,6 +362,11 @@ async fn handle_normal_mode(
         KeyCode::Char('A') => {
             // Create new project
             app.start_create_project();
+            Ok(true)
+        }
+        KeyCode::Char('E') => {
+            // Start editing the selected project (capital E to distinguish from task editing)
+            app.start_edit_project();
             Ok(true)
         }
         KeyCode::Char('D') => {

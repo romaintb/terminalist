@@ -13,7 +13,7 @@ use super::app::App;
 use super::components::{
     dialogs::{
         DeleteConfirmationDialog, ErrorDialog, InfoDialog, ProjectCreationDialog, ProjectDeleteConfirmationDialog,
-        SyncingDialog, TaskCreationDialog, TaskEditDialog,
+        ProjectEditDialog, SyncingDialog, TaskCreationDialog, TaskEditDialog,
     },
     HelpPanel, Sidebar, StatusBar, TasksList,
 };
@@ -154,6 +154,10 @@ fn render_ui(f: &mut ratatui::Frame, app: &mut App) {
 
     if app.editing_task {
         TaskEditDialog::render(f, app);
+    }
+
+    if app.editing_project {
+        ProjectEditDialog::render(f, app);
     }
 
     if app.delete_project_confirmation.is_some() {

@@ -41,6 +41,9 @@ pub struct App {
     pub new_project_name: String,
     pub new_project_parent_id: Option<String>,
     pub delete_project_confirmation: Option<String>, // Project ID to delete if confirmed
+    pub editing_project: bool,
+    pub edit_project_name: String,
+    pub edit_project_id: Option<String>,
     // Task management
     pub creating_task: bool,
     pub new_task_content: String,
@@ -92,6 +95,9 @@ impl App {
             new_project_name: String::new(),
             new_project_parent_id: None,
             delete_project_confirmation: None,
+            editing_project: false,
+            edit_project_name: String::new(),
+            edit_project_id: None,
             // Task management
             creating_task: false,
             new_task_content: String::new(),
@@ -479,6 +485,8 @@ impl App {
     pub fn add_char_to_project_name(&mut self, c: char) {
         if self.creating_project {
             self.new_project_name.push(c);
+        } else if self.editing_project {
+            self.edit_project_name.push(c);
         }
     }
 
@@ -486,6 +494,8 @@ impl App {
     pub fn remove_char_from_project_name(&mut self) {
         if self.creating_project && !self.new_project_name.is_empty() {
             self.new_project_name.pop();
+        } else if self.editing_project && !self.edit_project_name.is_empty() {
+            self.edit_project_name.pop();
         }
     }
 
@@ -603,6 +613,24 @@ impl App {
         self.creating_task = false;
         self.new_task_content.clear();
         self.new_task_project_id = None;
+    }
+
+    /// Start editing the currently selected project
+    pub fn start_edit_project(&mut self) {
+        if let Some(project) = self.get_selected_project() {
+            let project_name = project.name.clone();
+            let project_id = project.id.clone();
+            self.editing_project = true;
+            self.edit_project_name = project_name;
+            self.edit_project_id = Some(project_id);
+        }
+    }
+
+    /// Cancel project editing
+    pub fn cancel_edit_project(&mut self) {
+        self.editing_project = false;
+        self.edit_project_name.clear();
+        self.edit_project_id = None;
     }
 
     /// Start editing the currently selected task
@@ -731,5 +759,46 @@ impl App {
 
         self.edit_task_id = None;
         self.edit_task_content.clear();
+    }
+
+    /// Update the project with edited content
+    pub async fn save_edit_project(&mut self, sync_service: &SyncService) {
+        if self.edit_project_name.trim().is_empty() {
+            self.error_message = Some("Project name cannot be empty".to_string());
+            return;
+        }
+
+        if let Some(project_id) = &self.edit_project_id.clone() {
+            self.editing_project = false;
+            self.error_message = None;
+            self.info_message = None;
+
+            match sync_service
+                .update_project_content(project_id, self.edit_project_name.trim())
+                .await
+            {
+                Ok(()) => {
+                    // Try to sync first, but if it fails, at least reload local data
+                    match sync_service.force_sync().await {
+                        Ok(_) => {
+                            // Sync succeeded, reload local data
+                            self.load_local_data(sync_service).await;
+                            self.info_message = Some("Project updated successfully!".to_string());
+                        }
+                        Err(e) => {
+                            // Sync failed but project was updated, just reload local data
+                            self.load_local_data(sync_service).await;
+                            self.error_message = Some(format!("Project updated but sync failed: {e}"));
+                        }
+                    }
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Failed to update project: {e}"));
+                }
+            }
+        }
+
+        self.edit_project_id = None;
+        self.edit_project_name.clear();
     }
 }
