@@ -141,6 +141,30 @@ impl SyncService {
         Ok(())
     }
 
+    /// Update task content
+    pub async fn update_task_content(&self, task_id: &str, content: &str) -> Result<()> {
+        // Update task via API using the UpdateTaskArgs structure
+        let task_args = todoist_api::UpdateTaskArgs {
+            content: Some(content.to_string()),
+            description: None,
+            labels: None,
+            priority: None,
+            due_string: None,
+            due_date: None,
+            due_datetime: None,
+            due_lang: None,
+            deadline_date: None,
+            deadline_lang: None,
+            assignee_id: None,
+            duration: None,
+            duration_unit: None,
+        };
+        let _task = self.todoist.update_task(task_id, &task_args).await?;
+
+        // The UI will handle the sync separately to ensure proper error handling
+        Ok(())
+    }
+
     /// Delete a project
     pub async fn delete_project(&self, project_id: &str) -> Result<()> {
         // Delete project via API

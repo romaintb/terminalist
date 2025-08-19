@@ -52,6 +52,7 @@ TASK MANAGEMENT
 --------------
 Space       Toggle task completion
 a           Create new task
+e           Edit selected task
 d           Delete task (with confirmation)
 
 SYNC & DATA

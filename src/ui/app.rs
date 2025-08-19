@@ -29,6 +29,7 @@ pub struct App {
     pub deleting_task: bool,
     pub delete_confirmation: Option<String>, // Task ID to delete if confirmed
     pub error_message: Option<String>,
+    pub info_message: Option<String>,
     pub sync_stats: Option<SyncStats>,
     pub last_sync_status: SyncStatus,
     pub show_help: bool,           // Toggle for help panel
@@ -44,6 +45,9 @@ pub struct App {
     pub creating_task: bool,
     pub new_task_content: String,
     pub new_task_project_id: Option<String>,
+    pub editing_task: bool,
+    pub edit_task_content: String,
+    pub edit_task_id: Option<String>,
     // Icons
     pub icons: IconService,
 }
@@ -77,6 +81,7 @@ impl App {
             deleting_task: false,
             delete_confirmation: None,
             error_message: None,
+            info_message: None,
             sync_stats: None,
             last_sync_status: SyncStatus::Idle,
             show_help: false,
@@ -91,6 +96,9 @@ impl App {
             creating_task: false,
             new_task_content: String::new(),
             new_task_project_id: None,
+            editing_task: false,
+            edit_task_content: String::new(),
+            edit_task_id: None,
             // Icons
             icons: IconService::default(),
         }
@@ -249,6 +257,7 @@ impl App {
     pub async fn load_local_data(&mut self, sync_service: &SyncService) {
         self.loading = true;
         self.error_message = None;
+        self.info_message = None;
 
         // Remember the current selection
         let current_selection = self.sidebar_selection.clone();
@@ -386,6 +395,7 @@ impl App {
         if let Some(task) = self.tasks.get(self.selected_task_index) {
             self.completing_task = true;
             self.error_message = None;
+            self.info_message = None;
 
             let result = if task.is_completed {
                 sync_service.reopen_task(&task.id).await
@@ -413,6 +423,7 @@ impl App {
         if let Some(task) = self.tasks.get(self.selected_task_index) {
             self.deleting_task = true;
             self.error_message = None;
+            self.info_message = None;
 
             match sync_service.delete_task(&task.id).await {
                 Ok(()) => {
@@ -434,6 +445,7 @@ impl App {
     pub async fn force_clear_and_sync(&mut self, sync_service: &SyncService) {
         self.syncing = true;
         self.error_message = None;
+        self.info_message = None;
 
         match sync_service.force_sync().await {
             Ok(stats) => {
@@ -507,6 +519,7 @@ impl App {
 
         self.creating_project = false;
         self.error_message = None;
+        self.info_message = None;
 
         match sync_service
             .create_project(self.new_project_name.trim(), self.new_project_parent_id.as_deref())
@@ -531,6 +544,7 @@ impl App {
                 // Clear the success message after a short delay
                 tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                 self.error_message = None;
+                self.info_message = None;
             }
             Err(e) => {
                 self.error_message = Some(format!("Error creating project: {e}"));
@@ -557,15 +571,13 @@ impl App {
     pub async fn delete_project(&mut self, sync_service: &SyncService) {
         if let Some(project_id) = &self.delete_project_confirmation {
             self.error_message = None;
+            self.info_message = None;
 
             match sync_service.delete_project(project_id).await {
                 Ok(()) => {
                     // Force a full sync to ensure all data is up to date
                     self.force_clear_and_sync(sync_service).await;
-                    self.error_message = Some("Project deleted successfully!".to_string());
-                    // Clear the success message after a short delay
-                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                    self.error_message = None;
+                    self.info_message = Some("Project deleted successfully!".to_string());
                 }
                 Err(e) => {
                     self.error_message = Some(format!("Error deleting project: {e}"));
@@ -593,10 +605,30 @@ impl App {
         self.new_task_project_id = None;
     }
 
+    /// Start editing the currently selected task
+    pub fn start_edit_task(&mut self) {
+        if let Some(task) = self.tasks.get(self.selected_task_index) {
+            if !task.is_deleted {
+                self.editing_task = true;
+                self.edit_task_content = task.content.clone();
+                self.edit_task_id = Some(task.id.clone());
+            }
+        }
+    }
+
+    /// Cancel task editing
+    pub fn cancel_edit_task(&mut self) {
+        self.editing_task = false;
+        self.edit_task_content.clear();
+        self.edit_task_id = None;
+    }
+
     /// Add a character to the task content
     pub fn add_char_to_task_content(&mut self, c: char) {
         if self.creating_task {
             self.new_task_content.push(c);
+        } else if self.editing_task {
+            self.edit_task_content.push(c);
         }
     }
 
@@ -604,6 +636,8 @@ impl App {
     pub fn remove_char_from_task_content(&mut self) {
         if self.creating_task && !self.new_task_content.is_empty() {
             self.new_task_content.pop();
+        } else if self.editing_task && !self.edit_task_content.is_empty() {
+            self.edit_task_content.pop();
         }
     }
 
@@ -616,6 +650,7 @@ impl App {
 
         self.creating_task = false;
         self.error_message = None;
+        self.info_message = None;
 
         // Create the task in the currently selected project (if a project is selected)
         if let Some(project) = self.get_selected_project() {
@@ -629,7 +664,7 @@ impl App {
                         Ok(_) => {
                             // Sync succeeded, reload local data
                             self.load_local_data(sync_service).await;
-                            self.error_message = Some("Task created successfully!".to_string());
+                            self.info_message = Some("Task created successfully!".to_string());
                         }
                         Err(e) => {
                             // Sync failed, but try to reload local data anyway
@@ -642,6 +677,7 @@ impl App {
                     // Clear the success message after a short delay
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
                     self.error_message = None;
+                    self.info_message = None;
                 }
                 Err(e) => {
                     self.error_message = Some(format!("Error creating task: {e}"));
@@ -654,5 +690,46 @@ impl App {
 
         self.new_task_content.clear();
         self.new_task_project_id = None;
+    }
+
+    /// Update the task with edited content
+    pub async fn save_edit_task(&mut self, sync_service: &SyncService) {
+        if self.edit_task_content.trim().is_empty() {
+            self.error_message = Some("Task content cannot be empty".to_string());
+            return;
+        }
+
+        if let Some(task_id) = &self.edit_task_id.clone() {
+            self.editing_task = false;
+            self.error_message = None;
+            self.info_message = None;
+
+            match sync_service
+                .update_task_content(task_id, self.edit_task_content.trim())
+                .await
+            {
+                Ok(()) => {
+                    // Try to sync first, but if it fails, at least reload local data
+                    match sync_service.force_sync().await {
+                        Ok(_) => {
+                            // Sync succeeded, reload local data
+                            self.load_local_data(sync_service).await;
+                            self.info_message = Some("Task updated successfully!".to_string());
+                        }
+                        Err(e) => {
+                            // Sync failed but task was updated, just reload local data
+                            self.load_local_data(sync_service).await;
+                            self.error_message = Some(format!("Task updated but sync failed: {e}"));
+                        }
+                    }
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Failed to update task: {e}"));
+                }
+            }
+        }
+
+        self.edit_task_id = None;
+        self.edit_task_content.clear();
     }
 }
