@@ -23,6 +23,16 @@ pub async fn handle_events(event: Event, app: &mut App, sync_service: &SyncServi
                 return handle_task_creation_mode(key, app, sync_service).await;
             }
 
+            // Handle task editing dialog
+            if app.editing_task {
+                return handle_task_editing_mode(key, app, sync_service).await;
+            }
+
+            // Handle error/info message dialogs
+            if app.error_message.is_some() || app.info_message.is_some() {
+                return handle_message_dialog(key, app);
+            }
+
             // Handle delete confirmation dialog
             if app.delete_confirmation.is_some() {
                 return handle_delete_confirmation(key, app, sync_service).await;
@@ -166,7 +176,7 @@ async fn handle_task_creation_mode(
     sync_service: &SyncService,
 ) -> Result<bool, anyhow::Error> {
     match key.code {
-        KeyCode::Char(c) if c.is_ascii_graphic() => {
+        KeyCode::Char(c) if c.is_ascii_graphic() || c == ' ' => {
             app.add_char_to_task_content(c);
             Ok(true)
         }
@@ -184,6 +194,46 @@ async fn handle_task_creation_mode(
             Ok(true)
         }
         _ => Ok(false), // Ignore all other keys when creating task
+    }
+}
+
+/// Handle events when error or info message dialogs are shown
+fn handle_message_dialog(key: crossterm::event::KeyEvent, app: &mut App) -> Result<bool, anyhow::Error> {
+    match key.code {
+        KeyCode::Enter | KeyCode::Esc | KeyCode::Char(' ') => {
+            app.error_message = None;
+            app.info_message = None;
+            Ok(true)
+        }
+        _ => Ok(false), // Ignore all other keys when message dialog is shown
+    }
+}
+
+/// Handle events in task editing mode
+async fn handle_task_editing_mode(
+    key: crossterm::event::KeyEvent,
+    app: &mut App,
+    sync_service: &SyncService,
+) -> Result<bool, anyhow::Error> {
+    match key.code {
+        KeyCode::Char(c) if c.is_ascii_graphic() || c == ' ' => {
+            app.add_char_to_task_content(c);
+            Ok(true)
+        }
+        KeyCode::Backspace => {
+            app.remove_char_from_task_content();
+            Ok(true)
+        }
+        KeyCode::Enter => {
+            // Save the edited task
+            app.save_edit_task(sync_service).await;
+            Ok(true)
+        }
+        KeyCode::Esc => {
+            app.cancel_edit_task();
+            Ok(true)
+        }
+        _ => Ok(false), // Ignore all other keys when editing task
     }
 }
 
@@ -260,6 +310,11 @@ async fn handle_normal_mode(
                 }
                 // If task is already deleted, do nothing (silently ignore)
             }
+            Ok(true)
+        }
+        KeyCode::Char('e') => {
+            // Start editing the selected task
+            app.start_edit_task();
             Ok(true)
         }
         KeyCode::Char('?') => {

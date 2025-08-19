@@ -19,7 +19,8 @@ impl ErrorDialog {
         if let Some(error_msg) = &app.error_message {
             let error_area = LayoutManager::centered_rect(60, 20, f.area());
             f.render_widget(Clear, error_area);
-            let error_paragraph = Paragraph::new(error_msg.as_str())
+            let display_text = format!("{}\n\nPress Enter or Esc to dismiss", error_msg);
+            let error_paragraph = Paragraph::new(display_text.as_str())
                 .block(
                     Block::default()
                         .borders(Borders::ALL)

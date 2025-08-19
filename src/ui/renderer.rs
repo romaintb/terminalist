@@ -11,8 +11,11 @@ use tokio::time::Duration;
 
 use super::app::App;
 use super::components::{
-    DeleteConfirmationDialog, ErrorDialog, HelpPanel, ProjectCreationDialog, ProjectDeleteConfirmationDialog, Sidebar,
-    StatusBar, SyncingDialog, TaskCreationDialog, TasksList,
+    dialogs::{
+        DeleteConfirmationDialog, ErrorDialog, InfoDialog, ProjectCreationDialog, ProjectDeleteConfirmationDialog,
+        SyncingDialog, TaskCreationDialog, TaskEditDialog,
+    },
+    HelpPanel, Sidebar, StatusBar, TasksList,
 };
 use super::events::handle_events;
 use super::layout::LayoutManager;
@@ -130,9 +133,11 @@ fn render_ui(f: &mut ratatui::Frame, app: &mut App) {
         SyncingDialog::render(f, app);
     }
 
-    // Render overlays
+    // Render overlays - error messages have priority over info messages
     if app.error_message.is_some() {
         ErrorDialog::render(f, app);
+    } else if app.info_message.is_some() {
+        InfoDialog::render(f, app);
     }
 
     if app.delete_confirmation.is_some() {
@@ -145,6 +150,10 @@ fn render_ui(f: &mut ratatui::Frame, app: &mut App) {
 
     if app.creating_task {
         TaskCreationDialog::render(f, app);
+    }
+
+    if app.editing_task {
+        TaskEditDialog::render(f, app);
     }
 
     if app.delete_project_confirmation.is_some() {
