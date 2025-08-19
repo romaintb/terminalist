@@ -44,6 +44,13 @@ pub struct App {
     pub editing_project: bool,
     pub edit_project_name: String,
     pub edit_project_id: Option<String>,
+    // Label management
+    pub creating_label: bool,
+    pub new_label_name: String,
+    pub editing_label: bool,
+    pub edit_label_name: String,
+    pub edit_label_id: Option<String>,
+    pub delete_label_confirmation: Option<String>, // Label ID to delete if confirmed
     // Task management
     pub creating_task: bool,
     pub new_task_content: String,
@@ -98,6 +105,13 @@ impl App {
             editing_project: false,
             edit_project_name: String::new(),
             edit_project_id: None,
+            // Label management
+            creating_label: false,
+            new_label_name: String::new(),
+            editing_label: false,
+            edit_label_name: String::new(),
+            edit_label_id: None,
+            delete_label_confirmation: None,
             // Task management
             creating_task: false,
             new_task_content: String::new(),
@@ -800,5 +814,166 @@ impl App {
 
         self.edit_project_id = None;
         self.edit_project_name.clear();
+    }
+
+    /// Start creating a new label
+    pub fn start_create_label(&mut self) {
+        self.creating_label = true;
+        self.new_label_name.clear();
+    }
+
+    /// Cancel label creation
+    pub fn cancel_create_label(&mut self) {
+        self.creating_label = false;
+        self.new_label_name.clear();
+    }
+
+    /// Start editing the currently selected label
+    pub fn start_edit_label(&mut self) {
+        if let Some(label) = self.get_selected_label() {
+            let label_name = label.name.clone();
+            let label_id = label.id.clone();
+            self.editing_label = true;
+            self.edit_label_name = label_name;
+            self.edit_label_id = Some(label_id);
+        }
+    }
+
+    /// Cancel label editing
+    pub fn cancel_edit_label(&mut self) {
+        self.editing_label = false;
+        self.edit_label_name.clear();
+        self.edit_label_id = None;
+    }
+
+    /// Add a character to the label name
+    pub fn add_char_to_label_name(&mut self, c: char) {
+        if self.creating_label {
+            self.new_label_name.push(c);
+        } else if self.editing_label {
+            self.edit_label_name.push(c);
+        }
+    }
+
+    /// Remove the last character from the label name
+    pub fn remove_char_from_label_name(&mut self) {
+        if self.creating_label && !self.new_label_name.is_empty() {
+            self.new_label_name.pop();
+        } else if self.editing_label && !self.edit_label_name.is_empty() {
+            self.edit_label_name.pop();
+        }
+    }
+
+    /// Create the new label
+    pub async fn create_label(&mut self, sync_service: &SyncService) {
+        if self.new_label_name.trim().is_empty() {
+            self.error_message = Some("Label name cannot be empty".to_string());
+            return;
+        }
+
+        self.creating_label = false;
+        self.error_message = None;
+        self.info_message = None;
+
+        match sync_service
+            .create_label(self.new_label_name.trim(), None)
+            .await
+        {
+            Ok(()) => {
+                // Try to sync first, but if it fails, at least reload local data
+                match sync_service.force_sync().await {
+                    Ok(_) => {
+                        // Sync succeeded, reload local data
+                        self.load_local_data(sync_service).await;
+                        self.info_message = Some("Label created successfully!".to_string());
+                    }
+                    Err(e) => {
+                        // Sync failed, but try to reload local data anyway
+                        eprintln!("Warning: Sync failed after label creation: {e}");
+                        self.load_local_data(sync_service).await;
+                        self.error_message = Some("Label created but sync failed - data may be stale".to_string());
+                    }
+                }
+            }
+            Err(e) => {
+                self.error_message = Some(format!("Error creating label: {e}"));
+            }
+        }
+
+        self.new_label_name.clear();
+    }
+
+    /// Update the label with edited content
+    pub async fn save_edit_label(&mut self, sync_service: &SyncService) {
+        if self.edit_label_name.trim().is_empty() {
+            self.error_message = Some("Label name cannot be empty".to_string());
+            return;
+        }
+
+        if let Some(label_id) = &self.edit_label_id.clone() {
+            self.editing_label = false;
+            self.error_message = None;
+            self.info_message = None;
+
+            match sync_service
+                .update_label_content(label_id, self.edit_label_name.trim())
+                .await
+            {
+                Ok(()) => {
+                    // Try to sync first, but if it fails, at least reload local data
+                    match sync_service.force_sync().await {
+                        Ok(_) => {
+                            // Sync succeeded, reload local data
+                            self.load_local_data(sync_service).await;
+                            self.info_message = Some("Label updated successfully!".to_string());
+                        }
+                        Err(e) => {
+                            // Sync failed but label was updated, just reload local data
+                            self.load_local_data(sync_service).await;
+                            self.error_message = Some(format!("Label updated but sync failed: {e}"));
+                        }
+                    }
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Failed to update label: {e}"));
+                }
+            }
+        }
+
+        self.edit_label_id = None;
+        self.edit_label_name.clear();
+    }
+
+    /// Start label deletion confirmation
+    pub fn start_delete_label(&mut self) {
+        if let Some(label) = self.get_selected_label() {
+            self.delete_label_confirmation = Some(label.id.clone());
+        }
+    }
+
+    /// Cancel label deletion
+    pub fn cancel_delete_label(&mut self) {
+        self.delete_label_confirmation = None;
+    }
+
+    /// Delete the confirmed label
+    pub async fn delete_label(&mut self, sync_service: &SyncService) {
+        if let Some(label_id) = &self.delete_label_confirmation {
+            self.error_message = None;
+            self.info_message = None;
+
+            match sync_service.delete_label(label_id).await {
+                Ok(()) => {
+                    // Force a full sync to ensure all data is up to date
+                    self.force_clear_and_sync(sync_service).await;
+                    self.info_message = Some("Label deleted successfully!".to_string());
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Error deleting label: {e}"));
+                }
+            }
+
+            self.delete_label_confirmation = None;
+        }
     }
 }

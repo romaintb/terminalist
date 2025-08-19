@@ -13,9 +13,19 @@ pub async fn handle_events(event: Event, app: &mut App, sync_service: &SyncServi
                 return handle_project_delete_confirmation(key, app, sync_service).await;
             }
 
+            // Handle label deletion confirmation dialog
+            if app.delete_label_confirmation.is_some() {
+                return handle_label_delete_confirmation(key, app, sync_service).await;
+            }
+
             // Handle project creation dialog
             if app.creating_project {
                 return handle_project_creation(key, app, sync_service).await;
+            }
+
+            // Handle label creation dialog
+            if app.creating_label {
+                return handle_label_creation_mode(key, app, sync_service).await;
             }
 
             // Handle task creation dialog
@@ -31,6 +41,11 @@ pub async fn handle_events(event: Event, app: &mut App, sync_service: &SyncServi
             // Handle project editing dialog
             if app.editing_project {
                 return handle_project_editing_mode(key, app, sync_service).await;
+            }
+
+            // Handle label editing dialog
+            if app.editing_label {
+                return handle_label_editing_mode(key, app, sync_service).await;
             }
 
             // Handle error/info message dialogs
@@ -364,16 +379,111 @@ async fn handle_normal_mode(
             app.start_create_project();
             Ok(true)
         }
+        KeyCode::Char('L') => {
+            // Create new label
+            app.start_create_label();
+            Ok(true)
+        }
         KeyCode::Char('E') => {
-            // Start editing the selected project (capital E to distinguish from task editing)
-            app.start_edit_project();
+            // Start editing the selected item (project or label depending on selection)
+            match &app.sidebar_selection {
+                crate::ui::app::SidebarSelection::Project(_) => {
+                    app.start_edit_project();
+                }
+                crate::ui::app::SidebarSelection::Label(_) => {
+                    app.start_edit_label();
+                }
+            }
             Ok(true)
         }
         KeyCode::Char('D') => {
-            // Delete selected project (capital D to distinguish from task deletion)
-            app.start_delete_project();
+            // Delete selected item (project or label depending on selection)
+            match &app.sidebar_selection {
+                crate::ui::app::SidebarSelection::Project(_) => {
+                    app.start_delete_project();
+                }
+                crate::ui::app::SidebarSelection::Label(_) => {
+                    app.start_delete_label();
+                }
+            }
             Ok(true)
         }
         _ => Ok(false),
+    }
+}
+
+/// Handle events when creating a label
+async fn handle_label_creation_mode(
+    key: crossterm::event::KeyEvent,
+    app: &mut App,
+    sync_service: &SyncService,
+) -> Result<bool, anyhow::Error> {
+    match key.code {
+        KeyCode::Char(c) if c.is_ascii_graphic() || c == ' ' => {
+            app.add_char_to_label_name(c);
+            Ok(true)
+        }
+        KeyCode::Backspace => {
+            app.remove_char_from_label_name();
+            Ok(true)
+        }
+        KeyCode::Enter => {
+            // Create the new label
+            app.create_label(sync_service).await;
+            Ok(true)
+        }
+        KeyCode::Esc => {
+            app.cancel_create_label();
+            Ok(true)
+        }
+        _ => Ok(false), // Ignore all other keys when creating label
+    }
+}
+
+/// Handle events when editing a label
+async fn handle_label_editing_mode(
+    key: crossterm::event::KeyEvent,
+    app: &mut App,
+    sync_service: &SyncService,
+) -> Result<bool, anyhow::Error> {
+    match key.code {
+        KeyCode::Char(c) if c.is_ascii_graphic() || c == ' ' => {
+            app.add_char_to_label_name(c);
+            Ok(true)
+        }
+        KeyCode::Backspace => {
+            app.remove_char_from_label_name();
+            Ok(true)
+        }
+        KeyCode::Enter => {
+            // Save the edited label
+            app.save_edit_label(sync_service).await;
+            Ok(true)
+        }
+        KeyCode::Esc => {
+            app.cancel_edit_label();
+            Ok(true)
+        }
+        _ => Ok(false), // Ignore all other keys when editing label
+    }
+}
+
+/// Handle events when label delete confirmation is open
+async fn handle_label_delete_confirmation(
+    key: crossterm::event::KeyEvent,
+    app: &mut App,
+    sync_service: &SyncService,
+) -> Result<bool, anyhow::Error> {
+    match key.code {
+        KeyCode::Char('y') | KeyCode::Char('Y') => {
+            // User confirmed deletion
+            app.delete_label(sync_service).await;
+            Ok(true)
+        }
+        _ => {
+            // Any other key cancels the deletion
+            app.cancel_delete_label();
+            Ok(true)
+        }
     }
 }
