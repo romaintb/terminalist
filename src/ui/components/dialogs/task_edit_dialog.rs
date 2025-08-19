@@ -54,7 +54,7 @@ impl TaskEditDialog {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .title("✏️ Edit Task")
+                        .title("Edit Task")
                         .title_alignment(Alignment::Center),
                 )
                 .style(Style::default().fg(Color::Yellow))

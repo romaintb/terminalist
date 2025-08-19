@@ -24,7 +24,7 @@ impl ErrorDialog {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .title("❌ Error")
+                        .title("Error")
                         .title_alignment(Alignment::Center),
                 )
                 .style(Style::default().fg(Color::Red))

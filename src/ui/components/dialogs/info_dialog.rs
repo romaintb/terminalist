@@ -24,7 +24,7 @@ impl InfoDialog {
                 .block(
                     Block::default()
                         .borders(Borders::ALL)
-                        .title("✅ Success")
+                        .title("Success")
                         .title_alignment(Alignment::Center),
                 )
                 .style(Style::default().fg(Color::Green))
