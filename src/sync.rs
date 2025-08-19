@@ -141,6 +141,46 @@ impl SyncService {
         Ok(())
     }
 
+    /// Create a new label
+    pub async fn create_label(&self, name: &str, color: Option<&str>) -> Result<()> {
+        // Create label via API using the CreateLabelArgs structure
+        let label_args = todoist_api::CreateLabelArgs {
+            name: name.to_string(),
+            color: color.map(std::string::ToString::to_string),
+            order: None,
+            is_favorite: None,
+        };
+        let _label = self.todoist.create_label(&label_args).await?;
+
+        // The UI will handle the sync separately to ensure proper error handling
+        Ok(())
+    }
+
+    /// Update label content (name only for now)
+    pub async fn update_label_content(&self, label_id: &str, name: &str) -> Result<()> {
+        // Update label via API using the UpdateLabelArgs structure
+        let label_args = todoist_api::UpdateLabelArgs {
+            name: Some(name.to_string()),
+            // Set all other fields to None to avoid overwriting existing data
+            color: None,
+            order: None,
+            is_favorite: None,
+        };
+        let _label = self.todoist.update_label(label_id, &label_args).await?;
+
+        // The UI will handle the sync separately to ensure proper error handling
+        Ok(())
+    }
+
+    /// Delete a label
+    pub async fn delete_label(&self, label_id: &str) -> Result<()> {
+        // Delete label via API
+        self.todoist.delete_label(label_id).await?;
+
+        // Note: Local storage deletion will be handled by the next sync
+        Ok(())
+    }
+
     /// Update project content (name only for now)
     pub async fn update_project_content(&self, project_id: &str, name: &str) -> Result<()> {
         // Update project via API using the UpdateProjectArgs structure

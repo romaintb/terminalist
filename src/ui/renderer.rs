@@ -12,8 +12,9 @@ use tokio::time::Duration;
 use super::app::App;
 use super::components::{
     dialogs::{
-        DeleteConfirmationDialog, ErrorDialog, InfoDialog, ProjectCreationDialog, ProjectDeleteConfirmationDialog,
-        ProjectEditDialog, SyncingDialog, TaskCreationDialog, TaskEditDialog,
+        DeleteConfirmationDialog, ErrorDialog, InfoDialog, LabelCreationDialog, LabelDeleteConfirmationDialog,
+        LabelEditDialog, ProjectCreationDialog, ProjectDeleteConfirmationDialog, ProjectEditDialog, SyncingDialog,
+        TaskCreationDialog, TaskEditDialog,
     },
     HelpPanel, Sidebar, StatusBar, TasksList,
 };
@@ -148,6 +149,10 @@ fn render_ui(f: &mut ratatui::Frame, app: &mut App) {
         ProjectCreationDialog::render(f, app);
     }
 
+    if app.creating_label {
+        LabelCreationDialog::render(f, app);
+    }
+
     if app.creating_task {
         TaskCreationDialog::render(f, app);
     }
@@ -160,8 +165,16 @@ fn render_ui(f: &mut ratatui::Frame, app: &mut App) {
         ProjectEditDialog::render(f, app);
     }
 
+    if app.editing_label {
+        LabelEditDialog::render(f, app);
+    }
+
     if app.delete_project_confirmation.is_some() {
         ProjectDeleteConfirmationDialog::render(f, app);
+    }
+
+    if app.delete_label_confirmation.is_some() {
+        LabelDeleteConfirmationDialog::render(f, app);
     }
 
     // Render help panel last to ensure it's on top of everything
