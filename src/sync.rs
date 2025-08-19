@@ -141,6 +141,25 @@ impl SyncService {
         Ok(())
     }
 
+    /// Update project content (name only for now)
+    pub async fn update_project_content(&self, project_id: &str, name: &str) -> Result<()> {
+        // Update project via API using the UpdateProjectArgs structure
+        let project_args = todoist_api::UpdateProjectArgs {
+            name: Some(name.to_string()),
+            // Set all other fields to None to avoid overwriting existing data
+            color: None,
+            is_favorite: None,
+            view_style: None,
+        };
+        let _project = self
+            .todoist
+            .update_project(project_id, &project_args)
+            .await?;
+
+        // The UI will handle the sync separately to ensure proper error handling
+        Ok(())
+    }
+
     /// Update task content
     pub async fn update_task_content(&self, task_id: &str, content: &str) -> Result<()> {
         // Update task via API using the UpdateTaskArgs structure
