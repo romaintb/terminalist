@@ -160,8 +160,8 @@ pub struct LocalStorage {
 impl LocalStorage {
     /// Initialize the local storage with `SQLite` database
     pub async fn new() -> Result<Self> {
-        // Use in-memory SQLite database for ephemeral storage
-        let database_url = "sqlite::memory:".to_string();
+        // Use shared cache in-memory SQLite database to persist data during app lifetime
+        let database_url = "sqlite:file:terminalist_memdb?mode=memory&cache=shared".to_string();
         let pool = SqlitePool::connect(&database_url).await?;
         let storage = LocalStorage { pool };
         storage.init_schema().await?;
