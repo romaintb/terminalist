@@ -1,8 +1,9 @@
 //! Application state and business logic
 
+use crate::debug_logger::DebugLogger;
 use crate::icons::IconService;
 use crate::sync::{SyncService, SyncStats, SyncStatus};
-use crate::todoist::{LabelDisplay, ProjectDisplay, TaskDisplay};
+use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
 use ratatui::widgets::ListState;
 use tokio::task::JoinHandle;
 
@@ -19,6 +20,7 @@ pub struct App {
     pub projects: Vec<ProjectDisplay>,
     pub tasks: Vec<TaskDisplay>,
     pub labels: Vec<LabelDisplay>,
+    pub sections: Vec<SectionDisplay>,
     pub sidebar_selection: SidebarSelection,
     pub selected_task_index: usize,
 
@@ -60,6 +62,10 @@ pub struct App {
     pub edit_task_id: Option<String>,
     // Icons
     pub icons: IconService,
+    // Debug logging
+    pub debug_logger: DebugLogger,
+    pub show_debug_modal: bool,
+    pub debug_scroll_offset: usize,
 }
 
 impl Default for App {
@@ -82,6 +88,7 @@ impl App {
             projects: Vec::new(),
             tasks: Vec::new(),
             labels: Vec::new(),
+            sections: Vec::new(),
             sidebar_selection: SidebarSelection::Project(0), // Will be properly set when data is loaded
             selected_task_index: 0,
             task_list_state,
@@ -121,6 +128,76 @@ impl App {
             edit_task_id: None,
             // Icons
             icons: IconService::default(),
+            // Debug logging
+            debug_logger: DebugLogger::new(),
+            show_debug_modal: false,
+            debug_scroll_offset: 0,
+        }
+    }
+
+    /// Add a debug log entry
+    pub fn add_debug_log(&mut self, message: String) {
+        self.debug_logger.log(message);
+    }
+
+    /// Get the list position for the currently selected task (accounting for section headers)
+    fn get_task_list_position(&self) -> Option<usize> {
+        let current_project = match &self.sidebar_selection {
+            SidebarSelection::Project(index) => self.projects.get(*index).map(|p| &p.id),
+            _ => None,
+        };
+
+        if let Some(project_id) = current_project {
+            // Get sections for the current project
+            let project_sections: Vec<_> = self
+                .sections
+                .iter()
+                .filter(|section| section.project_id == *project_id)
+                .collect();
+
+            // Group tasks by section
+            let mut tasks_by_section: std::collections::HashMap<Option<String>, Vec<&TaskDisplay>> =
+                std::collections::HashMap::new();
+
+            for task in &self.tasks {
+                tasks_by_section
+                    .entry(task.section_id.clone())
+                    .or_default()
+                    .push(task);
+            }
+
+            let mut list_position = 0;
+            let mut current_task_index = 0;
+
+            // Count tasks without sections first
+            if let Some(tasks_without_section) = tasks_by_section.get(&None) {
+                if self.selected_task_index < current_task_index + tasks_without_section.len() {
+                    return Some(list_position + (self.selected_task_index - current_task_index));
+                }
+                list_position += tasks_without_section.len();
+                current_task_index += tasks_without_section.len();
+            }
+
+            // Count sections and their tasks
+            for (section_index, section) in project_sections.iter().enumerate() {
+                // Add section header positions (blank, name, separator)
+                let section_header_count = if list_position > 0 || section_index > 0 { 3 } else { 2 };
+                list_position += section_header_count;
+
+                // Check if task is in this section
+                if let Some(section_tasks) = tasks_by_section.get(&Some(section.id.clone())) {
+                    if self.selected_task_index < current_task_index + section_tasks.len() {
+                        return Some(list_position + (self.selected_task_index - current_task_index));
+                    }
+                    list_position += section_tasks.len();
+                    current_task_index += section_tasks.len();
+                }
+            }
+
+            None
+        } else {
+            // No sections, task index equals list position
+            Some(self.selected_task_index)
         }
     }
 
@@ -275,6 +352,7 @@ impl App {
     }
 
     pub async fn load_local_data(&mut self, sync_service: &SyncService) {
+        self.add_debug_log("📱 Loading local data into app...".to_string());
         self.loading = true;
         self.error_message = None;
         self.info_message = None;
@@ -285,16 +363,31 @@ impl App {
         // Load labels from local storage (fast)
         match sync_service.get_labels().await {
             Ok(labels) => {
+                self.add_debug_log(format!("📱 Loaded {} labels into app", labels.len()));
                 self.labels = labels;
             }
             Err(e) => {
+                self.add_debug_log(format!("❌ Error loading labels: {e}"));
                 self.error_message = Some(format!("Error loading labels: {e}"));
+            }
+        }
+
+        // Load sections from local storage (fast)
+        match sync_service.get_sections().await {
+            Ok(sections) => {
+                self.add_debug_log(format!("📱 Loaded {} sections into app", sections.len()));
+                self.sections = sections;
+            }
+            Err(e) => {
+                self.add_debug_log(format!("❌ Error loading sections: {e}"));
+                self.error_message = Some(format!("Error loading sections: {e}"));
             }
         }
 
         // Load projects from local storage (fast)
         match sync_service.get_projects().await {
             Ok(projects) => {
+                self.add_debug_log(format!("📱 Loaded {} projects into app", projects.len()));
                 self.projects = projects;
 
                 // Try to restore the previous selection or set a sensible default
@@ -332,10 +425,14 @@ impl App {
 
                 // Load tasks for the selected item
                 if let Err(e) = self.load_tasks_for_selected_item(sync_service).await {
+                    self.add_debug_log(format!("❌ Error loading tasks: {e}"));
                     self.error_message = Some(format!("Error loading tasks: {e}"));
+                } else {
+                    self.add_debug_log("📱 Tasks loaded successfully for selected item".to_string());
                 }
             }
             Err(e) => {
+                self.add_debug_log(format!("❌ Error loading projects: {e}"));
                 self.error_message = Some(format!("Error loading projects: {e}"));
             }
         }
@@ -352,7 +449,10 @@ impl App {
                         Ok(tasks) => {
                             self.tasks = self.sort_tasks(tasks);
                             self.selected_task_index = 0;
-                            self.task_list_state.select(Some(0));
+                            // Update list state to highlight the correct position (accounting for section headers)
+                            if let Some(list_position) = self.get_task_list_position() {
+                                self.task_list_state.select(Some(list_position));
+                            }
                         }
                         Err(e) => {
                             self.error_message = Some(format!("Error loading tasks for label: {e}"));
@@ -367,7 +467,10 @@ impl App {
                         Ok(tasks) => {
                             self.tasks = self.sort_tasks(tasks);
                             self.selected_task_index = 0;
-                            self.task_list_state.select(Some(0));
+                            // Update list state to highlight the correct position (accounting for section headers)
+                            if let Some(list_position) = self.get_task_list_position() {
+                                self.task_list_state.select(Some(list_position));
+                            }
                         }
                         Err(e) => {
                             self.error_message = Some(format!("Error loading tasks for project: {e}"));
@@ -396,7 +499,10 @@ impl App {
     pub fn next_task(&mut self) {
         if !self.tasks.is_empty() {
             self.selected_task_index = (self.selected_task_index + 1) % self.tasks.len();
-            self.task_list_state.select(Some(self.selected_task_index));
+            // Update list state to highlight the correct position (accounting for section headers)
+            if let Some(list_position) = self.get_task_list_position() {
+                self.task_list_state.select(Some(list_position));
+            }
         }
     }
 
@@ -407,7 +513,10 @@ impl App {
             } else {
                 self.selected_task_index - 1
             };
-            self.task_list_state.select(Some(self.selected_task_index));
+            // Update list state to highlight the correct position (accounting for section headers)
+            if let Some(list_position) = self.get_task_list_position() {
+                self.task_list_state.select(Some(list_position));
+            }
         }
     }
 
@@ -559,7 +668,7 @@ impl App {
                     }
                     Err(e) => {
                         // Sync failed, but try to reload local data anyway
-                        eprintln!("Warning: Sync failed after project creation: {e}");
+                        self.add_debug_log(format!("Warning: Sync failed after project creation: {e}"));
                         self.load_local_data(sync_service).await;
                         self.error_message = Some("Project created but sync failed - data may be stale".to_string());
                     }
@@ -710,7 +819,7 @@ impl App {
                         }
                         Err(e) => {
                             // Sync failed, but try to reload local data anyway
-                            eprintln!("Warning: Sync failed after task creation: {e}");
+                            self.add_debug_log(format!("Warning: Sync failed after task creation: {e}"));
                             self.load_local_data(sync_service).await;
                             self.error_message = Some("Task created but sync failed - data may be stale".to_string());
                         }
@@ -889,7 +998,7 @@ impl App {
                     }
                     Err(e) => {
                         // Sync failed, but try to reload local data anyway
-                        eprintln!("Warning: Sync failed after label creation: {e}");
+                        self.add_debug_log(format!("Warning: Sync failed after label creation: {e}"));
                         self.load_local_data(sync_service).await;
                         self.error_message = Some("Label created but sync failed - data may be stale".to_string());
                     }

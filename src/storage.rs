@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{sqlite::SqlitePool, Row};
 
-use crate::todoist::{Label, Project, ProjectDisplay, Task, TaskDisplay};
+use crate::todoist::{Label, Project, ProjectDisplay, Section, SectionDisplay, Task, TaskDisplay};
 
 /// Local project representation with sync metadata
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -18,6 +18,16 @@ pub struct LocalProject {
     pub last_synced: DateTime<Utc>,
 }
 
+/// Local section representation with sync metadata
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct LocalSection {
+    pub id: String,
+    pub name: String,
+    pub project_id: String,
+    pub order_index: i32,
+    pub last_synced: DateTime<Utc>,
+}
+
 /// Local task representation with sync metadata
 #[derive(Debug, Clone)]
 pub struct LocalTask {
@@ -25,6 +35,7 @@ pub struct LocalTask {
     pub content: String,
     pub description: Option<String>,
     pub project_id: String,
+    pub section_id: Option<String>,
     pub is_completed: bool,
     pub is_deleted: bool,
     pub priority: i32,
@@ -61,6 +72,17 @@ impl From<LocalProject> for ProjectDisplay {
     }
 }
 
+impl From<LocalSection> for SectionDisplay {
+    fn from(local: LocalSection) -> Self {
+        Self {
+            id: local.id,
+            name: local.name,
+            project_id: local.project_id,
+            order: local.order_index,
+        }
+    }
+}
+
 impl From<LocalTask> for TaskDisplay {
     fn from(local: LocalTask) -> Self {
         // Parse labels from JSON string
@@ -80,6 +102,7 @@ impl From<LocalTask> for TaskDisplay {
             id: local.id,
             content: local.content,
             project_id: local.project_id,
+            section_id: local.section_id,
             is_completed: local.is_completed,
             is_deleted: local.is_deleted,
             priority: local.priority,
@@ -109,6 +132,18 @@ impl From<Project> for LocalProject {
     }
 }
 
+impl From<Section> for LocalSection {
+    fn from(section: Section) -> Self {
+        Self {
+            id: section.id,
+            name: section.name,
+            project_id: section.project_id,
+            order_index: section.order,
+            last_synced: Utc::now(),
+        }
+    }
+}
+
 impl From<Task> for LocalTask {
     fn from(task: Task) -> Self {
         let duration_string = task.duration.map(|d| match d.unit.as_str() {
@@ -122,6 +157,7 @@ impl From<Task> for LocalTask {
             id: task.id,
             content: task.content,
             project_id: task.project_id,
+            section_id: task.section_id,
             is_completed: task.is_completed,
             is_deleted: false, // New tasks are not deleted
             priority: task.priority,
@@ -189,6 +225,21 @@ impl LocalStorage {
         .execute(&self.pool)
         .await?;
 
+        // Create sections table
+        sqlx::query(
+            r"
+            CREATE TABLE IF NOT EXISTS sections (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                project_id TEXT NOT NULL,
+                order_index INTEGER NOT NULL DEFAULT 0,
+                last_synced TEXT NOT NULL
+            )
+            ",
+        )
+        .execute(&self.pool)
+        .await?;
+
         // Create tasks table
         sqlx::query(
             r"
@@ -197,6 +248,7 @@ impl LocalStorage {
                 content TEXT NOT NULL,
                 description TEXT,
                 project_id TEXT NOT NULL,
+                section_id TEXT,
                 is_completed BOOLEAN NOT NULL DEFAULT 0,
                 is_deleted BOOLEAN NOT NULL DEFAULT 0,
                 priority INTEGER NOT NULL DEFAULT 1,
@@ -281,6 +333,38 @@ impl LocalStorage {
         Ok(())
     }
 
+    /// Store sections in local database
+    pub async fn store_sections(&self, sections: Vec<Section>) -> Result<()> {
+        let mut tx = self.pool.begin().await?;
+
+        // Clear existing sections
+        sqlx::query("DELETE FROM sections")
+            .execute(&mut *tx)
+            .await?;
+
+        // Insert new sections
+        for section in &sections {
+            let local_section: LocalSection = section.clone().into();
+            sqlx::query(
+                r"
+                INSERT INTO sections (id, name, project_id, order_index, last_synced)
+                VALUES (?, ?, ?, ?, ?)
+                ",
+            )
+            .bind(&local_section.id)
+            .bind(&local_section.name)
+            .bind(&local_section.project_id)
+            .bind(local_section.order_index)
+            .bind(local_section.last_synced)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        self.update_sync_timestamp("sections").await?;
+        Ok(())
+    }
+
     /// Store tasks in local database
     pub async fn store_tasks(&self, tasks: Vec<Task>) -> Result<()> {
         let mut tx = self.pool.begin().await?;
@@ -293,13 +377,14 @@ impl LocalStorage {
             let local_task: LocalTask = task.into();
             sqlx::query(
                 r"
-                INSERT INTO tasks (id, content, project_id, is_completed, is_deleted, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description, last_synced)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tasks (id, content, project_id, section_id, is_completed, is_deleted, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description, last_synced)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ",
             )
             .bind(&local_task.id)
             .bind(&local_task.content)
             .bind(&local_task.project_id)
+            .bind(&local_task.section_id)
             .bind(local_task.is_completed)
             .bind(local_task.is_deleted)
             .bind(local_task.priority)
@@ -466,11 +551,63 @@ impl LocalStorage {
         Ok(projects)
     }
 
+    /// Get all sections from local storage
+    pub async fn get_sections(&self) -> Result<Vec<SectionDisplay>> {
+        let rows = sqlx::query(
+            r"
+            SELECT id, name, project_id, order_index
+            FROM sections 
+            ORDER BY project_id, order_index, name
+            ",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let sections = rows
+            .into_iter()
+            .map(|row| SectionDisplay {
+                id: row.get("id"),
+                name: row.get("name"),
+                project_id: row.get("project_id"),
+                order: row.get("order_index"),
+            })
+            .collect();
+
+        Ok(sections)
+    }
+
+    /// Get sections for a specific project from local storage
+    pub async fn get_sections_for_project(&self, project_id: &str) -> Result<Vec<SectionDisplay>> {
+        let rows = sqlx::query(
+            r"
+            SELECT id, name, project_id, order_index
+            FROM sections 
+            WHERE project_id = ? 
+            ORDER BY order_index, name
+            ",
+        )
+        .bind(project_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        let sections = rows
+            .into_iter()
+            .map(|row| SectionDisplay {
+                id: row.get("id"),
+                name: row.get("name"),
+                project_id: row.get("project_id"),
+                order: row.get("order_index"),
+            })
+            .collect();
+
+        Ok(sections)
+    }
+
     /// Get tasks for a specific project from local storage
     pub async fn get_tasks_for_project(&self, project_id: &str) -> Result<Vec<TaskDisplay>> {
         let rows = sqlx::query(
             r"
-            SELECT id, content, project_id, is_completed, is_deleted, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
+            SELECT id, content, project_id, section_id, is_completed, is_deleted, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
             FROM tasks 
             WHERE project_id = ? 
             ORDER BY is_completed ASC, priority DESC, order_index ASC
@@ -501,6 +638,7 @@ impl LocalStorage {
                     id: row.get("id"),
                     content: row.get("content"),
                     project_id: row.get("project_id"),
+                    section_id: row.get("section_id"),
                     is_completed: row.get("is_completed"),
                     is_deleted: row.get("is_deleted"),
                     priority: row.get("priority"),
@@ -556,6 +694,7 @@ impl LocalStorage {
                     id: row.get("id"),
                     content: row.get("content"),
                     project_id: row.get("project_id"),
+                    section_id: row.get("section_id"),
                     is_completed: row.get("is_completed"),
                     is_deleted: row.get("is_deleted"),
                     priority: row.get("priority"),

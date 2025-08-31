@@ -3,8 +3,9 @@ use chrono::{DateTime, Duration, Utc};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use crate::debug_logger::DebugLogger;
 use crate::storage::LocalStorage;
-use crate::todoist::{CreateProjectArgs, LabelDisplay, ProjectDisplay, TaskDisplay, TodoistWrapper};
+use crate::todoist::{CreateProjectArgs, LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay, TodoistWrapper};
 
 /// Sync service that manages data synchronization between API and local storage
 #[derive(Clone)]
@@ -12,6 +13,7 @@ pub struct SyncService {
     todoist: TodoistWrapper,
     storage: Arc<Mutex<LocalStorage>>,
     sync_in_progress: Arc<Mutex<bool>>,
+    debug_logger: Option<DebugLogger>,
 }
 
 #[derive(Debug, Clone)]
@@ -33,7 +35,20 @@ impl SyncService {
             todoist,
             storage,
             sync_in_progress,
+            debug_logger: None,
         })
+    }
+
+    /// Set the debug logger for this sync service
+    pub fn set_debug_logger(&mut self, logger: DebugLogger) {
+        self.debug_logger = Some(logger);
+    }
+
+    /// Log a debug message if logger is available
+    fn log_debug(&self, message: String) {
+        if let Some(ref logger) = self.debug_logger {
+            logger.log(message);
+        }
     }
 
     /// Get projects from local storage (fast)
@@ -64,6 +79,18 @@ impl SyncService {
             .collect();
 
         Ok(labels)
+    }
+
+    /// Get all sections from local storage (fast)
+    pub async fn get_sections(&self) -> Result<Vec<SectionDisplay>> {
+        let storage = self.storage.lock().await;
+        storage.get_sections().await
+    }
+
+    /// Get sections for a project from local storage (fast)
+    pub async fn get_sections_for_project(&self, project_id: &str) -> Result<Vec<SectionDisplay>> {
+        let storage = self.storage.lock().await;
+        storage.get_sections_for_project(project_id).await
     }
 
     /// Get tasks with a specific label from local storage (fast)
@@ -261,10 +288,16 @@ impl SyncService {
 
     /// Internal sync implementation
     async fn perform_sync(&self) -> Result<SyncStatus> {
+        self.log_debug("🔄 Starting sync process...".to_string());
+
         // Fetch projects from API
         let projects = match self.todoist.get_projects().await {
-            Ok(projects) => projects,
+            Ok(projects) => {
+                self.log_debug(format!("✅ Fetched {} projects from API", projects.len()));
+                projects
+            }
             Err(e) => {
+                self.log_debug(format!("❌ Failed to fetch projects: {e}"));
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to fetch projects: {e}"),
                 });
@@ -273,8 +306,12 @@ impl SyncService {
 
         // Fetch all tasks from API
         let tasks = match self.todoist.get_tasks().await {
-            Ok(tasks) => tasks,
+            Ok(tasks) => {
+                self.log_debug(format!("✅ Fetched {} tasks from API", tasks.len()));
+                tasks
+            }
             Err(e) => {
+                self.log_debug(format!("❌ Failed to fetch tasks: {e}"));
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to fetch tasks: {e}"),
                 });
@@ -283,34 +320,71 @@ impl SyncService {
 
         // Fetch all labels from API
         let labels = match self.todoist.get_labels().await {
-            Ok(labels) => labels,
+            Ok(labels) => {
+                self.log_debug(format!("✅ Fetched {} labels from API", labels.len()));
+                labels
+            }
             Err(e) => {
+                self.log_debug(format!("❌ Failed to fetch labels: {e}"));
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to fetch labels: {e}"),
                 });
             }
         };
 
+        // Fetch all sections from API
+        let sections = match self.todoist.get_sections().await {
+            Ok(sections) => {
+                self.log_debug(format!("✅ Fetched {} sections from API", sections.len()));
+                sections
+            }
+            Err(e) => {
+                self.log_debug(format!("❌ Failed to fetch sections: {e}"));
+                self.log_debug("⚠️  Skipping sections sync due to API compatibility issue".to_string());
+                // For now, skip sections sync and continue with other data
+                Vec::new()
+            }
+        };
+
         // Store in local database
         {
             let storage = self.storage.lock().await;
+            self.log_debug("💾 Storing data in local database...".to_string());
 
             if let Err(e) = storage.store_projects(projects).await {
+                self.log_debug(format!("❌ Failed to store projects: {e}"));
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to store projects: {e}"),
                 });
             }
+            self.log_debug("✅ Stored projects in database".to_string());
 
             if let Err(e) = storage.store_tasks(tasks).await {
+                self.log_debug(format!("❌ Failed to store tasks: {e}"));
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to store tasks: {e}"),
                 });
             }
+            self.log_debug("✅ Stored tasks in database".to_string());
 
             if let Err(e) = storage.store_labels(labels).await {
+                self.log_debug(format!("❌ Failed to store labels: {e}"));
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to store labels: {e}"),
                 });
+            }
+            self.log_debug("✅ Stored labels in database".to_string());
+
+            if !sections.is_empty() {
+                if let Err(e) = storage.store_sections(sections).await {
+                    self.log_debug(format!("❌ Failed to store sections: {e}"));
+                    return Ok(SyncStatus::Error {
+                        message: format!("Failed to store sections: {e}"),
+                    });
+                }
+                self.log_debug("✅ Stored sections in database".to_string());
+            } else {
+                self.log_debug("⚠️  No sections to store (skipped due to API issue)".to_string());
             }
         }
 

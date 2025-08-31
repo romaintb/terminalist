@@ -63,6 +63,11 @@ pub async fn handle_events(event: Event, app: &mut App, sync_service: &SyncServi
                 return Ok(handle_help_panel(key, app));
             }
 
+            // Handle debug modal - block all other shortcuts when debug modal is open
+            if app.show_debug_modal {
+                return Ok(handle_debug_modal(key, app));
+            }
+
             // Handle normal navigation and actions
             return handle_normal_mode(key, app, sync_service).await;
         }
@@ -369,6 +374,10 @@ async fn handle_normal_mode(
             app.show_help = true;
             Ok(true)
         }
+        KeyCode::Char('G') => {
+            app.show_debug_modal = true;
+            Ok(true)
+        }
         KeyCode::Char('a') => {
             // Create new task
             app.start_create_task();
@@ -485,5 +494,42 @@ async fn handle_label_delete_confirmation(
             app.cancel_delete_label();
             Ok(true)
         }
+    }
+}
+
+/// Handle events when debug modal is open
+fn handle_debug_modal(key: crossterm::event::KeyEvent, app: &mut App) -> bool {
+    match key.code {
+        KeyCode::Char('q') | KeyCode::Esc => {
+            app.show_debug_modal = false;
+            true
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            app.debug_scroll_offset = app.debug_scroll_offset.saturating_sub(1);
+            true
+        }
+        KeyCode::Down | KeyCode::Char('j') => {
+            app.debug_scroll_offset = app.debug_scroll_offset.saturating_add(1);
+            true
+        }
+        KeyCode::PageUp => {
+            app.debug_scroll_offset = app.debug_scroll_offset.saturating_sub(10);
+            true
+        }
+        KeyCode::PageDown => {
+            app.debug_scroll_offset = app.debug_scroll_offset.saturating_add(10);
+            true
+        }
+        KeyCode::Home => {
+            app.debug_scroll_offset = 0;
+            true
+        }
+        KeyCode::End => {
+            // Set to a large number, the debug modal will clamp it
+            let log_count = app.debug_logger.get_logs().len();
+            app.debug_scroll_offset = log_count.saturating_sub(1);
+            true
+        }
+        _ => false,
     }
 }

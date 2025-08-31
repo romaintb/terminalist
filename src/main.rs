@@ -1,4 +1,5 @@
 pub mod badge;
+pub mod debug_logger;
 pub mod icons;
 pub mod storage;
 pub mod sync;

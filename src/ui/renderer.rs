@@ -12,9 +12,9 @@ use tokio::time::Duration;
 use super::app::App;
 use super::components::{
     dialogs::{
-        DeleteConfirmationDialog, ErrorDialog, InfoDialog, LabelCreationDialog, LabelDeleteConfirmationDialog,
-        LabelEditDialog, ProjectCreationDialog, ProjectDeleteConfirmationDialog, ProjectEditDialog, SyncingDialog,
-        TaskCreationDialog, TaskEditDialog,
+        DebugDialog, DeleteConfirmationDialog, ErrorDialog, InfoDialog, LabelCreationDialog,
+        LabelDeleteConfirmationDialog, LabelEditDialog, ProjectCreationDialog, ProjectDeleteConfirmationDialog,
+        ProjectEditDialog, SyncingDialog, TaskCreationDialog, TaskEditDialog,
     },
     HelpPanel, Sidebar, StatusBar, TasksList,
 };
@@ -34,7 +34,10 @@ pub async fn run_app() -> Result<()> {
     // Create application state
     let mut app = App::new();
     let api_token = std::env::var("TODOIST_API_TOKEN").expect("TODOIST_API_TOKEN environment variable must be set");
-    let sync_service = SyncService::new(api_token).await?;
+    let mut sync_service = SyncService::new(api_token).await?;
+
+    // Set up debug logging
+    sync_service.set_debug_logger(app.debug_logger.clone());
 
     // Load initial local data so we can render the UI immediately
     app.load_local_data(&sync_service).await;
@@ -175,6 +178,11 @@ fn render_ui(f: &mut ratatui::Frame, app: &mut App) {
 
     if app.delete_label_confirmation.is_some() {
         LabelDeleteConfirmationDialog::render(f, app);
+    }
+
+    // Render debug modal
+    if app.show_debug_modal {
+        DebugDialog::render(f, app, f.area());
     }
 
     // Render help panel last to ensure it's on top of everything
