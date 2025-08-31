@@ -10,6 +10,7 @@ use tokio::task::JoinHandle;
 /// Represents the currently selected item in the sidebar
 #[derive(Debug, Clone, PartialEq)]
 pub enum SidebarSelection {
+    Today,          // Today view (special view)
     Label(usize),   // Index into labels vector
     Project(usize), // Index into projects vector
 }
@@ -89,7 +90,7 @@ impl App {
             tasks: Vec::new(),
             labels: Vec::new(),
             sections: Vec::new(),
-            sidebar_selection: SidebarSelection::Project(0), // Will be properly set when data is loaded
+            sidebar_selection: SidebarSelection::Today, // Default to Today view
             selected_task_index: 0,
             task_list_state,
             loading: true,
@@ -142,62 +143,130 @@ impl App {
 
     /// Get the list position for the currently selected task (accounting for section headers)
     fn get_task_list_position(&self) -> Option<usize> {
-        let current_project = match &self.sidebar_selection {
-            SidebarSelection::Project(index) => self.projects.get(*index).map(|p| &p.id),
-            _ => None,
-        };
+        match &self.sidebar_selection {
+            SidebarSelection::Today => {
+                // For Today view, we need to account for section headers
+                let now = chrono::Utc::now().date_naive();
 
-        if let Some(project_id) = current_project {
-            // Get sections for the current project
-            let project_sections: Vec<_> = self
-                .sections
-                .iter()
-                .filter(|section| section.project_id == *project_id)
-                .collect();
+                // Separate tasks into overdue and today
+                let mut overdue_tasks = Vec::new();
+                let mut today_tasks = Vec::new();
 
-            // Group tasks by section
-            let mut tasks_by_section: std::collections::HashMap<Option<String>, Vec<&TaskDisplay>> =
-                std::collections::HashMap::new();
-
-            for task in &self.tasks {
-                tasks_by_section
-                    .entry(task.section_id.clone())
-                    .or_default()
-                    .push(task);
-            }
-
-            let mut list_position = 0;
-            let mut current_task_index = 0;
-
-            // Count tasks without sections first
-            if let Some(tasks_without_section) = tasks_by_section.get(&None) {
-                if self.selected_task_index < current_task_index + tasks_without_section.len() {
-                    return Some(list_position + (self.selected_task_index - current_task_index));
+                for task in &self.tasks {
+                    if let Some(due_date_str) = &task.due {
+                        if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
+                            if due_date < now {
+                                overdue_tasks.push(task);
+                            } else if due_date == now {
+                                today_tasks.push(task);
+                            }
+                        }
+                    }
                 }
-                list_position += tasks_without_section.len();
-                current_task_index += tasks_without_section.len();
-            }
 
-            // Count sections and their tasks
-            for (section_index, section) in project_sections.iter().enumerate() {
-                // Add section header positions (blank, name, separator)
-                let section_header_count = if list_position > 0 || section_index > 0 { 3 } else { 2 };
-                list_position += section_header_count;
+                let mut list_position = 0;
+                let mut current_task_index = 0;
 
-                // Check if task is in this section
-                if let Some(section_tasks) = tasks_by_section.get(&Some(section.id.clone())) {
-                    if self.selected_task_index < current_task_index + section_tasks.len() {
+                // Count overdue section
+                if !overdue_tasks.is_empty() {
+                    // Section header
+                    list_position += 1;
+
+                    if self.selected_task_index < current_task_index + overdue_tasks.len() {
                         return Some(list_position + (self.selected_task_index - current_task_index));
                     }
-                    list_position += section_tasks.len();
-                    current_task_index += section_tasks.len();
+                    list_position += overdue_tasks.len();
+                    current_task_index += overdue_tasks.len();
+
+                    // Separator if we have both sections
+                    if !today_tasks.is_empty() {
+                        list_position += 1;
+                    }
+                }
+
+                // Count today section
+                if !today_tasks.is_empty() {
+                    // Section header
+                    list_position += 1;
+
+                    if self.selected_task_index < current_task_index + today_tasks.len() {
+                        return Some(list_position + (self.selected_task_index - current_task_index));
+                    }
+                    list_position += today_tasks.len();
+                    current_task_index += today_tasks.len();
+                }
+
+                // If no tasks match the date filtering, show all tasks (fallback for debugging)
+                if overdue_tasks.is_empty() && today_tasks.is_empty() && !self.tasks.is_empty() {
+                    // Section header
+                    list_position += 1;
+
+                    if self.selected_task_index < current_task_index + self.tasks.len() {
+                        return Some(list_position + (self.selected_task_index - current_task_index));
+                    }
+                }
+
+                None
+            }
+            SidebarSelection::Project(index) => {
+                let current_project = self.projects.get(*index).map(|p| &p.id);
+                if let Some(project_id) = current_project {
+                    // Get sections for the current project
+                    let project_sections: Vec<_> = self
+                        .sections
+                        .iter()
+                        .filter(|section| section.project_id == *project_id)
+                        .collect();
+
+                    // Group tasks by section
+                    let mut tasks_by_section: std::collections::HashMap<Option<String>, Vec<&TaskDisplay>> =
+                        std::collections::HashMap::new();
+
+                    for task in &self.tasks {
+                        tasks_by_section
+                            .entry(task.section_id.clone())
+                            .or_default()
+                            .push(task);
+                    }
+
+                    let mut list_position = 0;
+                    let mut current_task_index = 0;
+
+                    // Count tasks without sections first
+                    if let Some(tasks_without_section) = tasks_by_section.get(&None) {
+                        if self.selected_task_index < current_task_index + tasks_without_section.len() {
+                            return Some(list_position + (self.selected_task_index - current_task_index));
+                        }
+                        list_position += tasks_without_section.len();
+                        current_task_index += tasks_without_section.len();
+                    }
+
+                    // Count sections and their tasks
+                    for (section_index, section) in project_sections.iter().enumerate() {
+                        // Add section header positions (blank, name, separator)
+                        let section_header_count = if list_position > 0 || section_index > 0 { 3 } else { 2 };
+                        list_position += section_header_count;
+
+                        // Check if task is in this section
+                        if let Some(section_tasks) = tasks_by_section.get(&Some(section.id.clone())) {
+                            if self.selected_task_index < current_task_index + section_tasks.len() {
+                                return Some(list_position + (self.selected_task_index - current_task_index));
+                            }
+                            list_position += section_tasks.len();
+                            current_task_index += section_tasks.len();
+                        }
+                    }
+
+                    None
+                } else {
+                    // No sections, task index equals list position
+                    Some(self.selected_task_index)
                 }
             }
-
-            None
-        } else {
-            // No sections, task index equals list position
-            Some(self.selected_task_index)
+            SidebarSelection::Label(_) => {
+                // For label view, no section headers, task index equals list position
+                Some(self.selected_task_index)
+            }
         }
     }
 
@@ -207,6 +276,7 @@ impl App {
         match &self.sidebar_selection {
             SidebarSelection::Project(index) => self.projects.get(*index),
             SidebarSelection::Label(_) => None,
+            SidebarSelection::Today => None,
         }
     }
 
@@ -216,12 +286,25 @@ impl App {
         match &self.sidebar_selection {
             SidebarSelection::Label(index) => self.labels.get(*index),
             SidebarSelection::Project(_) => None,
+            SidebarSelection::Today => None,
         }
     }
 
     /// Navigate to the next item in the sidebar
     pub fn next_sidebar_item(&mut self) {
         match &self.sidebar_selection {
+            SidebarSelection::Today => {
+                if !self.labels.is_empty() {
+                    // Move to first label
+                    self.sidebar_selection = SidebarSelection::Label(0);
+                } else if !self.projects.is_empty() {
+                    // Move to first project (use first in sorted order)
+                    let sorted_projects = self.get_sorted_projects();
+                    if let Some((original_index, _)) = sorted_projects.first() {
+                        self.sidebar_selection = SidebarSelection::Project(*original_index);
+                    }
+                }
+            }
             SidebarSelection::Label(index) => {
                 let next_index = index + 1;
                 if next_index < self.labels.len() {
@@ -233,6 +316,9 @@ impl App {
                     if let Some((original_index, _)) = sorted_projects.first() {
                         self.sidebar_selection = SidebarSelection::Project(*original_index);
                     }
+                } else {
+                    // Wrap to Today
+                    self.sidebar_selection = SidebarSelection::Today;
                 }
             }
             SidebarSelection::Project(index) => {
@@ -247,14 +333,9 @@ impl App {
                         if let Some((original_index, _)) = sorted_projects.get(next_sorted_index) {
                             self.sidebar_selection = SidebarSelection::Project(*original_index);
                         }
-                    } else if !self.labels.is_empty() {
-                        // Wrap to first label
-                        self.sidebar_selection = SidebarSelection::Label(0);
                     } else {
-                        // Wrap to first project
-                        if let Some((original_index, _)) = sorted_projects.first() {
-                            self.sidebar_selection = SidebarSelection::Project(*original_index);
-                        }
+                        // Wrap to Today
+                        self.sidebar_selection = SidebarSelection::Today;
                     }
                 }
             }
@@ -264,16 +345,24 @@ impl App {
     /// Navigate to the previous item in the sidebar
     pub fn previous_sidebar_item(&mut self) {
         match &self.sidebar_selection {
-            SidebarSelection::Label(index) => {
-                if *index > 0 {
-                    // Move to previous label
-                    self.sidebar_selection = SidebarSelection::Label(index - 1);
-                } else if !self.projects.is_empty() {
-                    // Wrap to last project
+            SidebarSelection::Today => {
+                // From Today, wrap to last project or last label
+                if !self.projects.is_empty() {
                     let sorted_projects = self.get_sorted_projects();
                     if let Some((original_index, _)) = sorted_projects.last() {
                         self.sidebar_selection = SidebarSelection::Project(*original_index);
                     }
+                } else if !self.labels.is_empty() {
+                    self.sidebar_selection = SidebarSelection::Label(self.labels.len() - 1);
+                }
+            }
+            SidebarSelection::Label(index) => {
+                if *index > 0 {
+                    // Move to previous label
+                    self.sidebar_selection = SidebarSelection::Label(index - 1);
+                } else {
+                    // Wrap to Today
+                    self.sidebar_selection = SidebarSelection::Today;
                 }
             }
             SidebarSelection::Project(index) => {
@@ -291,10 +380,8 @@ impl App {
                         // Wrap to last label
                         self.sidebar_selection = SidebarSelection::Label(self.labels.len() - 1);
                     } else {
-                        // Wrap to last project
-                        if let Some((original_index, _)) = sorted_projects.last() {
-                            self.sidebar_selection = SidebarSelection::Project(*original_index);
-                        }
+                        // Wrap to Today
+                        self.sidebar_selection = SidebarSelection::Today;
                     }
                 }
             }
@@ -394,6 +481,10 @@ impl App {
                 let mut selection_restored = false;
 
                 match current_selection {
+                    SidebarSelection::Today => {
+                        self.sidebar_selection = SidebarSelection::Today;
+                        selection_restored = true;
+                    }
                     SidebarSelection::Label(index) => {
                         if index < self.labels.len() {
                             self.sidebar_selection = SidebarSelection::Label(index);
@@ -408,17 +499,9 @@ impl App {
                     }
                 }
 
-                // If we couldn't restore the selection, set a sensible default
+                // If we couldn't restore the selection, set a sensible default (Today first)
                 if !selection_restored {
-                    if !self.labels.is_empty() {
-                        self.sidebar_selection = SidebarSelection::Label(0);
-                    } else if !self.projects.is_empty() {
-                        // Use first project in sorted order
-                        let sorted_projects = self.get_sorted_projects();
-                        if let Some((original_index, _)) = sorted_projects.first() {
-                            self.sidebar_selection = SidebarSelection::Project(*original_index);
-                        }
-                    }
+                    self.sidebar_selection = SidebarSelection::Today;
                 }
 
                 // Update the list state to match the selection
@@ -443,6 +526,21 @@ impl App {
     /// Load tasks for the currently selected sidebar item (label or project)
     pub async fn load_tasks_for_selected_item(&mut self, sync_service: &SyncService) -> Result<(), anyhow::Error> {
         match &self.sidebar_selection {
+            SidebarSelection::Today => {
+                match sync_service.get_tasks_for_today().await {
+                    Ok(tasks) => {
+                        // Don't sort today's tasks since they're already sorted by the query (overdue first, then today)
+                        self.tasks = tasks;
+                        self.selected_task_index = 0;
+                        // Update list state to highlight the first task
+                        self.task_list_state.select(Some(0));
+                    }
+                    Err(e) => {
+                        self.error_message = Some(format!("Error loading today's tasks: {e}"));
+                        return Err(e);
+                    }
+                }
+            }
             SidebarSelection::Label(index) => {
                 if let Some(label) = self.labels.get(*index) {
                     match sync_service.get_tasks_with_label(&label.name).await {

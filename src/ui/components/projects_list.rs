@@ -19,8 +19,26 @@ impl Sidebar {
     pub fn render(f: &mut Frame, area: ratatui::layout::Rect, app: &App) {
         let (_sidebar_width, max_name_width) = super::super::layout::LayoutManager::sidebar_constraints(area.width);
 
-        // Create list items: labels first, then projects
+        // Create list items: Today first, then labels, then projects
         let mut all_items: Vec<ListItem> = Vec::new();
+
+        // Add Today item at the top
+        let is_today_selected = matches!(app.sidebar_selection, SidebarSelection::Today);
+        let today_style = if is_today_selected {
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        all_items.push(ListItem::new(Line::from(vec![
+            Span::styled(app.icons.today().to_string(), today_style),
+            Span::styled(" Today".to_string(), today_style),
+        ])));
+
+        // Add separator after Today
+        all_items.push(ListItem::new(Line::from(vec![Span::styled("", Style::default())])));
 
         // Add labels section header if there are labels
         if !app.labels.is_empty() {
