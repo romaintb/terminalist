@@ -25,4 +25,4 @@ sqlx = { version = "0.8", features = [
     "uuid",
 ] }
 chrono = { version = "0.4", features = ["serde"] }
-todoist-api = "0.2.0"
+todoist-api = { git = "https://github.com/romaintb/todoist-api", branch = "main" }
