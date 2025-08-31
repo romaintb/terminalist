@@ -5,7 +5,7 @@ use tokio::sync::Mutex;
 
 use crate::debug_logger::DebugLogger;
 use crate::storage::LocalStorage;
-use crate::todoist::{CreateProjectArgs, LabelDisplay, ProjectDisplay, TaskDisplay, TodoistWrapper};
+use crate::todoist::{CreateProjectArgs, LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay, TodoistWrapper};
 
 /// Sync service that manages data synchronization between API and local storage
 #[derive(Clone)]
@@ -79,6 +79,18 @@ impl SyncService {
             .collect();
 
         Ok(labels)
+    }
+
+    /// Get all sections from local storage (fast)
+    pub async fn get_sections(&self) -> Result<Vec<SectionDisplay>> {
+        let storage = self.storage.lock().await;
+        storage.get_sections().await
+    }
+
+    /// Get sections for a project from local storage (fast)
+    pub async fn get_sections_for_project(&self, project_id: &str) -> Result<Vec<SectionDisplay>> {
+        let storage = self.storage.lock().await;
+        storage.get_sections_for_project(project_id).await
     }
 
     /// Get tasks with a specific label from local storage (fast)
@@ -320,6 +332,20 @@ impl SyncService {
             }
         };
 
+        // Fetch all sections from API
+        let sections = match self.todoist.get_sections().await {
+            Ok(sections) => {
+                self.log_debug(format!("✅ Fetched {} sections from API", sections.len()));
+                sections
+            }
+            Err(e) => {
+                self.log_debug(format!("❌ Failed to fetch sections: {e}"));
+                self.log_debug("⚠️  Skipping sections sync due to API compatibility issue".to_string());
+                // For now, skip sections sync and continue with other data
+                Vec::new()
+            }
+        };
+
         // Store in local database
         {
             let storage = self.storage.lock().await;
@@ -346,6 +372,19 @@ impl SyncService {
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to store labels: {e}"),
                 });
+            }
+            self.log_debug("✅ Stored labels in database".to_string());
+
+            if !sections.is_empty() {
+                if let Err(e) = storage.store_sections(sections).await {
+                    self.log_debug(format!("❌ Failed to store sections: {e}"));
+                    return Ok(SyncStatus::Error {
+                        message: format!("Failed to store sections: {e}"),
+                    });
+                }
+                self.log_debug("✅ Stored sections in database".to_string());
+            } else {
+                self.log_debug("⚠️  No sections to store (skipped due to API issue)".to_string());
             }
         }
 
