@@ -107,6 +107,12 @@ impl SyncService {
         Ok(filtered_tasks)
     }
 
+    /// Get tasks due today and overdue tasks from local storage (fast)
+    pub async fn get_tasks_for_today(&self) -> Result<Vec<TaskDisplay>> {
+        let storage = self.storage.lock().await;
+        storage.get_tasks_for_today().await
+    }
+
     /// Check if sync is currently in progress
     pub async fn is_syncing(&self) -> bool {
         *self.sync_in_progress.lock().await

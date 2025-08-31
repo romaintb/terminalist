@@ -402,6 +402,9 @@ async fn handle_normal_mode(
                 crate::ui::app::SidebarSelection::Label(_) => {
                     app.start_edit_label();
                 }
+                crate::ui::app::SidebarSelection::Today => {
+                    // Cannot edit Today view
+                }
             }
             Ok(true)
         }
@@ -413,6 +416,9 @@ async fn handle_normal_mode(
                 }
                 crate::ui::app::SidebarSelection::Label(_) => {
                     app.start_delete_label();
+                }
+                crate::ui::app::SidebarSelection::Today => {
+                    // Cannot delete Today view
                 }
             }
             Ok(true)

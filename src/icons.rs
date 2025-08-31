@@ -282,6 +282,15 @@ impl IconService {
             IconTheme::Ascii => "@",
         }
     }
+
+    #[must_use]
+    pub fn today(&self) -> &'static str {
+        match self.current_theme {
+            IconTheme::Emoji => "📅",
+            IconTheme::Unicode => "◷",
+            IconTheme::Ascii => "@",
+        }
+    }
 }
 
 #[cfg(test)]

@@ -162,7 +162,7 @@ impl From<Task> for LocalTask {
             is_deleted: false, // New tasks are not deleted
             priority: task.priority,
             order_index: task.order,
-            due_date: task.due.as_ref().map(|d| d.string.clone()),
+            due_date: task.due.as_ref().map(|d| d.date.clone()),
             due_datetime: task.due.as_ref().and_then(|d| d.datetime.clone()),
             is_recurring: task.due.as_ref().is_some_and(|d| d.is_recurring),
             deadline: task.deadline.map(|d| d.date),
@@ -665,11 +665,84 @@ impl LocalStorage {
     pub async fn get_all_tasks(&self) -> Result<Vec<TaskDisplay>> {
         let rows = sqlx::query(
             r"
-            SELECT id, content, project_id, is_completed, is_deleted, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
+            SELECT id, content, project_id, section_id, is_completed, is_deleted, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
             FROM tasks 
             ORDER BY is_completed ASC, priority DESC, order_index ASC
             ",
         )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut tasks = rows
+            .into_iter()
+            .map(|row| {
+                // Parse labels from JSON string
+                let label_names: Vec<String> =
+                    serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
+
+                // Convert label names to LabelDisplay objects (colors will be filled in later)
+                let labels = label_names
+                    .into_iter()
+                    .map(|name| crate::todoist::LabelDisplay {
+                        id: name.clone(), // Use name as ID for now
+                        name,
+                        color: "blue".to_string(), // Default color, will be updated from storage
+                    })
+                    .collect();
+
+                TaskDisplay {
+                    id: row.get("id"),
+                    content: row.get("content"),
+                    project_id: row.get("project_id"),
+                    section_id: row.get("section_id"),
+                    is_completed: row.get("is_completed"),
+                    is_deleted: row.get("is_deleted"),
+                    priority: row.get("priority"),
+                    due: row.get("due_date"),
+                    due_datetime: row.get("due_datetime"),
+                    is_recurring: row.get("is_recurring"),
+                    deadline: row.get("deadline"),
+                    duration: row.get("duration"),
+                    labels,
+                    description: row.get("description"),
+                }
+            })
+            .collect::<Vec<TaskDisplay>>();
+
+        // Update label colors for all tasks
+        for task in &mut tasks {
+            self.update_task_labels(task).await?;
+        }
+
+        Ok(tasks)
+    }
+
+    /// Get tasks due today and overdue tasks from local storage
+    pub async fn get_tasks_for_today(&self) -> Result<Vec<TaskDisplay>> {
+        // Get current date in YYYY-MM-DD format
+        let current_date: String = sqlx::query_scalar("SELECT date('now')")
+            .fetch_one(&self.pool)
+            .await?;
+
+        let rows = sqlx::query(
+            r"
+            SELECT id, content, project_id, section_id, is_completed, is_deleted, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
+            FROM tasks 
+            WHERE is_completed = false 
+              AND is_deleted = false 
+              AND due_date IS NOT NULL
+              AND due_date <= ?
+            ORDER BY 
+              CASE 
+                WHEN due_date < ? THEN 0  -- Overdue first
+                ELSE 1  -- Today second
+              END,
+              priority DESC, 
+              order_index ASC
+            ",
+        )
+        .bind(&current_date)
+        .bind(&current_date)
         .fetch_all(&self.pool)
         .await?;
 
