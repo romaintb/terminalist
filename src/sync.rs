@@ -3,6 +3,7 @@ use chrono::{DateTime, Duration, Utc};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use crate::debug_logger::DebugLogger;
 use crate::storage::LocalStorage;
 use crate::todoist::{CreateProjectArgs, LabelDisplay, ProjectDisplay, TaskDisplay, TodoistWrapper};
 
@@ -12,6 +13,7 @@ pub struct SyncService {
     todoist: TodoistWrapper,
     storage: Arc<Mutex<LocalStorage>>,
     sync_in_progress: Arc<Mutex<bool>>,
+    debug_logger: Option<DebugLogger>,
 }
 
 #[derive(Debug, Clone)]
@@ -33,7 +35,20 @@ impl SyncService {
             todoist,
             storage,
             sync_in_progress,
+            debug_logger: None,
         })
+    }
+
+    /// Set the debug logger for this sync service
+    pub fn set_debug_logger(&mut self, logger: DebugLogger) {
+        self.debug_logger = Some(logger);
+    }
+
+    /// Log a debug message if logger is available
+    fn log_debug(&self, message: String) {
+        if let Some(ref logger) = self.debug_logger {
+            logger.log(message);
+        }
     }
 
     /// Get projects from local storage (fast)
@@ -261,10 +276,16 @@ impl SyncService {
 
     /// Internal sync implementation
     async fn perform_sync(&self) -> Result<SyncStatus> {
+        self.log_debug("🔄 Starting sync process...".to_string());
+
         // Fetch projects from API
         let projects = match self.todoist.get_projects().await {
-            Ok(projects) => projects,
+            Ok(projects) => {
+                self.log_debug(format!("✅ Fetched {} projects from API", projects.len()));
+                projects
+            }
             Err(e) => {
+                self.log_debug(format!("❌ Failed to fetch projects: {e}"));
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to fetch projects: {e}"),
                 });
@@ -273,8 +294,12 @@ impl SyncService {
 
         // Fetch all tasks from API
         let tasks = match self.todoist.get_tasks().await {
-            Ok(tasks) => tasks,
+            Ok(tasks) => {
+                self.log_debug(format!("✅ Fetched {} tasks from API", tasks.len()));
+                tasks
+            }
             Err(e) => {
+                self.log_debug(format!("❌ Failed to fetch tasks: {e}"));
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to fetch tasks: {e}"),
                 });
@@ -283,8 +308,12 @@ impl SyncService {
 
         // Fetch all labels from API
         let labels = match self.todoist.get_labels().await {
-            Ok(labels) => labels,
+            Ok(labels) => {
+                self.log_debug(format!("✅ Fetched {} labels from API", labels.len()));
+                labels
+            }
             Err(e) => {
+                self.log_debug(format!("❌ Failed to fetch labels: {e}"));
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to fetch labels: {e}"),
                 });
@@ -294,20 +323,26 @@ impl SyncService {
         // Store in local database
         {
             let storage = self.storage.lock().await;
+            self.log_debug("💾 Storing data in local database...".to_string());
 
             if let Err(e) = storage.store_projects(projects).await {
+                self.log_debug(format!("❌ Failed to store projects: {e}"));
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to store projects: {e}"),
                 });
             }
+            self.log_debug("✅ Stored projects in database".to_string());
 
             if let Err(e) = storage.store_tasks(tasks).await {
+                self.log_debug(format!("❌ Failed to store tasks: {e}"));
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to store tasks: {e}"),
                 });
             }
+            self.log_debug("✅ Stored tasks in database".to_string());
 
             if let Err(e) = storage.store_labels(labels).await {
+                self.log_debug(format!("❌ Failed to store labels: {e}"));
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to store labels: {e}"),
                 });

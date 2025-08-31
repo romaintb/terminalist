@@ -1,5 +1,6 @@
 //! Dialog components module
 
+mod debug_dialog;
 mod delete_confirmation_dialog;
 mod error_dialog;
 mod info_dialog;
@@ -13,6 +14,7 @@ mod syncing_dialog;
 mod task_creation_dialog;
 mod task_edit_dialog;
 
+pub use debug_dialog::DebugDialog;
 pub use delete_confirmation_dialog::DeleteConfirmationDialog;
 pub use error_dialog::ErrorDialog;
 pub use info_dialog::InfoDialog;

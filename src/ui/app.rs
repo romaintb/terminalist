@@ -1,5 +1,6 @@
 //! Application state and business logic
 
+use crate::debug_logger::DebugLogger;
 use crate::icons::IconService;
 use crate::sync::{SyncService, SyncStats, SyncStatus};
 use crate::todoist::{LabelDisplay, ProjectDisplay, TaskDisplay};
@@ -60,6 +61,10 @@ pub struct App {
     pub edit_task_id: Option<String>,
     // Icons
     pub icons: IconService,
+    // Debug logging
+    pub debug_logger: DebugLogger,
+    pub show_debug_modal: bool,
+    pub debug_scroll_offset: usize,
 }
 
 impl Default for App {
@@ -275,6 +280,7 @@ impl App {
     }
 
     pub async fn load_local_data(&mut self, sync_service: &SyncService) {
+        self.add_debug_log("📱 Loading local data into app...".to_string());
         self.loading = true;
         self.error_message = None;
         self.info_message = None;
@@ -285,9 +291,11 @@ impl App {
         // Load labels from local storage (fast)
         match sync_service.get_labels().await {
             Ok(labels) => {
+                self.add_debug_log(format!("📱 Loaded {} labels into app", labels.len()));
                 self.labels = labels;
             }
             Err(e) => {
+                self.add_debug_log(format!("❌ Error loading labels: {e}"));
                 self.error_message = Some(format!("Error loading labels: {e}"));
             }
         }
@@ -295,6 +303,7 @@ impl App {
         // Load projects from local storage (fast)
         match sync_service.get_projects().await {
             Ok(projects) => {
+                self.add_debug_log(format!("📱 Loaded {} projects into app", projects.len()));
                 self.projects = projects;
 
                 // Try to restore the previous selection or set a sensible default
@@ -332,10 +341,14 @@ impl App {
 
                 // Load tasks for the selected item
                 if let Err(e) = self.load_tasks_for_selected_item(sync_service).await {
+                    self.add_debug_log(format!("❌ Error loading tasks: {e}"));
                     self.error_message = Some(format!("Error loading tasks: {e}"));
+                } else {
+                    self.add_debug_log("📱 Tasks loaded successfully for selected item".to_string());
                 }
             }
             Err(e) => {
+                self.add_debug_log(format!("❌ Error loading projects: {e}"));
                 self.error_message = Some(format!("Error loading projects: {e}"));
             }
         }
@@ -559,7 +572,7 @@ impl App {
                     }
                     Err(e) => {
                         // Sync failed, but try to reload local data anyway
-                        eprintln!("Warning: Sync failed after project creation: {e}");
+                        self.add_debug_log(format!("Warning: Sync failed after project creation: {e}"));
                         self.load_local_data(sync_service).await;
                         self.error_message = Some("Project created but sync failed - data may be stale".to_string());
                     }
@@ -710,7 +723,7 @@ impl App {
                         }
                         Err(e) => {
                             // Sync failed, but try to reload local data anyway
-                            eprintln!("Warning: Sync failed after task creation: {e}");
+                            self.add_debug_log(format!("Warning: Sync failed after task creation: {e}"));
                             self.load_local_data(sync_service).await;
                             self.error_message = Some("Task created but sync failed - data may be stale".to_string());
                         }
@@ -889,7 +902,7 @@ impl App {
                     }
                     Err(e) => {
                         // Sync failed, but try to reload local data anyway
-                        eprintln!("Warning: Sync failed after label creation: {e}");
+                        self.add_debug_log(format!("Warning: Sync failed after label creation: {e}"));
                         self.load_local_data(sync_service).await;
                         self.error_message = Some("Label created but sync failed - data may be stale".to_string());
                     }
