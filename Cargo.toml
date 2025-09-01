@@ -2,6 +2,8 @@
 name = "terminalist"
 version = "0.1.0"
 edition = "2021"
+keywords = ["terminal", "tui", "todoist", "productivity", "cli", "rust", "ratatui", "async"]
+description = "A terminal-based Todoist client with modern TUI interface"
 
 [[bin]]
 name = "terminalist"
