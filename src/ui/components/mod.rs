@@ -1,5 +1,6 @@
 //! Reusable UI components
 
+pub mod badge;
 pub mod dialogs;
 pub mod help_panel;
 pub mod projects_list;

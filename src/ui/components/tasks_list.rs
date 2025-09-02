@@ -9,8 +9,8 @@ use ratatui::{
 };
 
 use super::super::app::App;
-use crate::terminal_badge::{create_terminal_priority_badge, create_terminal_task_badges};
 use crate::todoist::TaskDisplay;
+use crate::ui::components::badge::{create_priority_badge, create_task_badges};
 
 /// Tasks list component
 pub struct TasksList;
@@ -233,10 +233,10 @@ impl TasksList {
         };
 
         // Create priority badge using the proper function
-        let priority_badge = create_terminal_priority_badge(task.priority);
+        let priority_badge = create_priority_badge(task.priority);
 
         // Create badges for task metadata
-        let metadata_badges = create_terminal_task_badges(
+        let metadata_badges = create_task_badges(
             task.is_recurring,
             task.due.is_some() || task.deadline.is_some(),
             task.duration.as_deref(),
