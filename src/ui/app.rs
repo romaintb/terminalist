@@ -11,6 +11,7 @@ use tokio::task::JoinHandle;
 #[derive(Debug, Clone, PartialEq)]
 pub enum SidebarSelection {
     Today,          // Today view (special view)
+    Tomorrow,       // Tomorrow view (special view)
     Label(usize),   // Index into labels vector
     Project(usize), // Index into projects vector
 }
@@ -208,6 +209,17 @@ impl App {
 
                 None
             }
+            SidebarSelection::Tomorrow => {
+                // For Tomorrow view, we just need to account for the section header
+                if !self.tasks.is_empty() {
+                    // Section header
+                    let list_position = 1;
+                    if self.selected_task_index < self.tasks.len() {
+                        return Some(list_position + self.selected_task_index);
+                    }
+                }
+                None
+            }
             SidebarSelection::Project(index) => {
                 let current_project = self.projects.get(*index).map(|p| &p.id);
                 if let Some(project_id) = current_project {
@@ -277,6 +289,7 @@ impl App {
             SidebarSelection::Project(index) => self.projects.get(*index),
             SidebarSelection::Label(_) => None,
             SidebarSelection::Today => None,
+            SidebarSelection::Tomorrow => None,
         }
     }
 
@@ -287,6 +300,7 @@ impl App {
             SidebarSelection::Label(index) => self.labels.get(*index),
             SidebarSelection::Project(_) => None,
             SidebarSelection::Today => None,
+            SidebarSelection::Tomorrow => None,
         }
     }
 
@@ -294,6 +308,10 @@ impl App {
     pub fn next_sidebar_item(&mut self) {
         match &self.sidebar_selection {
             SidebarSelection::Today => {
+                // Move to Tomorrow
+                self.sidebar_selection = SidebarSelection::Tomorrow;
+            }
+            SidebarSelection::Tomorrow => {
                 if !self.labels.is_empty() {
                     // Move to first label
                     self.sidebar_selection = SidebarSelection::Label(0);
@@ -303,6 +321,9 @@ impl App {
                     if let Some((original_index, _)) = sorted_projects.first() {
                         self.sidebar_selection = SidebarSelection::Project(*original_index);
                     }
+                } else {
+                    // Wrap to Tomorrow
+                    self.sidebar_selection = SidebarSelection::Tomorrow;
                 }
             }
             SidebarSelection::Label(index) => {
@@ -317,8 +338,8 @@ impl App {
                         self.sidebar_selection = SidebarSelection::Project(*original_index);
                     }
                 } else {
-                    // Wrap to Today
-                    self.sidebar_selection = SidebarSelection::Today;
+                    // Wrap to Tomorrow
+                    self.sidebar_selection = SidebarSelection::Tomorrow;
                 }
             }
             SidebarSelection::Project(index) => {
@@ -334,8 +355,8 @@ impl App {
                             self.sidebar_selection = SidebarSelection::Project(*original_index);
                         }
                     } else {
-                        // Wrap to Today
-                        self.sidebar_selection = SidebarSelection::Today;
+                        // Wrap to Tomorrow
+                        self.sidebar_selection = SidebarSelection::Tomorrow;
                     }
                 }
             }
@@ -354,15 +375,22 @@ impl App {
                     }
                 } else if !self.labels.is_empty() {
                     self.sidebar_selection = SidebarSelection::Label(self.labels.len() - 1);
+                } else {
+                    // Wrap to Tomorrow
+                    self.sidebar_selection = SidebarSelection::Tomorrow;
                 }
+            }
+            SidebarSelection::Tomorrow => {
+                // Move to Today
+                self.sidebar_selection = SidebarSelection::Today;
             }
             SidebarSelection::Label(index) => {
                 if *index > 0 {
                     // Move to previous label
                     self.sidebar_selection = SidebarSelection::Label(index - 1);
                 } else {
-                    // Wrap to Today
-                    self.sidebar_selection = SidebarSelection::Today;
+                    // Wrap to Tomorrow
+                    self.sidebar_selection = SidebarSelection::Tomorrow;
                 }
             }
             SidebarSelection::Project(index) => {
@@ -380,8 +408,8 @@ impl App {
                         // Wrap to last label
                         self.sidebar_selection = SidebarSelection::Label(self.labels.len() - 1);
                     } else {
-                        // Wrap to Today
-                        self.sidebar_selection = SidebarSelection::Today;
+                        // Wrap to Tomorrow
+                        self.sidebar_selection = SidebarSelection::Tomorrow;
                     }
                 }
             }
@@ -485,6 +513,10 @@ impl App {
                         self.sidebar_selection = SidebarSelection::Today;
                         selection_restored = true;
                     }
+                    SidebarSelection::Tomorrow => {
+                        self.sidebar_selection = SidebarSelection::Tomorrow;
+                        selection_restored = true;
+                    }
                     SidebarSelection::Label(index) => {
                         if index < self.labels.len() {
                             self.sidebar_selection = SidebarSelection::Label(index);
@@ -537,6 +569,21 @@ impl App {
                     }
                     Err(e) => {
                         self.error_message = Some(format!("Error loading today's tasks: {e}"));
+                        return Err(e);
+                    }
+                }
+            }
+            SidebarSelection::Tomorrow => {
+                match sync_service.get_tasks_for_tomorrow().await {
+                    Ok(tasks) => {
+                        // Don't sort tomorrow's tasks since they're already sorted by the query
+                        self.tasks = tasks;
+                        self.selected_task_index = 0;
+                        // Update list state to highlight the first task
+                        self.task_list_state.select(Some(0));
+                    }
+                    Err(e) => {
+                        self.error_message = Some(format!("Error loading tomorrow's tasks: {e}"));
                         return Err(e);
                     }
                 }
