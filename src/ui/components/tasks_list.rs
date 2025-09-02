@@ -276,7 +276,16 @@ impl TasksList {
         };
         line_spans.push(Span::styled(task.content.clone(), content_style));
 
-        // Due date display (before labels)
+        // Project display
+        if let Some(project) = app.projects.iter().find(|p| p.id == task.project_id) {
+            line_spans.push(Span::raw(" "));
+            line_spans.push(Span::styled(
+                format!("#{}", project.name),
+                Style::default().fg(Color::Cyan),
+            ));
+        }
+
+        // Due date display (after project)
         if let Some(due_date) = &task.due {
             line_spans.push(Span::raw(" "));
             line_spans.push(Span::styled(
