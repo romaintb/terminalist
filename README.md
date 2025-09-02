@@ -135,14 +135,13 @@ src/
 ├── todoist.rs                 # Todoist API models & display structs
 ├── sync.rs                    # Sync service
 ├── storage.rs                 # SQLite storage (in-memory)
-├── badge.rs                   # Badge creation utilities
-├── terminal_badge.rs          # Terminal-optimized badges
 └── ui/                        # TUI components
     ├── app.rs                 # Application state management
     ├── events.rs              # Event handling & keyboard shortcuts
     ├── layout.rs              # Layout management
     ├── renderer.rs            # Main rendering loop
     └── components/            # UI components
+        ├── badge.rs           # Terminal-optimized badges
         ├── projects_list.rs   # Projects display
         ├── tasks_list.rs      # Tasks display
         ├── status_bar.rs      # Status bar
