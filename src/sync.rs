@@ -113,6 +113,12 @@ impl SyncService {
         storage.get_tasks_for_today().await
     }
 
+    /// Get tasks due tomorrow from local storage (fast)
+    pub async fn get_tasks_for_tomorrow(&self) -> Result<Vec<TaskDisplay>> {
+        let storage = self.storage.lock().await;
+        storage.get_tasks_for_tomorrow().await
+    }
+
     /// Check if sync is currently in progress
     pub async fn is_syncing(&self) -> bool {
         *self.sync_in_progress.lock().await

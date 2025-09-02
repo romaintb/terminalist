@@ -24,6 +24,8 @@ impl TasksList {
                 "No projects available. Press 'r' to sync or 'A' to create a project."
             } else if matches!(app.sidebar_selection, super::super::app::SidebarSelection::Today) {
                 "No tasks due today. Press 'a' to create a task or 'r' to sync."
+            } else if matches!(app.sidebar_selection, super::super::app::SidebarSelection::Tomorrow) {
+                "No tasks due tomorrow. Press 'a' to create a task or 'r' to sync."
             } else {
                 "No tasks in this project. Press 'a' to create a task."
             };
@@ -66,6 +68,11 @@ impl TasksList {
         // Handle Today view specially
         if matches!(app.sidebar_selection, super::super::app::SidebarSelection::Today) {
             return Self::create_today_task_items(app, area);
+        }
+
+        // Handle Tomorrow view specially
+        if matches!(app.sidebar_selection, super::super::app::SidebarSelection::Tomorrow) {
+            return Self::create_tomorrow_task_items(app, area);
         }
 
         // Get the current project to filter sections
@@ -204,6 +211,26 @@ impl TasksList {
                 items.push(item);
                 task_index += 1;
             }
+        }
+
+        items
+    }
+
+    /// Create list items for Tomorrow view
+    fn create_tomorrow_task_items(app: &App, _area: ratatui::layout::Rect) -> Vec<ListItem<'_>> {
+        let mut items = Vec::new();
+
+        if app.tasks.is_empty() {
+            return items;
+        }
+
+        // Add tomorrow section header
+        items.push(Self::create_section_header("📅 Tomorrow"));
+
+        // Add all tasks (they're already filtered for tomorrow by the database query)
+        for (task_index, task) in app.tasks.iter().enumerate() {
+            let item = Self::create_task_item(task, task_index, app);
+            items.push(item);
         }
 
         items

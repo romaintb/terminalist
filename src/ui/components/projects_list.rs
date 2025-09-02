@@ -37,18 +37,26 @@ impl Sidebar {
             Span::styled(" Today".to_string(), today_style),
         ])));
 
-        // Add separator after Today
+        // Add Tomorrow item after Today
+        let is_tomorrow_selected = matches!(app.sidebar_selection, SidebarSelection::Tomorrow);
+        let tomorrow_style = if is_tomorrow_selected {
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        all_items.push(ListItem::new(Line::from(vec![
+            Span::styled(app.icons.today().to_string(), tomorrow_style), // Using same icon as today
+            Span::styled(" Tomorrow".to_string(), tomorrow_style),
+        ])));
+
+        // Add separator after Today and Tomorrow
         all_items.push(ListItem::new(Line::from(vec![Span::styled("", Style::default())])));
 
         // Add labels section header if there are labels
         if !app.labels.is_empty() {
-            // all_items.push(ListItem::new(Line::from(vec![Span::styled(
-            //     format!("{} Labels", app.icons.label()),
-            //     Style::default()
-            //         .fg(Color::Cyan)
-            //         .add_modifier(Modifier::BOLD),
-            // )])));
-
             // Add labels
             for (label_index, label) in app.labels.iter().enumerate() {
                 let is_selected = matches!(app.sidebar_selection, SidebarSelection::Label(idx) if idx == label_index);

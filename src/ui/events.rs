@@ -405,6 +405,9 @@ async fn handle_normal_mode(
                 crate::ui::app::SidebarSelection::Today => {
                     // Cannot edit Today view
                 }
+                crate::ui::app::SidebarSelection::Tomorrow => {
+                    // Cannot edit Tomorrow view
+                }
             }
             Ok(true)
         }
@@ -419,6 +422,9 @@ async fn handle_normal_mode(
                 }
                 crate::ui::app::SidebarSelection::Today => {
                     // Cannot delete Today view
+                }
+                crate::ui::app::SidebarSelection::Tomorrow => {
+                    // Cannot delete Tomorrow view
                 }
             }
             Ok(true)
