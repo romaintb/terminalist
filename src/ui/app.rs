@@ -4,24 +4,10 @@ use crate::debug_logger::DebugLogger;
 use crate::icons::IconService;
 use crate::sync::{SyncService, SyncStats, SyncStatus};
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
-use chrono::{Datelike, Duration, NaiveDate, Utc, Weekday};
+use crate::utils::date::{format_ymd, next_weekday};
+use chrono::{Duration, Utc, Weekday};
 use ratatui::widgets::ListState;
 use tokio::task::JoinHandle;
-
-/// Format a NaiveDate to YYYY-MM-DD string
-fn format_ymd(d: NaiveDate) -> String {
-    d.format("%Y-%m-%d").to_string()
-}
-
-fn next_weekday(from: chrono::NaiveDate, target: Weekday) -> chrono::NaiveDate {
-    let from_w = from.weekday().num_days_from_monday() as i64;
-    let tgt_w = target.num_days_from_monday() as i64;
-    let mut delta = (7 + tgt_w - from_w) % 7;
-    if delta == 0 {
-        delta = 7;
-    }
-    from + Duration::days(delta)
-}
 
 /// Represents the currently selected item in the sidebar
 #[derive(Debug, Clone, PartialEq)]
