@@ -54,6 +54,10 @@ Space       Toggle task completion
 a           Create new task
 e           Edit selected task
 d           Delete task (with confirmation)
+t           Set task due date to today
+T           Set task due date to tomorrow
+w           Set task due date to next week (Monday)
+W           Set task due date to next week end (Saturday)
 
 SYNC & DATA
 -----------
