@@ -131,14 +131,6 @@ impl Sidebar {
             }
         });
 
-        // Add projects section header
-        // all_items.push(ListItem::new(Line::from(vec![Span::styled(
-        //     format!("{} Projects", app.icons.projects_title()),
-        //     Style::default()
-        //         .fg(Color::Cyan)
-        //         .add_modifier(Modifier::BOLD),
-        // )])));
-
         // Add projects
         let project_items: Vec<ListItem> = sorted_projects
             .iter()
