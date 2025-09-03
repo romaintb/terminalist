@@ -434,6 +434,16 @@ async fn handle_normal_mode(
             app.icons.cycle_icon_theme();
             Ok(true)
         }
+        KeyCode::Char('t') => {
+            // Set selected task due date to today
+            app.set_selected_task_due_today(sync_service).await;
+            Ok(true)
+        }
+        KeyCode::Char('T') => {
+            // Set selected task due date to tomorrow
+            app.set_selected_task_due_tomorrow(sync_service).await;
+            Ok(true)
+        }
         _ => Ok(false),
     }
 }
