@@ -716,6 +716,103 @@ impl App {
         }
     }
 
+    /// Set the selected task's due date to today
+    pub async fn set_selected_task_due_today(&mut self, sync_service: &SyncService) {
+        if let Some(task) = self.tasks.get(self.selected_task_index) {
+            if task.is_deleted {
+                return; // Don't modify deleted tasks
+            }
+
+            self.error_message = None;
+            self.info_message = None;
+
+            let today = chrono::Utc::now()
+                .date_naive()
+                .format("%Y-%m-%d")
+                .to_string();
+
+            match sync_service
+                .update_task_due_date(&task.id, Some(&today))
+                .await
+            {
+                Ok(()) => {
+                    // Try to sync first, but if it fails, at least reload local data
+                    match sync_service.force_sync().await {
+                        Ok(_) => {
+                            // Sync succeeded, reload local data
+                            if let Err(e) = self.load_tasks_for_selected_item(sync_service).await {
+                                self.error_message = Some(format!("Error reloading tasks: {e}"));
+                            } else {
+                                self.info_message = Some("Task due date set to today!".to_string());
+                            }
+                        }
+                        Err(e) => {
+                            // Sync failed, but try to reload local data anyway
+                            self.add_debug_log(format!("Warning: Sync failed after updating task due date: {e}"));
+                            if let Err(e) = self.load_tasks_for_selected_item(sync_service).await {
+                                self.error_message = Some(format!("Error reloading tasks: {e}"));
+                            } else {
+                                self.error_message =
+                                    Some("Task due date updated but sync failed - data may be stale".to_string());
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Error updating task due date: {e}"));
+                }
+            }
+        }
+    }
+
+    /// Set the selected task's due date to tomorrow
+    pub async fn set_selected_task_due_tomorrow(&mut self, sync_service: &SyncService) {
+        if let Some(task) = self.tasks.get(self.selected_task_index) {
+            if task.is_deleted {
+                return; // Don't modify deleted tasks
+            }
+
+            self.error_message = None;
+            self.info_message = None;
+
+            let tomorrow = (chrono::Utc::now().date_naive() + chrono::Duration::days(1))
+                .format("%Y-%m-%d")
+                .to_string();
+
+            match sync_service
+                .update_task_due_date(&task.id, Some(&tomorrow))
+                .await
+            {
+                Ok(()) => {
+                    // Try to sync first, but if it fails, at least reload local data
+                    match sync_service.force_sync().await {
+                        Ok(_) => {
+                            // Sync succeeded, reload local data
+                            if let Err(e) = self.load_tasks_for_selected_item(sync_service).await {
+                                self.error_message = Some(format!("Error reloading tasks: {e}"));
+                            } else {
+                                self.info_message = Some("Task due date set to tomorrow!".to_string());
+                            }
+                        }
+                        Err(e) => {
+                            // Sync failed, but try to reload local data anyway
+                            self.add_debug_log(format!("Warning: Sync failed after updating task due date: {e}"));
+                            if let Err(e) = self.load_tasks_for_selected_item(sync_service).await {
+                                self.error_message = Some(format!("Error reloading tasks: {e}"));
+                            } else {
+                                self.error_message =
+                                    Some("Task due date updated but sync failed - data may be stale".to_string());
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Error updating task due date: {e}"));
+                }
+            }
+        }
+    }
+
     pub async fn force_clear_and_sync(&mut self, sync_service: &SyncService) {
         self.syncing = true;
         self.error_message = None;
