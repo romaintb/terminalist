@@ -4,9 +4,14 @@ use crate::debug_logger::DebugLogger;
 use crate::icons::IconService;
 use crate::sync::{SyncService, SyncStats, SyncStatus};
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
-use chrono::{Datelike, Duration, Utc};
+use chrono::{Datelike, Duration, NaiveDate, Utc};
 use ratatui::widgets::ListState;
 use tokio::task::JoinHandle;
+
+/// Format a NaiveDate to YYYY-MM-DD string
+fn format_ymd(d: NaiveDate) -> String {
+    d.format("%Y-%m-%d").to_string()
+}
 
 /// Represents the currently selected item in the sidebar
 #[derive(Debug, Clone, PartialEq)]
@@ -727,7 +732,7 @@ impl App {
             self.error_message = None;
             self.info_message = None;
 
-            let today = Utc::now().date_naive().format("%Y-%m-%d").to_string();
+            let today = format_ymd(Utc::now().date_naive());
 
             match sync_service
                 .update_task_due_date(&task.id, Some(&today))
@@ -773,9 +778,7 @@ impl App {
             self.error_message = None;
             self.info_message = None;
 
-            let tomorrow = (Utc::now().date_naive() + Duration::days(1))
-                .format("%Y-%m-%d")
-                .to_string();
+            let tomorrow = format_ymd(Utc::now().date_naive() + Duration::days(1));
 
             match sync_service
                 .update_task_due_date(&task.id, Some(&tomorrow))
