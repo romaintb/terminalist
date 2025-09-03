@@ -100,6 +100,15 @@ impl IconService {
         self.current_theme = theme;
     }
 
+    /// Cycle to the next icon theme in the sequence: Ascii -> Unicode -> Emoji -> Ascii
+    pub fn cycle_icon_theme(&mut self) {
+        self.current_theme = match self.current_theme {
+            IconTheme::Ascii => IconTheme::Unicode,
+            IconTheme::Unicode => IconTheme::Emoji,
+            IconTheme::Emoji => IconTheme::Ascii,
+        };
+    }
+
     /// Get the complete icon set for the current theme
     #[must_use]
     pub fn icons(&self) -> IconSet {
@@ -334,5 +343,20 @@ mod tests {
         assert_eq!(service.task_pending(), "[ ]");
         assert_eq!(service.task_completed(), "[X]");
         assert_eq!(service.task_deleted(), "[D]");
+    }
+
+    #[test]
+    fn test_theme_cycling() {
+        let mut service = IconService::new(IconTheme::Ascii);
+        assert_eq!(service.theme(), IconTheme::Ascii);
+
+        service.cycle_icon_theme();
+        assert_eq!(service.theme(), IconTheme::Unicode);
+
+        service.cycle_icon_theme();
+        assert_eq!(service.theme(), IconTheme::Emoji);
+
+        service.cycle_icon_theme();
+        assert_eq!(service.theme(), IconTheme::Ascii);
     }
 }

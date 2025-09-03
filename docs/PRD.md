@@ -400,6 +400,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 
 #### System
 - `r`: Force sync with Todoist
+- `i`: Cycle through icon themes
 - `?`: Toggle help panel
 - `q`: Quit application
 - `Esc`: Cancel action or close dialogs

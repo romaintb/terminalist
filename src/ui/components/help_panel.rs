@@ -64,6 +64,7 @@ GENERAL CONTROLS
 ----------------
 ?           Toggle help panel
 q           Quit application
+i           Change icon theme
 
 HELP PANEL SCROLLING
 --------------------

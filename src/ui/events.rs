@@ -429,6 +429,11 @@ async fn handle_normal_mode(
             }
             Ok(true)
         }
+        KeyCode::Char('i') => {
+            // Cycle through icon themes
+            app.icons.cycle_icon_theme();
+            Ok(true)
+        }
         _ => Ok(false),
     }
 }

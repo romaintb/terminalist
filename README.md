@@ -56,6 +56,7 @@ Once the application is running, you can use these keyboard shortcuts:
 
 ### **System**
 - **`r`** Force sync with Todoist
+- **`i`** Cycle through icon themes
 - **`?`** Toggle help panel
 - **`q`** Quit the application
 - **`Esc`** Cancel action or close dialogs
