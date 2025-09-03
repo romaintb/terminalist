@@ -444,6 +444,18 @@ async fn handle_normal_mode(
             app.set_selected_task_due_tomorrow(sync_service).await;
             Ok(true)
         }
+        KeyCode::Char('w') => {
+            // Set selected task due date to next week Monday
+            app.set_selected_task_due_next_week_monday(sync_service)
+                .await;
+            Ok(true)
+        }
+        KeyCode::Char('W') => {
+            // Set selected task due date to next week Saturday
+            app.set_selected_task_due_next_week_saturday(sync_service)
+                .await;
+            Ok(true)
+        }
         _ => Ok(false),
     }
 }

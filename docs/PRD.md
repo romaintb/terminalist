@@ -393,6 +393,10 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - `Space/Enter`: Toggle task completion
 - `a`: Create new task
 - `d`: Delete selected task
+- `t`: Set task due date to today
+- `T`: Set task due date to tomorrow
+- `w`: Set task due date to next week (Monday)
+- `W`: Set task due date to next week end (Saturday)
 
 #### Project Management
 - `A`: Create new project

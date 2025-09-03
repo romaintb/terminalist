@@ -4,8 +4,24 @@ use crate::debug_logger::DebugLogger;
 use crate::icons::IconService;
 use crate::sync::{SyncService, SyncStats, SyncStatus};
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
+use chrono::{Datelike, Duration, NaiveDate, Utc, Weekday};
 use ratatui::widgets::ListState;
 use tokio::task::JoinHandle;
+
+/// Format a NaiveDate to YYYY-MM-DD string
+fn format_ymd(d: NaiveDate) -> String {
+    d.format("%Y-%m-%d").to_string()
+}
+
+fn next_weekday(from: chrono::NaiveDate, target: Weekday) -> chrono::NaiveDate {
+    let from_w = from.weekday().num_days_from_monday() as i64;
+    let tgt_w = target.num_days_from_monday() as i64;
+    let mut delta = (7 + tgt_w - from_w) % 7;
+    if delta == 0 {
+        delta = 7;
+    }
+    from + Duration::days(delta)
+}
 
 /// Represents the currently selected item in the sidebar
 #[derive(Debug, Clone, PartialEq)]
@@ -726,10 +742,7 @@ impl App {
             self.error_message = None;
             self.info_message = None;
 
-            let today = chrono::Utc::now()
-                .date_naive()
-                .format("%Y-%m-%d")
-                .to_string();
+            let today = format_ymd(Utc::now().date_naive());
 
             match sync_service
                 .update_task_due_date(&task.id, Some(&today))
@@ -775,9 +788,7 @@ impl App {
             self.error_message = None;
             self.info_message = None;
 
-            let tomorrow = (chrono::Utc::now().date_naive() + chrono::Duration::days(1))
-                .format("%Y-%m-%d")
-                .to_string();
+            let tomorrow = format_ymd(Utc::now().date_naive() + Duration::days(1));
 
             match sync_service
                 .update_task_due_date(&task.id, Some(&tomorrow))
@@ -792,6 +803,98 @@ impl App {
                                 self.error_message = Some(format!("Error reloading tasks: {e}"));
                             } else {
                                 self.info_message = Some("Task due date set to tomorrow!".to_string());
+                            }
+                        }
+                        Err(e) => {
+                            // Sync failed, but try to reload local data anyway
+                            self.add_debug_log(format!("Warning: Sync failed after updating task due date: {e}"));
+                            if let Err(e) = self.load_tasks_for_selected_item(sync_service).await {
+                                self.error_message = Some(format!("Error reloading tasks: {e}"));
+                            } else {
+                                self.error_message =
+                                    Some("Task due date updated but sync failed - data may be stale".to_string());
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Error updating task due date: {e}"));
+                }
+            }
+        }
+    }
+
+    /// Set the selected task's due date to next week Monday
+    pub async fn set_selected_task_due_next_week_monday(&mut self, sync_service: &SyncService) {
+        if let Some(task) = self.tasks.get(self.selected_task_index) {
+            if task.is_deleted {
+                return; // Don't modify deleted tasks
+            }
+
+            self.error_message = None;
+            self.info_message = None;
+
+            let next_monday = format_ymd(next_weekday(Utc::now().date_naive(), Weekday::Mon));
+
+            match sync_service
+                .update_task_due_date(&task.id, Some(&next_monday))
+                .await
+            {
+                Ok(()) => {
+                    // Try to sync first, but if it fails, at least reload local data
+                    match sync_service.force_sync().await {
+                        Ok(_) => {
+                            // Sync succeeded, reload local data
+                            if let Err(e) = self.load_tasks_for_selected_item(sync_service).await {
+                                self.error_message = Some(format!("Error reloading tasks: {e}"));
+                            } else {
+                                self.info_message = Some("Task due date set to next Monday!".to_string());
+                            }
+                        }
+                        Err(e) => {
+                            // Sync failed, but try to reload local data anyway
+                            self.add_debug_log(format!("Warning: Sync failed after updating task due date: {e}"));
+                            if let Err(e) = self.load_tasks_for_selected_item(sync_service).await {
+                                self.error_message = Some(format!("Error reloading tasks: {e}"));
+                            } else {
+                                self.error_message =
+                                    Some("Task due date updated but sync failed - data may be stale".to_string());
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Error updating task due date: {e}"));
+                }
+            }
+        }
+    }
+
+    /// Set the selected task's due date to next week Saturday
+    pub async fn set_selected_task_due_next_week_saturday(&mut self, sync_service: &SyncService) {
+        if let Some(task) = self.tasks.get(self.selected_task_index) {
+            if task.is_deleted {
+                return; // Don't modify deleted tasks
+            }
+
+            self.error_message = None;
+            self.info_message = None;
+
+            let next_saturday = format_ymd(next_weekday(Utc::now().date_naive(), Weekday::Sat));
+
+            match sync_service
+                .update_task_due_date(&task.id, Some(&next_saturday))
+                .await
+            {
+                Ok(()) => {
+                    // Try to sync first, but if it fails, at least reload local data
+                    match sync_service.force_sync().await {
+                        Ok(_) => {
+                            // Sync succeeded, reload local data
+                            if let Err(e) = self.load_tasks_for_selected_item(sync_service).await {
+                                self.error_message = Some(format!("Error reloading tasks: {e}"));
+                            } else {
+                                self.info_message = Some("Task due date set to next Saturday!".to_string());
                             }
                         }
                         Err(e) => {
