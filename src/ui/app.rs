@@ -4,13 +4,23 @@ use crate::debug_logger::DebugLogger;
 use crate::icons::IconService;
 use crate::sync::{SyncService, SyncStats, SyncStatus};
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
-use chrono::{Datelike, Duration, NaiveDate, Utc};
+use chrono::{Datelike, Duration, NaiveDate, Utc, Weekday};
 use ratatui::widgets::ListState;
 use tokio::task::JoinHandle;
 
 /// Format a NaiveDate to YYYY-MM-DD string
 fn format_ymd(d: NaiveDate) -> String {
     d.format("%Y-%m-%d").to_string()
+}
+
+fn next_weekday(from: chrono::NaiveDate, target: Weekday) -> chrono::NaiveDate {
+    let from_w = from.weekday().num_days_from_monday() as i64;
+    let tgt_w = target.num_days_from_monday() as i64;
+    let mut delta = (7 + tgt_w - from_w) % 7;
+    if delta == 0 {
+        delta = 7;
+    }
+    from + Duration::days(delta)
 }
 
 /// Represents the currently selected item in the sidebar
@@ -824,19 +834,7 @@ impl App {
             self.error_message = None;
             self.info_message = None;
 
-            let today = Utc::now().date_naive();
-            let days_until_monday = match today.weekday() {
-                chrono::Weekday::Mon => 7, // Next Monday is 7 days away
-                chrono::Weekday::Tue => 6,
-                chrono::Weekday::Wed => 5,
-                chrono::Weekday::Thu => 4,
-                chrono::Weekday::Fri => 3,
-                chrono::Weekday::Sat => 2,
-                chrono::Weekday::Sun => 1,
-            };
-            let next_monday = (today + Duration::days(days_until_monday))
-                .format("%Y-%m-%d")
-                .to_string();
+            let next_monday = format_ymd(next_weekday(Utc::now().date_naive(), Weekday::Mon));
 
             match sync_service
                 .update_task_due_date(&task.id, Some(&next_monday))
@@ -882,19 +880,7 @@ impl App {
             self.error_message = None;
             self.info_message = None;
 
-            let today = Utc::now().date_naive();
-            let days_until_saturday = match today.weekday() {
-                chrono::Weekday::Mon => 5,
-                chrono::Weekday::Tue => 4,
-                chrono::Weekday::Wed => 3,
-                chrono::Weekday::Thu => 2,
-                chrono::Weekday::Fri => 1,
-                chrono::Weekday::Sat => 7, // Next Saturday is 7 days away
-                chrono::Weekday::Sun => 6,
-            };
-            let next_saturday = (today + Duration::days(days_until_saturday))
-                .format("%Y-%m-%d")
-                .to_string();
+            let next_saturday = format_ymd(next_weekday(Utc::now().date_naive(), Weekday::Sat));
 
             match sync_service
                 .update_task_due_date(&task.id, Some(&next_saturday))
