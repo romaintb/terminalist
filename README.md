@@ -169,34 +169,30 @@ This project is set up with modern Rust development tooling:
 rustup component add rustfmt clippy
 
 # Development workflow
-make dev          # Format + lint + check
-make format       # Format code with rustfmt
-make lint         # Run clippy linter
-make fix          # Auto-fix clippy issues
+cargo fmt && cargo clippy --fix --allow-dirty && cargo check  # Format + lint + check
+cargo fmt         # Format code with rustfmt
+cargo clippy      # Run clippy linter
+cargo clippy --fix --allow-dirty  # Auto-fix clippy issues
 ```
 
 ### Available Commands
 ```bash
-make help         # Show all available commands
-make format       # Format code with rustfmt
-make lint         # Run clippy linter  
-make fix          # Auto-fix clippy issues
-make check        # Check code without building
-make test         # Run tests
-make build        # Build the project
-make run          # Run the main application
-make clean        # Clean build artifacts
-make all          # Run format, fix, check, test, and build
-make dev          # Quick development check (format + fix + check)
-make strict-lint  # Run all clippy lints (very strict)
-make docs         # Generate and open documentation
+cargo fmt         # Format code with rustfmt
+cargo clippy      # Run clippy linter  
+cargo clippy --fix --allow-dirty  # Auto-fix clippy issues
+cargo check       # Check code without building
+cargo test        # Run tests
+cargo build       # Build the project
+cargo run         # Run the main application
+cargo clean       # Clean build artifacts
+cargo clippy -- -W clippy::all -W clippy::pedantic  # Run all clippy lints (strict)
+cargo doc --open --no-deps  # Generate and open documentation
 ```
 
 ### Configuration Files
 
 - `rustfmt.toml` - Code formatting rules
 - `clippy.toml` - Linting rules
-- `Makefile` - Development commands
 
 ### CI/CD
 
@@ -218,10 +214,10 @@ This is a fully-featured TUI application for Todoist. You can extend it by:
 
 ### Development Workflow
 
-1. `make format` - Format your code
-2. `make fix` - Auto-fix linting issues
-3. `make test` - Run tests
-4. `make check` - Quick compile check
+1. `cargo fmt` - Format your code
+2. `cargo clippy --fix --allow-dirty` - Auto-fix linting issues
+3. `cargo test` - Run tests
+4. `cargo check` - Quick compile check
 5. `git commit` - Commit your changes
 
 ## License
