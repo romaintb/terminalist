@@ -1,7 +1,10 @@
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{sqlite::SqlitePool, Row};
+use sqlx::{
+    sqlite::{SqlitePool, SqlitePoolOptions},
+    Row,
+};
 
 use crate::todoist::{Label, Project, ProjectDisplay, Section, SectionDisplay, Task, TaskDisplay};
 
@@ -196,9 +199,14 @@ pub struct LocalStorage {
 impl LocalStorage {
     /// Initialize the local storage with `SQLite` database
     pub async fn new() -> Result<Self> {
-        // Use shared cache in-memory SQLite database to persist data during app lifetime
+        // Use shared-cache in-memory SQLite database that persists for app lifetime
         let database_url = "sqlite:file:terminalist_memdb?mode=memory&cache=shared".to_string();
-        let pool = SqlitePool::connect(&database_url).await?;
+        let pool = SqlitePoolOptions::new()
+            .min_connections(1)
+            .max_connections(4)
+            .connect(&database_url)
+            .await?;
+
         let storage = LocalStorage { pool };
         storage.init_schema().await?;
         storage.run_migrations().await?;
