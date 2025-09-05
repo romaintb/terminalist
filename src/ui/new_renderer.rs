@@ -142,7 +142,6 @@ impl AppComponent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sync::SyncService;
 
     #[tokio::test]
     async fn test_app_creation() {
@@ -155,7 +154,7 @@ mod tests {
     #[tokio::test]
     async fn test_event_handling() {
         // Test that the event handler can be created
-        let mut event_handler = EventHandler::new();
+        let event_handler = EventHandler::new();
 
         // Test basic functionality
         assert!(event_handler.should_render());
