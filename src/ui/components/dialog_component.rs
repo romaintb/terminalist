@@ -257,6 +257,150 @@ impl DialogComponent {
         f.render_widget(instructions_paragraph, chunks[2]);
     }
 
+    fn render_project_creation_dialog(&self, f: &mut Frame, area: Rect) {
+        let dialog_area = LayoutManager::centered_rect(60, 15, area);
+        f.render_widget(Clear, dialog_area);
+
+        let title = format!("{} Create New Project", self.icons.info());
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(title)
+            .style(Style::default().fg(Color::White));
+
+        // Project name input
+        let content_text = format!("Project Name: {}", self.input_buffer);
+        let content_paragraph = Paragraph::new(content_text)
+            .block(Block::default().borders(Borders::ALL).title("Project Name"))
+            .style(Style::default().fg(Color::White));
+
+        // Instructions
+        let instructions = "Press Enter to create, Esc to cancel";
+        let instructions_paragraph = Paragraph::new(instructions)
+            .style(Style::default().fg(Color::Gray))
+            .alignment(Alignment::Center);
+
+        // Split dialog area
+        let chunks = ratatui::layout::Layout::default()
+            .direction(ratatui::layout::Direction::Vertical)
+            .constraints([
+                ratatui::layout::Constraint::Length(3), // Project name
+                ratatui::layout::Constraint::Length(1), // Instructions
+            ])
+            .split(dialog_area);
+
+        f.render_widget(block, dialog_area);
+        f.render_widget(content_paragraph, chunks[0]);
+        f.render_widget(instructions_paragraph, chunks[1]);
+    }
+
+    fn render_project_edit_dialog(&self, f: &mut Frame, area: Rect) {
+        let dialog_area = LayoutManager::centered_rect(60, 15, area);
+        f.render_widget(Clear, dialog_area);
+
+        let title = format!("{} Edit Project", self.icons.info());
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(title)
+            .style(Style::default().fg(Color::White));
+
+        // Project name input
+        let content_text = format!("Project Name: {}", self.input_buffer);
+        let content_paragraph = Paragraph::new(content_text)
+            .block(Block::default().borders(Borders::ALL).title("Project Name"))
+            .style(Style::default().fg(Color::White));
+
+        // Instructions
+        let instructions = "Press Enter to save, Esc to cancel";
+        let instructions_paragraph = Paragraph::new(instructions)
+            .style(Style::default().fg(Color::Gray))
+            .alignment(Alignment::Center);
+
+        // Split dialog area
+        let chunks = ratatui::layout::Layout::default()
+            .direction(ratatui::layout::Direction::Vertical)
+            .constraints([
+                ratatui::layout::Constraint::Length(3), // Project name
+                ratatui::layout::Constraint::Length(1), // Instructions
+            ])
+            .split(dialog_area);
+
+        f.render_widget(block, dialog_area);
+        f.render_widget(content_paragraph, chunks[0]);
+        f.render_widget(instructions_paragraph, chunks[1]);
+    }
+
+    fn render_label_creation_dialog(&self, f: &mut Frame, area: Rect) {
+        let dialog_area = LayoutManager::centered_rect(60, 15, area);
+        f.render_widget(Clear, dialog_area);
+
+        let title = format!("{} Create New Label", self.icons.info());
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(title)
+            .style(Style::default().fg(Color::White));
+
+        // Label name input
+        let content_text = format!("Label Name: {}", self.input_buffer);
+        let content_paragraph = Paragraph::new(content_text)
+            .block(Block::default().borders(Borders::ALL).title("Label Name"))
+            .style(Style::default().fg(Color::White));
+
+        // Instructions
+        let instructions = "Press Enter to create, Esc to cancel";
+        let instructions_paragraph = Paragraph::new(instructions)
+            .style(Style::default().fg(Color::Gray))
+            .alignment(Alignment::Center);
+
+        // Split dialog area
+        let chunks = ratatui::layout::Layout::default()
+            .direction(ratatui::layout::Direction::Vertical)
+            .constraints([
+                ratatui::layout::Constraint::Length(3), // Label name
+                ratatui::layout::Constraint::Length(1), // Instructions
+            ])
+            .split(dialog_area);
+
+        f.render_widget(block, dialog_area);
+        f.render_widget(content_paragraph, chunks[0]);
+        f.render_widget(instructions_paragraph, chunks[1]);
+    }
+
+    fn render_label_edit_dialog(&self, f: &mut Frame, area: Rect) {
+        let dialog_area = LayoutManager::centered_rect(60, 15, area);
+        f.render_widget(Clear, dialog_area);
+
+        let title = format!("{} Edit Label", self.icons.info());
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .title(title)
+            .style(Style::default().fg(Color::White));
+
+        // Label name input
+        let content_text = format!("Label Name: {}", self.input_buffer);
+        let content_paragraph = Paragraph::new(content_text)
+            .block(Block::default().borders(Borders::ALL).title("Label Name"))
+            .style(Style::default().fg(Color::White));
+
+        // Instructions
+        let instructions = "Press Enter to save, Esc to cancel";
+        let instructions_paragraph = Paragraph::new(instructions)
+            .style(Style::default().fg(Color::Gray))
+            .alignment(Alignment::Center);
+
+        // Split dialog area
+        let chunks = ratatui::layout::Layout::default()
+            .direction(ratatui::layout::Direction::Vertical)
+            .constraints([
+                ratatui::layout::Constraint::Length(3), // Label name
+                ratatui::layout::Constraint::Length(1), // Instructions
+            ])
+            .split(dialog_area);
+
+        f.render_widget(block, dialog_area);
+        f.render_widget(content_paragraph, chunks[0]);
+        f.render_widget(instructions_paragraph, chunks[1]);
+    }
+
     fn render_task_edit_dialog(&self, f: &mut Frame, area: Rect) {
         let dialog_area = LayoutManager::centered_rect(60, 15, area);
         f.render_widget(Clear, dialog_area);
@@ -543,7 +687,7 @@ TASK STATUS INDICATORS
 ✅          Completed task
 ❌          Deleted task
 
-Priority badges: [P0] (urgent), [P1] (high), [P2] (medium), [P3] (low), no badge (normal)
+Priority badges: [P1] (red, highest), [P2] (orange), [P3] (blue), [P4] (white, default)
 
 LAYOUT DETAILS
 --------------
@@ -918,20 +1062,16 @@ impl Component for DialogComponent {
                 DialogType::TaskCreation { .. } => self.render_task_creation_dialog(f, rect),
                 DialogType::TaskEdit { .. } => self.render_task_edit_dialog(f, rect),
                 DialogType::ProjectCreation => {
-                    // Similar to task creation but for projects
-                    self.render_task_creation_dialog(f, rect); // Simplified for now
+                    self.render_project_creation_dialog(f, rect);
                 }
                 DialogType::ProjectEdit { .. } => {
-                    // Similar to task edit but for projects
-                    self.render_task_edit_dialog(f, rect); // Simplified for now
+                    self.render_project_edit_dialog(f, rect);
                 }
                 DialogType::LabelCreation => {
-                    // Similar to task creation but for labels
-                    self.render_task_creation_dialog(f, rect); // Simplified for now
+                    self.render_label_creation_dialog(f, rect);
                 }
                 DialogType::LabelEdit { .. } => {
-                    // Similar to task edit but for labels
-                    self.render_task_edit_dialog(f, rect); // Simplified for now
+                    self.render_label_edit_dialog(f, rect);
                 }
                 DialogType::DeleteConfirmation { item_type, .. } => {
                     self.render_delete_confirmation_dialog(f, rect, &item_type);

@@ -1,8 +1,8 @@
 use crate::debug_logger::DebugLogger;
 use crate::sync::{SyncService, SyncStatus};
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
-use crate::ui::app::SidebarSelection;
 use crate::ui::components::{DialogComponent, SidebarComponent, TaskListComponent};
+use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
     actions::{Action, DialogType},
     event_handler::EventType,
@@ -27,6 +27,9 @@ pub struct AppState {
     pub loading: bool,
     pub error_message: Option<String>,
     pub info_message: Option<String>,
+    pub show_help: bool,
+    /// didnt we just got rid of custom scrolling ?
+    pub help_scroll_offset: usize,
 }
 
 impl AppState {
@@ -158,6 +161,18 @@ impl AppComponent {
 
     /// Handle global keyboard shortcuts that aren't component-specific
     fn handle_global_key(&mut self, key: KeyEvent) -> Action {
+        // Handle help panel scrolling when help is open
+        if self.state.show_help {
+            match key.code {
+                KeyCode::Up => return Action::HelpScrollUp,
+                KeyCode::Down => return Action::HelpScrollDown,
+                KeyCode::Home => return Action::HelpScrollToTop,
+                KeyCode::End => return Action::HelpScrollToBottom,
+                KeyCode::Char('?') | KeyCode::Esc => return Action::ShowHelp(false),
+                _ => {} // Continue to other key handling
+            }
+        }
+
         match key.code {
             KeyCode::Char('q') => {
                 self.debug_logger
@@ -401,6 +416,30 @@ impl AppComponent {
                 self.spawn_task_operation("Set task due tomorrow".to_string(), format!("{}|tomorrow", task_id));
                 Action::None
             }
+            Action::SetTaskDueNextWeek(task_id) => {
+                // Find task name for better logging
+                let task_desc = if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
+                    format!("ID {} '{}'", task_id, task.content)
+                } else {
+                    format!("ID {} [unknown]", task_id)
+                };
+                self.debug_logger
+                    .log(format!("Task: Setting due date to next week for task {}", task_desc));
+                self.spawn_task_operation("Set task due next week".to_string(), format!("{}|next_week", task_id));
+                Action::None
+            }
+            Action::SetTaskDueWeekEnd(task_id) => {
+                // Find task name for better logging
+                let task_desc = if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
+                    format!("ID {} '{}'", task_id, task.content)
+                } else {
+                    format!("ID {} [unknown]", task_id)
+                };
+                self.debug_logger
+                    .log(format!("Task: Setting due date to weekend for task {}", task_desc));
+                self.spawn_task_operation("Set task due weekend".to_string(), format!("{}|weekend", task_id));
+                Action::None
+            }
             Action::EditTask { id, content } => {
                 self.debug_logger
                     .log(format!("Task: Editing task ID {} with new content '{}'", id, content));
@@ -505,6 +544,47 @@ impl AppComponent {
                 self.schedule_data_fetch();
                 Action::None
             }
+            // Help panel scrolling actions
+            Action::HelpScrollUp => {
+                if self.state.help_scroll_offset > 0 {
+                    self.state.help_scroll_offset -= 1;
+                }
+                self.debug_logger.log(format!(
+                    "Help: Scrolled up, offset now {}",
+                    self.state.help_scroll_offset
+                ));
+                Action::None
+            }
+            Action::HelpScrollDown => {
+                self.state.help_scroll_offset += 1;
+                self.debug_logger.log(format!(
+                    "Help: Scrolled down, offset now {}",
+                    self.state.help_scroll_offset
+                ));
+                Action::None
+            }
+            Action::HelpScrollToTop => {
+                self.state.help_scroll_offset = 0;
+                self.debug_logger.log("Help: Scrolled to top".to_string());
+                Action::None
+            }
+            Action::HelpScrollToBottom => {
+                // Set to a large value - dialog component will handle bounds checking
+                self.state.help_scroll_offset = usize::MAX;
+                self.debug_logger
+                    .log("Help: Scrolled to bottom".to_string());
+                Action::None
+            }
+            Action::ShowHelp(show) => {
+                self.state.show_help = show;
+                if !show {
+                    // Reset scroll when hiding help
+                    self.state.help_scroll_offset = 0;
+                }
+                self.debug_logger
+                    .log(format!("Help: {} help panel", if show { "Showing" } else { "Hiding" }));
+                action
+            }
             // Pass through other actions
             _ => action,
         }
@@ -539,26 +619,68 @@ impl AppComponent {
                         // task_info format: "task_id|today"
                         if let Some((task_id, _)) = task_info.split_once('|') {
                             let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
-                            match sync_service.update_task_due_date(task_id, Some(&today)).await {
+                            match sync_service
+                                .update_task_due_date(task_id, Some(&today))
+                                .await
+                            {
                                 Ok(()) => Ok(format!("✅ Task due date set to today: {}", task_id)),
                                 Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
                             }
                         } else {
                             Err("❌ Invalid task info format for setting due date".to_string())
                         }
-                    },
+                    }
                     "Set task due tomorrow" => {
                         // task_info format: "task_id|tomorrow"
                         if let Some((task_id, _)) = task_info.split_once('|') {
-                            let tomorrow = (chrono::Utc::now() + chrono::Duration::days(1)).format("%Y-%m-%d").to_string();
-                            match sync_service.update_task_due_date(task_id, Some(&tomorrow)).await {
+                            let tomorrow = (chrono::Utc::now() + chrono::Duration::days(1))
+                                .format("%Y-%m-%d")
+                                .to_string();
+                            match sync_service
+                                .update_task_due_date(task_id, Some(&tomorrow))
+                                .await
+                            {
                                 Ok(()) => Ok(format!("✅ Task due date set to tomorrow: {}", task_id)),
                                 Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
                             }
                         } else {
                             Err("❌ Invalid task info format for setting due date".to_string())
                         }
-                    },
+                    }
+                    "Set task due next week" => {
+                        // task_info format: "task_id|next_week"
+                        if let Some((task_id, _)) = task_info.split_once('|') {
+                            let today = chrono::Utc::now().date_naive();
+                            let next_monday = crate::utils::date::next_weekday(today, chrono::Weekday::Mon);
+                            let next_monday_str = crate::utils::date::format_ymd(next_monday);
+                            match sync_service
+                                .update_task_due_date(task_id, Some(&next_monday_str))
+                                .await
+                            {
+                                Ok(()) => Ok(format!("✅ Task due date set to next Monday: {}", task_id)),
+                                Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
+                            }
+                        } else {
+                            Err("❌ Invalid task info format for setting due date".to_string())
+                        }
+                    }
+                    "Set task due weekend" => {
+                        // task_info format: "task_id|weekend"
+                        if let Some((task_id, _)) = task_info.split_once('|') {
+                            let today = chrono::Utc::now().date_naive();
+                            let next_saturday = crate::utils::date::next_weekday(today, chrono::Weekday::Sat);
+                            let next_saturday_str = crate::utils::date::format_ymd(next_saturday);
+                            match sync_service
+                                .update_task_due_date(task_id, Some(&next_saturday_str))
+                                .await
+                            {
+                                Ok(()) => Ok(format!("✅ Task due date set to next Saturday: {}", task_id)),
+                                Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
+                            }
+                        } else {
+                            Err("❌ Invalid task info format for setting due date".to_string())
+                        }
+                    }
                     "Create task" => {
                         // task_info format: "content|project_id" or just "content" for inbox
                         if let Some((content, project_id)) = task_info.split_once('|') {

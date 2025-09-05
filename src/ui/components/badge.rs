@@ -101,7 +101,7 @@ pub fn create_label_badge(name: &str, color: &str) -> Span<'static> {
         .fg(Color::White)
         .add_modifier(Modifier::BOLD);
 
-    Span::styled(format!(" {name} "), style)
+    Span::styled(name.to_string(), style)
 }
 
 /// Create task badges optimized for terminal compatibility
@@ -138,10 +138,10 @@ pub fn create_task_badges(
 #[must_use]
 pub fn create_priority_badge(priority: i32) -> Option<Span<'static>> {
     match priority {
-        4 => Some(create_badge("P0", BadgeStyle::Danger)),    // Urgent
-        3 => Some(create_badge("P1", BadgeStyle::Warning)),   // High
-        2 => Some(create_badge("P2", BadgeStyle::Info)),      // Medium
-        1 => Some(create_badge("P3", BadgeStyle::Secondary)), // Low
-        _ => None,                                            // No priority
+        4 => Some(create_badge("P1", BadgeStyle::Danger)), // P1 = red (highest priority)
+        3 => Some(create_badge("P2", BadgeStyle::Warning)), // P2 = orange
+        2 => Some(create_badge("P3", BadgeStyle::Info)),   // P3 = blue
+        1 => Some(create_badge("P4", BadgeStyle::Secondary)), // P4 = white (no priority/default)
+        _ => Some(create_badge("P4", BadgeStyle::Secondary)), // Unknown priority = P4 = white
     }
 }

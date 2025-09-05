@@ -1,6 +1,6 @@
 use crate::icons::IconService;
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
-use crate::ui::app::SidebarSelection;
+use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
     actions::{Action, DialogType},
     Component,
@@ -429,11 +429,11 @@ impl TaskListComponent {
     /// Create priority badges with better terminal support
     fn create_priority_badge(&self, priority: i32) -> Option<Span<'static>> {
         match priority {
-            4 => Some(self.create_badge("P0", BadgeStyle::Danger)),  // Urgent
-            3 => Some(self.create_badge("P1", BadgeStyle::Warning)), // High
-            2 => Some(self.create_badge("P2", BadgeStyle::Info)),    // Medium
-            1 => Some(self.create_badge("P3", BadgeStyle::Secondary)), // Low
-            _ => None,                                               // No priority
+            4 => Some(self.create_badge("P1", BadgeStyle::Danger)), // P1 = red (highest priority)
+            3 => Some(self.create_badge("P2", BadgeStyle::Warning)), // P2 = orange
+            2 => Some(self.create_badge("P3", BadgeStyle::Info)),   // P3 = blue
+            1 => Some(self.create_badge("P4", BadgeStyle::Secondary)), // P4 = white (no priority/default)
+            _ => Some(self.create_badge("P4", BadgeStyle::Secondary)), // Unknown priority = P4 = white
         }
     }
 
@@ -582,6 +582,20 @@ impl Component for TaskListComponent {
             KeyCode::Char('T') => {
                 if let Some(task) = self.tasks.get(self.selected_index) {
                     Action::SetTaskDueTomorrow(task.id.clone())
+                } else {
+                    Action::None
+                }
+            }
+            KeyCode::Char('w') => {
+                if let Some(task) = self.tasks.get(self.selected_index) {
+                    Action::SetTaskDueNextWeek(task.id.clone())
+                } else {
+                    Action::None
+                }
+            }
+            KeyCode::Char('W') => {
+                if let Some(task) = self.tasks.get(self.selected_index) {
+                    Action::SetTaskDueWeekEnd(task.id.clone())
                 } else {
                     Action::None
                 }

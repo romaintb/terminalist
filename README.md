@@ -43,7 +43,6 @@ Once the application is running, you can use these keyboard shortcuts:
 ### **Navigation**
 - **`j/k`** Navigate between tasks (down/up)
 - **`J/K`** Navigate between projects (down/up)
-- **`Tab`** Switch focus between panes
 
 ### **Task Management**
 - **`Space`** or **`Enter`** Toggle task completion (complete ↔ reopen)

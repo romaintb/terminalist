@@ -1,4 +1,4 @@
-use super::actions::Action;
+use super::actions::{Action, SidebarSelection};
 use crate::sync::{SyncService, SyncStatus};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
@@ -108,7 +108,7 @@ impl TaskManager {
 
                     // For project deletion, navigate to Today view to avoid empty selection
                     if desc_clone == "Delete project" {
-                        let _ = action_sender.send(Action::NavigateToSidebar(crate::ui::app::SidebarSelection::Today));
+                        let _ = action_sender.send(Action::NavigateToSidebar(SidebarSelection::Today));
                     }
 
                     // Show success message
@@ -195,11 +195,7 @@ impl TaskManager {
     }
 
     /// Spawn a background data loading operation
-    pub fn spawn_data_load(
-        &mut self,
-        sync_service: SyncService,
-        sidebar_selection: crate::ui::app::SidebarSelection,
-    ) -> TaskId {
+    pub fn spawn_data_load(&mut self, sync_service: SyncService, sidebar_selection: SidebarSelection) -> TaskId {
         let task_id = self.next_task_id;
         self.next_task_id += 1;
 
@@ -215,14 +211,12 @@ impl TaskManager {
                 (Ok(projects), Ok(labels), Ok(sections)) => {
                     // Get tasks based on sidebar selection
                     let tasks = match sidebar_selection {
-                        crate::ui::app::SidebarSelection::Today => {
-                            sync_service.get_tasks_for_today().await.unwrap_or_default()
-                        }
-                        crate::ui::app::SidebarSelection::Tomorrow => sync_service
+                        SidebarSelection::Today => sync_service.get_tasks_for_today().await.unwrap_or_default(),
+                        SidebarSelection::Tomorrow => sync_service
                             .get_tasks_for_tomorrow()
                             .await
                             .unwrap_or_default(),
-                        crate::ui::app::SidebarSelection::Project(index) => {
+                        SidebarSelection::Project(index) => {
                             if let Some(project) = projects.get(index) {
                                 sync_service
                                     .get_tasks_for_project(&project.id)
@@ -232,7 +226,7 @@ impl TaskManager {
                                 Vec::new()
                             }
                         }
-                        crate::ui::app::SidebarSelection::Label(index) => {
+                        SidebarSelection::Label(index) => {
                             if let Some(label) = labels.get(index) {
                                 sync_service
                                     .get_tasks_with_label(&label.name)

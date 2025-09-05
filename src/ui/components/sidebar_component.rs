@@ -1,6 +1,6 @@
 use crate::icons::IconService;
 use crate::todoist::{LabelDisplay, ProjectDisplay};
-use crate::ui::app::SidebarSelection;
+use crate::ui::core::SidebarSelection;
 use crate::ui::core::{actions::Action, Component};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{

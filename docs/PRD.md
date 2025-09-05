@@ -387,7 +387,6 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 #### Navigation
 - `j/k`: Navigate tasks (down/up)
 - `J/K`: Navigate projects (down/up)
-- `Tab`: Switch focus between panes
 
 #### Task Management
 - `Space/Enter`: Toggle task completion

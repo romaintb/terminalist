@@ -1,5 +1,14 @@
 use crate::sync::SyncStatus;
-use crate::ui::app::SidebarSelection;
+
+/// Represents the currently selected item in the sidebar
+#[derive(Debug, Clone, PartialEq, Default)]
+pub enum SidebarSelection {
+    #[default]
+    Today, // Today view (special view)
+    Tomorrow,       // Tomorrow view (special view)
+    Label(usize),   // Index into labels vector
+    Project(usize), // Index into projects vector
+}
 
 #[derive(Debug, Clone)]
 pub enum Action {
@@ -13,6 +22,8 @@ pub enum Action {
     DeleteTask(String),
     SetTaskDueToday(String),
     SetTaskDueTomorrow(String),
+    SetTaskDueNextWeek(String),
+    SetTaskDueWeekEnd(String),
     CreateTask {
         content: String,
         project_id: Option<String>,
@@ -62,6 +73,10 @@ pub enum Action {
     ShowDebug(bool),
     ShowDialog(DialogType),
     HideDialog,
+    HelpScrollUp,
+    HelpScrollDown,
+    HelpScrollToTop,
+    HelpScrollToBottom,
 
     // App control
     Quit,

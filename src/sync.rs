@@ -271,8 +271,11 @@ impl SyncService {
 
     /// Update task due date
     pub async fn update_task_due_date(&self, task_id: &str, due_date: Option<&str>) -> Result<()> {
-        self.log_debug(format!("API: Updating task due date for ID {} to {:?}", task_id, due_date));
-        
+        self.log_debug(format!(
+            "API: Updating task due date for ID {} to {:?}",
+            task_id, due_date
+        ));
+
         // First, update task via API using the UpdateTaskArgs structure
         let task_args = todoist_api::UpdateTaskArgs {
             content: None,
@@ -294,7 +297,7 @@ impl SyncService {
         // Then update local storage
         let storage = self.storage.lock().await;
         storage.update_task_due_date(task_id, due_date).await?;
-        
+
         self.log_debug(format!("API: Successfully updated task due date {}", task_id));
         Ok(())
     }
