@@ -9,6 +9,7 @@ pub struct ProjectDisplay {
     pub color: String,
     pub is_favorite: bool,
     pub parent_id: Option<String>,
+    pub is_inbox_project: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -53,6 +54,7 @@ impl From<Project> for ProjectDisplay {
             color: project.color,
             is_favorite: project.is_favorite,
             parent_id: project.parent_id,
+            is_inbox_project: project.is_inbox_project,
         }
     }
 }

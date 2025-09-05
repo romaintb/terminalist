@@ -10,14 +10,7 @@ use ratatui::{backend::CrosstermBackend, Terminal};
 use tokio::time::Duration;
 
 use super::app::App;
-use super::components::{
-    dialogs::{
-        DebugDialog, DeleteConfirmationDialog, ErrorDialog, InfoDialog, LabelCreationDialog,
-        LabelDeleteConfirmationDialog, LabelEditDialog, ProjectCreationDialog, ProjectDeleteConfirmationDialog,
-        ProjectEditDialog, SyncingDialog, TaskCreationDialog, TaskEditDialog,
-    },
-    HelpPanel, Sidebar, StatusBar, TasksList,
-};
+use super::components::{HelpPanel, Sidebar, StatusBar, TasksList};
 use super::events::handle_events;
 use super::layout::LayoutManager;
 use crate::sync::SyncService;
@@ -134,55 +127,55 @@ fn render_ui(f: &mut ratatui::Frame, app: &mut App) {
     StatusBar::render(f, chunks[1], app);
     // Render syncing dialog if loading or syncing
     if app.loading || app.syncing {
-        SyncingDialog::render(f, app);
+        // SyncingDialog::render(f, app); // Disabled for new architecture
     }
 
     // Render overlays - error messages have priority over info messages
     if app.error_message.is_some() {
-        ErrorDialog::render(f, app);
+        // ErrorDialog::render(f, app); // Disabled for new architecture
     } else if app.info_message.is_some() {
-        InfoDialog::render(f, app);
+        // InfoDialog::render(f, app); // Disabled for new architecture
     }
 
     if app.delete_confirmation.is_some() {
-        DeleteConfirmationDialog::render(f, app);
+        // DeleteConfirmationDialog::render(f, app); // Disabled for new architecture
     }
 
     if app.creating_project {
-        ProjectCreationDialog::render(f, app);
+        // ProjectCreationDialog::render(f, app); // Disabled for new architecture
     }
 
     if app.creating_label {
-        LabelCreationDialog::render(f, app);
+        // LabelCreationDialog::render(f, app); // Disabled for new architecture
     }
 
     if app.creating_task {
-        TaskCreationDialog::render(f, app);
+        // TaskCreationDialog::render(f, app); // Disabled for new architecture
     }
 
     if app.editing_task {
-        TaskEditDialog::render(f, app);
+        // TaskEditDialog::render(f, app); // Disabled for new architecture
     }
 
     if app.editing_project {
-        ProjectEditDialog::render(f, app);
+        // ProjectEditDialog::render(f, app); // Disabled for new architecture
     }
 
     if app.editing_label {
-        LabelEditDialog::render(f, app);
+        // LabelEditDialog::render(f, app); // Disabled for new architecture
     }
 
     if app.delete_project_confirmation.is_some() {
-        ProjectDeleteConfirmationDialog::render(f, app);
+        // ProjectDeleteConfirmationDialog::render(f, app); // Disabled for new architecture
     }
 
     if app.delete_label_confirmation.is_some() {
-        LabelDeleteConfirmationDialog::render(f, app);
+        // LabelDeleteConfirmationDialog::render(f, app); // Disabled for new architecture
     }
 
     // Render debug modal
     if app.show_debug_modal {
-        DebugDialog::render(f, app, f.area());
+        // DebugDialog::render(f, app, f.area()); // Disabled for new architecture
     }
 
     // Render help panel last to ensure it's on top of everything

@@ -146,9 +146,12 @@ impl SyncService {
             is_favorite: None,
             view_style: None,
         };
-        let _project = self.todoist.create_project(&project_args).await?;
+        let project = self.todoist.create_project(&project_args).await?;
 
-        // The UI will handle the sync separately to ensure proper error handling
+        // Store the created project in local database immediately for UI refresh
+        let storage = self.storage.lock().await;
+        storage.store_single_project(project).await?;
+
         Ok(())
     }
 
@@ -174,9 +177,12 @@ impl SyncService {
             duration: None,
             duration_unit: None,
         };
-        let _task = self.todoist.create_task(&task_args).await?;
+        let task = self.todoist.create_task(&task_args).await?;
 
-        // The UI will handle the sync separately to ensure proper error handling
+        // Store the created task in local database immediately for UI refresh
+        let storage = self.storage.lock().await;
+        storage.store_single_task(task).await?;
+
         Ok(())
     }
 
@@ -296,6 +302,41 @@ impl SyncService {
         let storage = self.storage.lock().await;
         storage.delete_project(project_id).await?;
 
+        Ok(())
+    }
+
+    /// Toggle task completion status
+    pub async fn toggle_task(&self, task_id: &str) -> Result<()> {
+        self.log_debug(format!("API: Toggling task completion for ID {}", task_id));
+
+        // Get current task state from local storage to determine if we should complete or reopen
+        let storage = self.storage.lock().await;
+        let tasks = storage.get_all_tasks().await?;
+        let current_task = tasks.iter().find(|t| t.id == task_id);
+
+        if let Some(task) = current_task {
+            if task.is_completed {
+                // Task is completed, reopen it
+                self.log_debug(format!("API: Reopening completed task {}", task_id));
+                drop(storage); // Release lock before API call
+                self.reopen_task(task_id).await?;
+            } else {
+                // Task is not completed, complete it
+                self.log_debug(format!("API: Completing task {}", task_id));
+                drop(storage); // Release lock before API call
+                self.complete_task(task_id).await?;
+            }
+        } else {
+            // Task not found in local storage, assume it needs to be completed
+            self.log_debug(format!(
+                "API: Task not found locally, attempting to complete {}",
+                task_id
+            ));
+            drop(storage); // Release lock before API call
+            self.complete_task(task_id).await?;
+        }
+
+        self.log_debug(format!("API: Successfully toggled task {}", task_id));
         Ok(())
     }
 

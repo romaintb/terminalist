@@ -136,27 +136,27 @@ This project uses the following Rust crates:
 ```
 src/
 ├── main.rs                    # Main application entry point
-├── lib.rs                     # Library exports
+├── lib.rs                     # Library exports  
 ├── todoist.rs                 # Todoist API models & display structs
-├── sync.rs                    # Sync service
+├── sync.rs                    # Sync service with API integration
 ├── storage.rs                 # SQLite storage (in-memory)
-└── ui/                        # TUI components
-    ├── app.rs                 # Application state management
-    ├── events.rs              # Event handling & keyboard shortcuts
-    ├── layout.rs              # Layout management
-    ├── renderer.rs            # Main rendering loop
-    └── components/            # UI components
-        ├── badge.rs           # Terminal-optimized badges
-        ├── projects_list.rs   # Projects display
-        ├── tasks_list.rs      # Tasks display
-        ├── status_bar.rs      # Status bar
-        ├── help_panel.rs      # Help overlay
-        └── dialogs/           # Dialog components
-            ├── error_dialog.rs
-            ├── delete_confirmation_dialog.rs
-            ├── project_creation_dialog.rs
-            ├── task_creation_dialog.rs
-            └── project_delete_confirmation_dialog.rs
+├── icons.rs                   # Icon service for terminal compatibility
+├── debug_logger.rs            # Debug logging system
+├── utils/                     # Utility modules
+│   ├── mod.rs
+│   └── date.rs                # Date/time utilities
+└── ui/                        # Modern Component-Based Architecture
+    ├── app_component.rs       # Main application orchestrator
+    ├── new_renderer.rs        # Modern rendering system
+    ├── core/                  # Core architecture components
+    │   ├── actions.rs         # Action system for component communication
+    │   ├── component.rs       # Component trait and lifecycle
+    │   ├── event_handler.rs   # Event processing system
+    │   └── task_manager.rs    # Background async task management
+    └── components/            # UI Components
+        ├── dialog_component.rs    # Unified modal dialog system
+        ├── sidebar_component.rs   # Project/label navigation
+        └── task_list_component.rs # Task management and display
 ```
 
 ## Development Setup

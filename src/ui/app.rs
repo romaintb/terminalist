@@ -10,9 +10,10 @@ use ratatui::widgets::ListState;
 use tokio::task::JoinHandle;
 
 /// Represents the currently selected item in the sidebar
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum SidebarSelection {
-    Today,          // Today view (special view)
+    #[default]
+    Today, // Today view (special view)
     Tomorrow,       // Tomorrow view (special view)
     Label(usize),   // Index into labels vector
     Project(usize), // Index into projects vector
