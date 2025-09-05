@@ -11,6 +11,8 @@ pub enum Action {
     // Task operations
     ToggleTask(String),
     DeleteTask(String),
+    SetTaskDueToday(String),
+    SetTaskDueTomorrow(String),
     CreateTask {
         content: String,
         project_id: Option<String>,

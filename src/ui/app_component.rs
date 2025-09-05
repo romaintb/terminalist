@@ -377,6 +377,30 @@ impl AppComponent {
                 self.spawn_task_operation("Delete task".to_string(), task_id);
                 Action::None
             }
+            Action::SetTaskDueToday(task_id) => {
+                // Find task name for better logging
+                let task_desc = if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
+                    format!("ID {} '{}'", task_id, task.content)
+                } else {
+                    format!("ID {} [unknown]", task_id)
+                };
+                self.debug_logger
+                    .log(format!("Task: Setting due date to today for task {}", task_desc));
+                self.spawn_task_operation("Set task due today".to_string(), format!("{}|today", task_id));
+                Action::None
+            }
+            Action::SetTaskDueTomorrow(task_id) => {
+                // Find task name for better logging
+                let task_desc = if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
+                    format!("ID {} '{}'", task_id, task.content)
+                } else {
+                    format!("ID {} [unknown]", task_id)
+                };
+                self.debug_logger
+                    .log(format!("Task: Setting due date to tomorrow for task {}", task_desc));
+                self.spawn_task_operation("Set task due tomorrow".to_string(), format!("{}|tomorrow", task_id));
+                Action::None
+            }
             Action::EditTask { id, content } => {
                 self.debug_logger
                     .log(format!("Task: Editing task ID {} with new content '{}'", id, content));
@@ -510,6 +534,30 @@ impl AppComponent {
                     "Delete task" => match sync_service.delete_task(&task_info).await {
                         Ok(()) => Ok(format!("✅ Task deleted: {}", task_info)),
                         Err(e) => Err(format!("❌ Failed to delete task: {}", e)),
+                    },
+                    "Set task due today" => {
+                        // task_info format: "task_id|today"
+                        if let Some((task_id, _)) = task_info.split_once('|') {
+                            let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+                            match sync_service.update_task_due_date(task_id, Some(&today)).await {
+                                Ok(()) => Ok(format!("✅ Task due date set to today: {}", task_id)),
+                                Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
+                            }
+                        } else {
+                            Err("❌ Invalid task info format for setting due date".to_string())
+                        }
+                    },
+                    "Set task due tomorrow" => {
+                        // task_info format: "task_id|tomorrow"
+                        if let Some((task_id, _)) = task_info.split_once('|') {
+                            let tomorrow = (chrono::Utc::now() + chrono::Duration::days(1)).format("%Y-%m-%d").to_string();
+                            match sync_service.update_task_due_date(task_id, Some(&tomorrow)).await {
+                                Ok(()) => Ok(format!("✅ Task due date set to tomorrow: {}", task_id)),
+                                Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
+                            }
+                        } else {
+                            Err("❌ Invalid task info format for setting due date".to_string())
+                        }
                     },
                     "Create task" => {
                         // task_info format: "content|project_id" or just "content" for inbox

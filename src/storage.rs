@@ -988,6 +988,18 @@ impl LocalStorage {
         Ok(())
     }
 
+    /// Update a task's due date in local storage
+    pub async fn update_task_due_date(&self, task_id: &str, due_date: Option<&str>) -> Result<()> {
+        sqlx::query("UPDATE tasks SET due_date = ?, last_synced = ? WHERE id = ?")
+            .bind(due_date)
+            .bind(Utc::now())
+            .bind(task_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
     /// Mark a task as deleted in local storage
     pub async fn delete_task(&self, task_id: &str) -> Result<()> {
         sqlx::query("UPDATE tasks SET is_deleted = true, last_synced = ? WHERE id = ?")

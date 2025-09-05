@@ -572,6 +572,20 @@ impl Component for TaskListComponent {
                 // Note: Detailed logging done when action is processed by AppComponent
                 Action::ShowDialog(DialogType::TaskCreation { default_project_id })
             }
+            KeyCode::Char('t') => {
+                if let Some(task) = self.tasks.get(self.selected_index) {
+                    Action::SetTaskDueToday(task.id.clone())
+                } else {
+                    Action::None
+                }
+            }
+            KeyCode::Char('T') => {
+                if let Some(task) = self.tasks.get(self.selected_index) {
+                    Action::SetTaskDueTomorrow(task.id.clone())
+                } else {
+                    Action::None
+                }
+            }
             _ => Action::None,
         }
     }
