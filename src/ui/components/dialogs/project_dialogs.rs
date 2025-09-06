@@ -8,7 +8,7 @@ use ratatui::{
 };
 
 pub fn render_project_creation_dialog(f: &mut Frame, area: Rect, _icons: &IconService, input_buffer: &str) {
-    let dialog_area = LayoutManager::centered_rect_lines(65, 8, area);
+    let dialog_area = LayoutManager::centered_rect_lines(65, 9, area);
     f.render_widget(Clear, dialog_area);
 
     // Main dialog block with rounded borders and magenta theme
@@ -30,7 +30,7 @@ pub fn render_project_creation_dialog(f: &mut Frame, area: Rect, _icons: &IconSe
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
-            Constraint::Length(3), // Input field
+            Constraint::Length(4), // Input field (borders + content)
             Constraint::Length(1), // Spacer
             Constraint::Length(1), // Instructions
         ])
@@ -77,7 +77,7 @@ pub fn render_project_creation_dialog(f: &mut Frame, area: Rect, _icons: &IconSe
 }
 
 pub fn render_project_edit_dialog(f: &mut Frame, area: Rect, _icons: &IconService, input_buffer: &str) {
-    let dialog_area = LayoutManager::centered_rect_lines(65, 8, area);
+    let dialog_area = LayoutManager::centered_rect_lines(65, 9, area);
     f.render_widget(Clear, dialog_area);
 
     // Main dialog block with rounded borders and yellow theme for edit
@@ -99,7 +99,7 @@ pub fn render_project_edit_dialog(f: &mut Frame, area: Rect, _icons: &IconServic
         .direction(Direction::Vertical)
         .margin(1)
         .constraints([
-            Constraint::Length(3), // Input field
+            Constraint::Length(4), // Input field (borders + content)
             Constraint::Length(1), // Spacer
             Constraint::Length(1), // Instructions
         ])
