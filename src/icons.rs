@@ -300,6 +300,15 @@ impl IconService {
             IconTheme::Ascii => "@",
         }
     }
+
+    #[must_use]
+    pub fn tomorrow(&self) -> &'static str {
+        match self.current_theme {
+            IconTheme::Emoji => "🗓️",
+            IconTheme::Unicode => "◶",
+            IconTheme::Ascii => "+",
+        }
+    }
 }
 
 #[cfg(test)]
@@ -343,6 +352,21 @@ mod tests {
         assert_eq!(service.task_pending(), "[ ]");
         assert_eq!(service.task_completed(), "[X]");
         assert_eq!(service.task_deleted(), "[D]");
+    }
+
+    #[test]
+    fn test_today_tomorrow_icons() {
+        let emoji_service = IconService::new(IconTheme::Emoji);
+        assert_eq!(emoji_service.today(), "📅");
+        assert_eq!(emoji_service.tomorrow(), "🗓️");
+
+        let unicode_service = IconService::new(IconTheme::Unicode);
+        assert_eq!(unicode_service.today(), "◷");
+        assert_eq!(unicode_service.tomorrow(), "◶");
+
+        let ascii_service = IconService::new(IconTheme::Ascii);
+        assert_eq!(ascii_service.today(), "@");
+        assert_eq!(ascii_service.tomorrow(), "+");
     }
 
     #[test]

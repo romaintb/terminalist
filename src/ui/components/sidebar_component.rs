@@ -265,7 +265,7 @@ impl Component for SidebarComponent {
         };
 
         all_items.push(ListItem::new(Line::from(vec![
-            Span::styled(self.icons.today().to_string(), tomorrow_style),
+            Span::styled(self.icons.tomorrow().to_string(), tomorrow_style),
             Span::styled("Tomorrow".to_string(), tomorrow_style),
         ])));
 
