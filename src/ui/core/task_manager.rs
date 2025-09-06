@@ -107,7 +107,7 @@ impl TaskManager {
                     let _ = action_sender.send(Action::RefreshData);
 
                     // For project deletion, navigate to Today view to avoid empty selection
-                    if desc_clone == "Delete project" {
+                    if desc_clone.starts_with("Delete project") {
                         let _ = action_sender.send(Action::NavigateToSidebar(SidebarSelection::Today));
                     }
 
