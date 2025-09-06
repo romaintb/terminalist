@@ -108,4 +108,3 @@ impl From<Task> for TaskDisplay {
         }
     }
 }
-

@@ -16,7 +16,7 @@ fn test_project_conversion() {
         url: "https://todoist.com".to_string(),
         parent_id: None,
     };
-    
+
     let display: ProjectDisplay = project.into();
     assert_eq!(display.id, "123");
     assert_eq!(display.name, "Test Project");
@@ -54,7 +54,7 @@ fn test_task_conversion() {
         url: "https://todoist.com".to_string(),
         comment_count: 0,
     };
-    
+
     let display: TaskDisplay = task.into();
     assert_eq!(display.id, "456");
     assert_eq!(display.content, "Test Task");

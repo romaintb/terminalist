@@ -17,4 +17,3 @@ pub fn next_weekday(from: NaiveDate, target: Weekday) -> NaiveDate {
     }
     from + Duration::days(delta)
 }
-

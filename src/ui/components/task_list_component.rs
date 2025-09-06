@@ -1,6 +1,6 @@
 use crate::icons::IconService;
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
-use crate::ui::components::badge::{create_task_badges, create_priority_badge};
+use crate::ui::components::badge::{create_priority_badge, create_task_badges};
 use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
     actions::{Action, DialogType},
@@ -16,7 +16,6 @@ use ratatui::{
     Frame,
 };
 use std::collections::HashMap;
-
 
 pub struct TaskListComponent {
     pub tasks: Vec<TaskDisplay>,
@@ -383,7 +382,6 @@ impl TaskListComponent {
     pub fn get_selected_task(&self) -> Option<&TaskDisplay> {
         self.tasks.get(self.selected_index)
     }
-
 
     /// Create a section header item
     fn create_section_header(&self, name: &str) -> ListItem<'static> {

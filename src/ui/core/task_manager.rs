@@ -276,7 +276,6 @@ impl TaskManager {
     }
 }
 
-
 impl Drop for TaskManager {
     fn drop(&mut self) {
         // Cancel all tasks when the manager is dropped

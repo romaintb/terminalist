@@ -138,4 +138,3 @@ impl AppComponent {
         // For now, the render loop handles this automatically
     }
 }
-
