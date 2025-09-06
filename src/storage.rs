@@ -71,6 +71,7 @@ impl From<LocalProject> for ProjectDisplay {
             color: local.color,
             is_favorite: local.is_favorite,
             parent_id: local.parent_id,
+            is_inbox_project: local.is_inbox_project,
         }
     }
 }
@@ -341,6 +342,30 @@ impl LocalStorage {
         Ok(())
     }
 
+    /// Store a single project in the database (for immediate insertion after API calls)
+    pub async fn store_single_project(&self, project: Project) -> Result<()> {
+        let local_project: LocalProject = project.into();
+
+        sqlx::query(
+            r"
+            INSERT OR REPLACE INTO projects (id, name, color, is_favorite, is_inbox_project, order_index, parent_id, last_synced)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ",
+        )
+        .bind(&local_project.id)
+        .bind(&local_project.name)
+        .bind(&local_project.color)
+        .bind(local_project.is_favorite)
+        .bind(local_project.is_inbox_project)
+        .bind(local_project.order_index)
+        .bind(&local_project.parent_id)
+        .bind(local_project.last_synced)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// Store sections in local database
     pub async fn store_sections(&self, sections: Vec<Section>) -> Result<()> {
         let mut tx = self.pool.begin().await?;
@@ -411,6 +436,38 @@ impl LocalStorage {
 
         tx.commit().await?;
         self.update_sync_timestamp("tasks").await?;
+        Ok(())
+    }
+
+    /// Store a single task in the database (for immediate insertion after API calls)
+    pub async fn store_single_task(&self, task: Task) -> Result<()> {
+        let local_task: LocalTask = task.into();
+
+        sqlx::query(
+            r"
+            INSERT OR REPLACE INTO tasks (id, content, project_id, section_id, is_completed, is_deleted, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description, last_synced)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ",
+        )
+        .bind(&local_task.id)
+        .bind(&local_task.content)
+        .bind(&local_task.project_id)
+        .bind(&local_task.section_id)
+        .bind(local_task.is_completed)
+        .bind(local_task.is_deleted)
+        .bind(local_task.priority)
+        .bind(local_task.order_index)
+        .bind(&local_task.due_date)
+        .bind(&local_task.due_datetime)
+        .bind(local_task.is_recurring)
+        .bind(&local_task.deadline)
+        .bind(&local_task.duration)
+        .bind(&local_task.labels)
+        .bind(&local_task.description)
+        .bind(local_task.last_synced)
+        .execute(&self.pool)
+        .await?;
+
         Ok(())
     }
 
@@ -540,10 +597,11 @@ impl LocalStorage {
 
     /// Get all projects from local storage
     pub async fn get_projects(&self) -> Result<Vec<ProjectDisplay>> {
-        let rows =
-            sqlx::query("SELECT id, name, color, is_favorite, parent_id FROM projects ORDER BY order_index, name")
-                .fetch_all(&self.pool)
-                .await?;
+        let rows = sqlx::query(
+            "SELECT id, name, color, is_favorite, parent_id, is_inbox_project FROM projects ORDER BY order_index, name",
+        )
+        .fetch_all(&self.pool)
+        .await?;
 
         let projects = rows
             .into_iter()
@@ -553,6 +611,7 @@ impl LocalStorage {
                 color: row.get("color"),
                 is_favorite: row.get("is_favorite"),
                 parent_id: row.get("parent_id"),
+                is_inbox_project: row.get("is_inbox_project"),
             })
             .collect();
 
@@ -921,6 +980,18 @@ impl LocalStorage {
     /// Mark a task as incomplete in local storage (reopen)
     pub async fn mark_task_incomplete(&self, task_id: &str) -> Result<()> {
         sqlx::query("UPDATE tasks SET is_completed = false, last_synced = ? WHERE id = ?")
+            .bind(Utc::now())
+            .bind(task_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Update a task's due date in local storage
+    pub async fn update_task_due_date(&self, task_id: &str, due_date: Option<&str>) -> Result<()> {
+        sqlx::query("UPDATE tasks SET due_date = ?, last_synced = ? WHERE id = ?")
+            .bind(due_date)
             .bind(Utc::now())
             .bind(task_id)
             .execute(&self.pool)

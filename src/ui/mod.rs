@@ -2,13 +2,12 @@
 //!
 //! This module handles all user interface components, rendering, and user interactions.
 
-pub mod app;
+pub mod app_component;
 pub mod components;
-pub mod events;
+pub mod core;
 pub mod layout;
-pub mod renderer;
+pub mod new_renderer;
 
-pub use app::App;
-pub use events::handle_events;
+pub use app_component::AppComponent;
 pub use layout::LayoutManager;
-pub use renderer::run_app;
+pub use new_renderer::run_new_app;

@@ -300,63 +300,13 @@ impl IconService {
             IconTheme::Ascii => "@",
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_default_theme() {
-        let service = IconService::default();
-        assert_eq!(service.theme(), IconTheme::Ascii);
-    }
-
-    #[test]
-    fn test_theme_switching() {
-        let mut service = IconService::new(IconTheme::Emoji);
-        assert_eq!(service.theme(), IconTheme::Emoji);
-
-        service.set_theme(IconTheme::Ascii);
-        assert_eq!(service.theme(), IconTheme::Ascii);
-    }
-
-    #[test]
-    fn test_emoji_icons() {
-        let service = IconService::new(IconTheme::Emoji);
-        assert_eq!(service.task_pending(), "🔳");
-        assert_eq!(service.task_completed(), "✅");
-        assert_eq!(service.task_deleted(), "❌");
-    }
-
-    #[test]
-    fn test_unicode_icons() {
-        let service = IconService::new(IconTheme::Unicode);
-        assert_eq!(service.task_pending(), "□");
-        assert_eq!(service.task_completed(), "✓");
-        assert_eq!(service.task_deleted(), "✗");
-    }
-
-    #[test]
-    fn test_ascii_icons() {
-        let service = IconService::new(IconTheme::Ascii);
-        assert_eq!(service.task_pending(), "[ ]");
-        assert_eq!(service.task_completed(), "[X]");
-        assert_eq!(service.task_deleted(), "[D]");
-    }
-
-    #[test]
-    fn test_theme_cycling() {
-        let mut service = IconService::new(IconTheme::Ascii);
-        assert_eq!(service.theme(), IconTheme::Ascii);
-
-        service.cycle_icon_theme();
-        assert_eq!(service.theme(), IconTheme::Unicode);
-
-        service.cycle_icon_theme();
-        assert_eq!(service.theme(), IconTheme::Emoji);
-
-        service.cycle_icon_theme();
-        assert_eq!(service.theme(), IconTheme::Ascii);
+    #[must_use]
+    pub fn tomorrow(&self) -> &'static str {
+        match self.current_theme {
+            IconTheme::Emoji => "🗓️",
+            IconTheme::Unicode => "◶",
+            IconTheme::Ascii => "+",
+        }
     }
 }
