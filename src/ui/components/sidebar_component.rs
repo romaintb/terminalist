@@ -212,7 +212,7 @@ impl SidebarComponent {
 impl Component for SidebarComponent {
     fn handle_key_events(&mut self, key: KeyEvent) -> Action {
         use crossterm::event::KeyModifiers;
-        
+
         match key.code {
             KeyCode::Char('J') => {
                 let next_selection = self.get_next_selection();
