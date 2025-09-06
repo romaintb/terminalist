@@ -8,7 +8,7 @@ use ratatui::{
 };
 
 pub fn render_label_creation_dialog(f: &mut Frame, area: Rect, icons: &IconService, input_buffer: &str) {
-    let dialog_area = LayoutManager::centered_rect(60, 15, area);
+    let dialog_area = LayoutManager::centered_rect_lines(60, 8, area);
     f.render_widget(Clear, dialog_area);
 
     let title = format!("{} Create New Label", icons.info());
@@ -41,7 +41,7 @@ pub fn render_label_creation_dialog(f: &mut Frame, area: Rect, icons: &IconServi
 }
 
 pub fn render_label_edit_dialog(f: &mut Frame, area: Rect, icons: &IconService, input_buffer: &str) {
-    let dialog_area = LayoutManager::centered_rect(60, 15, area);
+    let dialog_area = LayoutManager::centered_rect_lines(60, 8, area);
     f.render_widget(Clear, dialog_area);
 
     let title = format!("{} Edit Label", icons.info());

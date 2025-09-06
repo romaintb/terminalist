@@ -9,7 +9,7 @@ use ratatui::{
 };
 
 pub fn render_delete_confirmation_dialog(f: &mut Frame, area: Rect, icons: &IconService, item_type: &str) {
-    let dialog_area = LayoutManager::centered_rect(50, 10, area);
+    let dialog_area = LayoutManager::centered_rect_lines(50, 6, area);
     f.render_widget(Clear, dialog_area);
 
     let title = format!("{} Confirm Delete", icons.warning());
@@ -50,7 +50,7 @@ pub fn render_info_dialog(
     scroll_offset: usize,
     scrollbar_state: &mut ScrollbarState,
 ) {
-    let dialog_area = LayoutManager::centered_rect(60, 15, area);
+    let dialog_area = LayoutManager::centered_rect_lines(60, 10, area);
     f.render_widget(Clear, dialog_area);
 
     let title = format!("{} Info", icons.info());
@@ -133,7 +133,7 @@ pub fn render_error_dialog(
     scroll_offset: usize,
     scrollbar_state: &mut ScrollbarState,
 ) {
-    let dialog_area = LayoutManager::centered_rect(70, 15, area);
+    let dialog_area = LayoutManager::centered_rect_lines(70, 12, area);
     f.render_widget(Clear, dialog_area);
 
     let title = format!("{} Error", icons.warning());

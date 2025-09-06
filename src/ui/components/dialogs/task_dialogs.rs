@@ -16,7 +16,7 @@ pub fn render_task_creation_dialog(
     projects: &[ProjectDisplay],
     selected_project_index: usize,
 ) {
-    let dialog_area = LayoutManager::centered_rect(60, 20, area);
+    let dialog_area = LayoutManager::centered_rect_lines(60, 10, area);
     f.render_widget(Clear, dialog_area);
 
     let title = format!("{} Create New Task", icons.info());
@@ -61,7 +61,7 @@ pub fn render_task_creation_dialog(
 }
 
 pub fn render_task_edit_dialog(f: &mut Frame, area: Rect, icons: &IconService, input_buffer: &str) {
-    let dialog_area = LayoutManager::centered_rect(60, 15, area);
+    let dialog_area = LayoutManager::centered_rect_lines(60, 8, area);
     f.render_widget(Clear, dialog_area);
 
     let title = format!("{} Edit Task", icons.info());
