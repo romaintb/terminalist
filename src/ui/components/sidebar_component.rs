@@ -211,12 +211,22 @@ impl SidebarComponent {
 
 impl Component for SidebarComponent {
     fn handle_key_events(&mut self, key: KeyEvent) -> Action {
+        use crossterm::event::KeyModifiers;
+        
         match key.code {
-            KeyCode::Char('J') | KeyCode::Down => {
+            KeyCode::Char('J') => {
                 let next_selection = self.get_next_selection();
                 Action::NavigateToSidebar(next_selection)
             }
-            KeyCode::Char('K') | KeyCode::Up => {
+            KeyCode::Char('K') => {
+                let prev_selection = self.get_previous_selection();
+                Action::NavigateToSidebar(prev_selection)
+            }
+            KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                let next_selection = self.get_next_selection();
+                Action::NavigateToSidebar(next_selection)
+            }
+            KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 let prev_selection = self.get_previous_selection();
                 Action::NavigateToSidebar(prev_selection)
             }
