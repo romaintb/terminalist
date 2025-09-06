@@ -58,7 +58,7 @@ impl TaskManager {
 
         let handle = tokio::spawn(async move {
             // Send sync started notification
-            let _ = action_sender.send(Action::None); // Could add SyncStarted action
+            let _ = action_sender.send(Action::StartSync);
 
             match sync_service.force_sync().await {
                 Ok(status) => {
@@ -276,12 +276,6 @@ impl TaskManager {
     }
 }
 
-impl Default for TaskManager {
-    fn default() -> Self {
-        let (manager, _rx) = Self::new();
-        manager
-    }
-}
 
 impl Drop for TaskManager {
     fn drop(&mut self) {
