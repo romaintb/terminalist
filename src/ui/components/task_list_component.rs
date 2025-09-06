@@ -1,5 +1,6 @@
 use crate::icons::IconService;
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
+use crate::ui::components::badge::{create_task_badges, create_priority_badge};
 use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
     actions::{Action, DialogType},
@@ -16,49 +17,6 @@ use ratatui::{
 };
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Copy)]
-/// Badge styles optimized for terminal compatibility
-enum BadgeStyle {
-    Primary,
-    #[allow(dead_code)]
-    Success,
-    Warning,
-    Danger,
-    Info,
-    Secondary,
-}
-
-impl BadgeStyle {
-    fn to_style(self) -> Style {
-        match self {
-            // Use bright colors with proper backgrounds for better visibility
-            BadgeStyle::Primary => Style::default()
-                .fg(Color::Black)
-                .bg(Color::LightBlue)
-                .add_modifier(Modifier::BOLD),
-            BadgeStyle::Success => Style::default()
-                .fg(Color::Black)
-                .bg(Color::LightGreen)
-                .add_modifier(Modifier::BOLD),
-            BadgeStyle::Warning => Style::default()
-                .fg(Color::Black)
-                .bg(Color::LightYellow)
-                .add_modifier(Modifier::BOLD),
-            BadgeStyle::Danger => Style::default()
-                .fg(Color::White)
-                .bg(Color::Red)
-                .add_modifier(Modifier::BOLD),
-            BadgeStyle::Info => Style::default()
-                .fg(Color::Black)
-                .bg(Color::LightCyan)
-                .add_modifier(Modifier::BOLD),
-            BadgeStyle::Secondary => Style::default()
-                .fg(Color::White)
-                .bg(Color::Gray)
-                .add_modifier(Modifier::BOLD),
-        }
-    }
-}
 
 pub struct TaskListComponent {
     pub tasks: Vec<TaskDisplay>,
@@ -368,7 +326,7 @@ impl TaskListComponent {
         line_spans.push(Span::styled(format!("{} ", status_icon), status_style));
 
         // Priority badge (if any)
-        if let Some(priority_badge) = self.create_priority_badge(task.priority) {
+        if let Some(priority_badge) = create_priority_badge(task.priority) {
             line_spans.push(priority_badge);
             line_spans.push(Span::raw(" "));
         }
@@ -406,7 +364,7 @@ impl TaskListComponent {
         }
 
         // Metadata badges
-        let metadata_badges = self.create_task_badges(
+        let metadata_badges = create_task_badges(
             task.is_recurring,
             task.due.is_some() || task.deadline.is_some(),
             task.duration.as_deref(),
@@ -426,89 +384,6 @@ impl TaskListComponent {
         self.tasks.get(self.selected_index)
     }
 
-    /// Create priority badges with better terminal support
-    fn create_priority_badge(&self, priority: i32) -> Option<Span<'static>> {
-        match priority {
-            4 => Some(self.create_badge("P1", BadgeStyle::Danger)), // P1 = red (highest priority)
-            3 => Some(self.create_badge("P2", BadgeStyle::Warning)), // P2 = orange
-            2 => Some(self.create_badge("P3", BadgeStyle::Info)),   // P3 = blue
-            1 => Some(self.create_badge("P4", BadgeStyle::Secondary)), // P4 = white (no priority/default)
-            _ => Some(self.create_badge("P4", BadgeStyle::Secondary)), // Unknown priority = P4 = white
-        }
-    }
-
-    /// Create task badges optimized for terminal compatibility
-    fn create_task_badges(
-        &self,
-        is_recurring: bool,
-        has_deadline: bool,
-        duration: Option<&str>,
-        labels: &[LabelDisplay],
-    ) -> Vec<Span<'static>> {
-        let mut badges = Vec::new();
-
-        if is_recurring {
-            badges.push(self.create_bracket_badge("REC", BadgeStyle::Primary));
-        }
-
-        if has_deadline {
-            badges.push(self.create_bracket_badge("DUE", BadgeStyle::Danger));
-        }
-
-        if let Some(duration) = duration {
-            badges.push(self.create_paren_badge(duration, BadgeStyle::Warning));
-        }
-
-        // Add label badges
-        for label in labels {
-            badges.push(self.create_label_badge(&label.name, &label.color));
-        }
-
-        badges
-    }
-
-    /// Create a terminal-optimized badge with text and style
-    fn create_badge(&self, text: &str, style: BadgeStyle) -> Span<'static> {
-        Span::styled(format!(" {text} "), style.to_style())
-    }
-
-    /// Create badges with brackets (ASCII fallback)
-    fn create_bracket_badge(&self, text: &str, style: BadgeStyle) -> Span<'static> {
-        Span::styled(format!("[{text}]"), style.to_style())
-    }
-
-    /// Create badges with parentheses
-    fn create_paren_badge(&self, text: &str, style: BadgeStyle) -> Span<'static> {
-        Span::styled(format!("({text})"), style.to_style())
-    }
-
-    /// Create a label badge with custom color
-    fn create_label_badge(&self, name: &str, color: &str) -> Span<'static> {
-        // Convert Todoist color names to terminal colors
-        let bg_color = match color.to_lowercase().as_str() {
-            "red" => Color::Red,
-            "orange" => Color::Rgb(255, 165, 0), // Orange
-            "yellow" => Color::Yellow,
-            "green" => Color::Green,
-            "blue" => Color::Blue,
-            "purple" => Color::Magenta,
-            "pink" => Color::Rgb(255, 192, 203), // Pink
-            "brown" => Color::Rgb(139, 69, 19),  // Brown
-            "charcoal" => Color::DarkGray,
-            "gray" => Color::Gray,
-            "silver" => Color::White, // Changed from LightGray which doesn't exist
-            "teal" => Color::Cyan,
-            "navy" => Color::Rgb(0, 0, 128), // Navy
-            _ => Color::Blue,                // Default fallback
-        };
-
-        let style = Style::default()
-            .bg(bg_color)
-            .fg(Color::White)
-            .add_modifier(Modifier::BOLD);
-
-        Span::styled(format!(" {name} "), style)
-    }
 
     /// Create a section header item
     fn create_section_header(&self, name: &str) -> ListItem<'static> {
