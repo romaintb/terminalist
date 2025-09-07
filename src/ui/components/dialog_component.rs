@@ -18,6 +18,7 @@ pub struct DialogComponent {
     pub labels: Vec<LabelDisplay>,
     pub selected_project_index: usize,
     pub selected_parent_project_index: Option<usize>, // For project creation parent selection
+    pub selected_task_project_index: Option<usize>, // For task creation project selection (None = no project/inbox)
     pub icons: IconService,
     // Scrolling support for long content dialogs
     pub scroll_offset: usize,
@@ -42,6 +43,7 @@ impl DialogComponent {
             labels: Vec::new(),
             selected_project_index: 0,
             selected_parent_project_index: None,
+            selected_task_project_index: None, // Default to "None" for tasks (no project)
             icons: IconService::default(),
             scroll_offset: 0,
             scrollbar_state: ScrollbarState::new(0),
@@ -62,6 +64,14 @@ impl DialogComponent {
             .collect()
     }
 
+    /// Get root non-inbox projects for task creation (excludes inbox project)
+    pub fn get_task_projects(&self) -> Vec<&ProjectDisplay> {
+        self.projects
+            .iter()
+            .filter(|project| project.parent_id.is_none() && !project.is_inbox_project)
+            .collect()
+    }
+
     pub fn set_debug_logger(&mut self, logger: DebugLogger) {
         self.debug_logger = Some(logger);
     }
@@ -74,12 +84,17 @@ impl DialogComponent {
         match &self.dialog_type {
             Some(DialogType::TaskCreation { default_project_id }) => {
                 if !self.input_buffer.is_empty() {
-                    // Use the default project ID if provided, otherwise use selected project
+                    // Use the default project ID if provided, otherwise use selected task project or None
                     let project_id = default_project_id.clone().or_else(|| {
-                        if !self.projects.is_empty() {
-                            Some(self.projects[self.selected_project_index].id.clone())
+                        if let Some(task_index) = self.selected_task_project_index {
+                            let task_projects = self.get_task_projects();
+                            if task_index < task_projects.len() {
+                                Some(task_projects[task_index].id.clone())
+                            } else {
+                                None
+                            }
                         } else {
-                            None
+                            None // Task goes to inbox (no project)
                         }
                     });
 
@@ -191,6 +206,7 @@ impl DialogComponent {
         self.cursor_position = 0;
         self.selected_project_index = 0;
         self.selected_parent_project_index = None;
+        self.selected_task_project_index = None; // Reset to "None" for task creation
         self.scroll_offset = 0;
         self.scrollbar_state = ScrollbarState::new(0);
     }
@@ -220,13 +236,14 @@ impl DialogComponent {
     }
 
     fn render_task_creation_dialog(&self, f: &mut Frame, area: Rect) {
+        let task_projects = self.get_task_projects();
         task_dialogs::render_task_creation_dialog(
             f,
             area,
             &self.icons,
             &self.input_buffer,
-            &self.projects,
-            self.selected_project_index,
+            &task_projects,
+            self.selected_task_project_index,
         );
     }
 
@@ -439,10 +456,21 @@ impl Component for DialogComponent {
                         Action::None
                     }
                     KeyCode::Tab => {
-                        if matches!(self.dialog_type, Some(DialogType::TaskCreation { .. }))
-                            && !self.projects.is_empty()
-                        {
-                            self.selected_project_index = (self.selected_project_index + 1) % self.projects.len();
+                        if matches!(self.dialog_type, Some(DialogType::TaskCreation { .. })) {
+                            let task_projects = self.get_task_projects();
+                            if !task_projects.is_empty() {
+                                self.selected_task_project_index = match self.selected_task_project_index {
+                                    None => Some(0), // First tab: select first project
+                                    Some(index) => {
+                                        let next_index = (index + 1) % (task_projects.len() + 1);
+                                        if next_index == task_projects.len() {
+                                            None // Cycle back to "None" option
+                                        } else {
+                                            Some(next_index)
+                                        }
+                                    }
+                                };
+                            }
                         } else if matches!(self.dialog_type, Some(DialogType::ProjectCreation)) {
                             let root_projects = self.get_root_projects();
                             if !root_projects.is_empty() {
