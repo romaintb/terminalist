@@ -17,6 +17,7 @@ pub struct DialogComponent {
     pub projects: Vec<ProjectDisplay>,
     pub labels: Vec<LabelDisplay>,
     pub selected_project_index: usize,
+    pub selected_parent_project_index: Option<usize>, // For project creation parent selection
     pub icons: IconService,
     // Scrolling support for long content dialogs
     pub scroll_offset: usize,
@@ -40,6 +41,7 @@ impl DialogComponent {
             projects: Vec::new(),
             labels: Vec::new(),
             selected_project_index: 0,
+            selected_parent_project_index: None,
             icons: IconService::default(),
             scroll_offset: 0,
             scrollbar_state: ScrollbarState::new(0),
@@ -50,6 +52,14 @@ impl DialogComponent {
     pub fn update_data(&mut self, projects: Vec<ProjectDisplay>, labels: Vec<LabelDisplay>) {
         self.projects = projects;
         self.labels = labels;
+    }
+
+    /// Get root projects (projects without a parent) for parent selection
+    pub fn get_root_projects(&self) -> Vec<&ProjectDisplay> {
+        self.projects
+            .iter()
+            .filter(|project| project.parent_id.is_none())
+            .collect()
     }
 
     pub fn set_debug_logger(&mut self, logger: DebugLogger) {
@@ -97,9 +107,20 @@ impl DialogComponent {
             }
             Some(DialogType::ProjectCreation) => {
                 if !self.input_buffer.is_empty() {
+                    let parent_id = if let Some(parent_index) = self.selected_parent_project_index {
+                        let root_projects = self.get_root_projects();
+                        if parent_index < root_projects.len() {
+                            Some(root_projects[parent_index].id.clone())
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
                     let action = Action::CreateProject {
                         name: self.input_buffer.clone(),
-                        parent_id: None,
+                        parent_id,
                     };
                     self.clear_dialog();
                     action
@@ -169,6 +190,7 @@ impl DialogComponent {
         self.input_buffer.clear();
         self.cursor_position = 0;
         self.selected_project_index = 0;
+        self.selected_parent_project_index = None;
         self.scroll_offset = 0;
         self.scrollbar_state = ScrollbarState::new(0);
     }
@@ -209,7 +231,15 @@ impl DialogComponent {
     }
 
     fn render_project_creation_dialog(&self, f: &mut Frame, area: Rect) {
-        project_dialogs::render_project_creation_dialog(f, area, &self.icons, &self.input_buffer);
+        let root_projects = self.get_root_projects();
+        project_dialogs::render_project_creation_dialog(
+            f,
+            area,
+            &self.icons,
+            &self.input_buffer,
+            &root_projects,
+            self.selected_parent_project_index,
+        );
     }
 
     fn render_project_edit_dialog(&self, f: &mut Frame, area: Rect) {
@@ -413,6 +443,21 @@ impl Component for DialogComponent {
                             && !self.projects.is_empty()
                         {
                             self.selected_project_index = (self.selected_project_index + 1) % self.projects.len();
+                        } else if matches!(self.dialog_type, Some(DialogType::ProjectCreation)) {
+                            let root_projects = self.get_root_projects();
+                            if !root_projects.is_empty() {
+                                self.selected_parent_project_index = match self.selected_parent_project_index {
+                                    None => Some(0), // First tab: select first parent
+                                    Some(index) => {
+                                        let next_index = (index + 1) % (root_projects.len() + 1);
+                                        if next_index == root_projects.len() {
+                                            None // Cycle back to "None" option
+                                        } else {
+                                            Some(next_index)
+                                        }
+                                    }
+                                };
+                            }
                         }
                         Action::None
                     }
