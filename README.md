@@ -1,5 +1,12 @@
 # Terminalist - Todoist Terminal Client
 
+[![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org)
+[![Build Status](https://github.com/romaintb/terminalist/workflows/CI/badge.svg)](https://github.com/romaintb/terminalist/actions)
+[![Crates.io](https://img.shields.io/crates/v/terminalist.svg)](https://crates.io/crates/terminalist)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Terminal](https://img.shields.io/badge/terminal-TUI-brightgreen.svg)](https://github.com/romaintb/terminalist)
+[![Todoist](https://img.shields.io/badge/Todoist-API-red.svg)](https://developer.todoist.com)
+
 A terminal application for interacting with Todoist, built in Rust with a modern TUI interface.
 
 ## Features
