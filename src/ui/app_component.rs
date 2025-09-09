@@ -890,6 +890,15 @@ impl AppComponent {
     /// Process an event through the component hierarchy
     pub async fn handle_event(&mut self, event_type: EventType) -> anyhow::Result<()> {
         let action = match event_type {
+            EventType::Mouse(mouse) => {
+                // Handle mouse events - assume sidebar is left 30 columns
+                if !self.dialog.is_visible() && mouse.column < 30 {
+                    let sidebar_area = Rect::new(0, 0, 30, 50); // Approximate sidebar area
+                    self.sidebar.handle_mouse(mouse, sidebar_area)
+                } else {
+                    Action::None
+                }
+            }
             EventType::Key(key) => {
                 // Route keyboard events to components or handle globally
                 if self.dialog.is_visible() {

@@ -239,6 +239,7 @@ NAVIGATION
 ----------
 j/k         Navigate tasks (down/up)
 J/K         Navigate projects (down/up)
+Mouse       Click sidebar items to navigate
 Enter       Select project/task or confirm action
 Esc         Cancel action or close dialogs
 

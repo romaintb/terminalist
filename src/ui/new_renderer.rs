@@ -2,7 +2,7 @@ use crate::sync::SyncService;
 use crate::ui::app_component::AppComponent;
 use crate::ui::core::{Component, EventHandler, EventType};
 use crossterm::{
-    event::DisableMouseCapture,
+    event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
@@ -18,7 +18,7 @@ pub async fn run_new_app(sync_service: SyncService) -> anyhow::Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -69,7 +69,7 @@ async fn run_app_loop<B: Backend>(
         let event_result = event_handler.next_event().await?;
 
         match event_result {
-            EventType::Key(_) | EventType::Resize(_, _) => {
+            EventType::Key(_) | EventType::Mouse(_) | EventType::Resize(_, _) => {
                 app.handle_event(event_result).await?;
                 needs_render = true;
             }
