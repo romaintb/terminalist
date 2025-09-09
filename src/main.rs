@@ -52,7 +52,7 @@ async fn main() -> Result<()> {
 
     match tokio::time::timeout(tokio::time::Duration::from_secs(10), sync::SyncService::new(api_token)).await {
         Ok(Ok(sync_service)) => {
-            ui::run_new_app(sync_service).await?;
+            ui::run_app(sync_service).await?;
         }
         Ok(Err(e)) => {
             return Err(e);

@@ -438,7 +438,7 @@ src/
 │   └── date.rs                # Date/time utilities
 └── ui/                        # Modern Component-Based Architecture
     ├── app_component.rs       # Main application orchestrator
-    ├── new_renderer.rs        # Modern rendering system
+    ├── renderer.rs            # Modern rendering system
     ├── core/                  # Core architecture components
     │   ├── actions.rs         # Action system for component communication
     │   ├── component.rs       # Component trait and lifecycle
