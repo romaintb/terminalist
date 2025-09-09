@@ -110,31 +110,3 @@ async fn run_app_loop<B: Backend>(
     Ok(())
 }
 
-/// Status information about the application
-#[derive(Debug, Clone)]
-pub struct AppStatus {
-    pub active_tasks: usize,
-    pub is_syncing: bool,
-    pub last_sync: Option<std::time::SystemTime>,
-    pub total_tasks: usize,
-    pub total_projects: usize,
-}
-
-impl AppComponent {
-    /// Get current application status for monitoring
-    pub fn get_status(&self) -> AppStatus {
-        AppStatus {
-            active_tasks: self.active_task_count(),
-            is_syncing: self.is_syncing(),
-            last_sync: None, // TODO: Track last sync time
-            total_tasks: self.total_tasks(),
-            total_projects: self.total_projects(),
-        }
-    }
-
-    /// Force a render on the next loop iteration
-    pub fn request_render(&mut self) {
-        // This could set a flag that the render loop checks
-        // For now, the render loop handles this automatically
-    }
-}

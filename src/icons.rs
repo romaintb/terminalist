@@ -234,20 +234,8 @@ impl IconService {
         self.icons().task_status.deleted
     }
 
-    #[must_use]
-    pub fn tasks_title(&self) -> &'static str {
-        self.icons().ui.tasks_title
-    }
 
-    #[must_use]
-    pub fn projects_title(&self) -> &'static str {
-        self.icons().ui.projects_title
-    }
 
-    #[must_use]
-    pub fn error(&self) -> &'static str {
-        self.icons().ui.error
-    }
 
     #[must_use]
     pub fn info(&self) -> &'static str {
@@ -259,10 +247,6 @@ impl IconService {
         self.icons().ui.warning
     }
 
-    #[must_use]
-    pub fn success(&self) -> &'static str {
-        self.icons().ui.success
-    }
 
     /// Convenience methods for project and label icons
     #[must_use]
