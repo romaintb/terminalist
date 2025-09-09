@@ -18,11 +18,7 @@ pub fn render_delete_confirmation_dialog(f: &mut Frame, area: Rect, icons: &Icon
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .title(title)
-        .title_style(
-            Style::default()
-                .fg(Color::Red)
-                .add_modifier(Modifier::BOLD),
-        )
+        .title_style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
         .style(Style::default().fg(Color::Red));
 
     // Create layout for content
