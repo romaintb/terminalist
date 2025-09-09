@@ -11,7 +11,7 @@ use crate::ui::core::{
 };
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
-    layout::{Constraint, Direction, Layout, Rect},
+    layout::{Constraint, Layout, Rect},
     Frame,
 };
 use tokio::sync::mpsc;
@@ -971,10 +971,7 @@ impl Component for AppComponent {
     fn render(&mut self, f: &mut Frame, rect: Rect) {
         // Create layout: sidebar (1/3 or 30 max) | task list (remainder)
         let sidebar_width = (rect.width / 3).min(30);
-        let main_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Length(sidebar_width), Constraint::Min(0)])
-            .split(rect);
+        let main_chunks = Layout::horizontal([Constraint::Length(sidebar_width), Constraint::Min(0)]).split(rect);
 
         // Render components
         self.sidebar.render(f, main_chunks[0]);
@@ -998,7 +995,7 @@ impl AppComponent {
     /// Render sync status indicator
     fn render_sync_status_impl(&self, f: &mut Frame, rect: Rect) {
         use ratatui::{
-            layout::{Alignment, Constraint, Direction, Layout},
+            layout::{Alignment, Constraint, Layout},
             style::{Color, Style},
             text::{Line, Span},
             widgets::{Block, Borders, Clear, Paragraph},
@@ -1006,23 +1003,19 @@ impl AppComponent {
 
         // Calculate centered area for the sync indicator
         let popup_area = {
-            let popup_layout = Layout::default()
-                .direction(Direction::Vertical)
-                .constraints([
-                    Constraint::Percentage(40),
-                    Constraint::Min(3),
-                    Constraint::Percentage(40),
-                ])
-                .split(rect);
+            let popup_layout = Layout::vertical([
+                Constraint::Percentage(40),
+                Constraint::Min(3),
+                Constraint::Percentage(40),
+            ])
+            .split(rect);
 
-            Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([
-                    Constraint::Percentage(30),
-                    Constraint::Min(30),
-                    Constraint::Percentage(30),
-                ])
-                .split(popup_layout[1])[1]
+            Layout::horizontal([
+                Constraint::Percentage(30),
+                Constraint::Min(30),
+                Constraint::Percentage(30),
+            ])
+            .split(popup_layout[1])[1]
         };
 
         let title = if self.state.loading {
