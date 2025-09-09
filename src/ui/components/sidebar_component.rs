@@ -211,12 +211,22 @@ impl SidebarComponent {
 
 impl Component for SidebarComponent {
     fn handle_key_events(&mut self, key: KeyEvent) -> Action {
+        use crossterm::event::KeyModifiers;
+
         match key.code {
-            KeyCode::Char('J') | KeyCode::Down => {
+            KeyCode::Char('J') => {
                 let next_selection = self.get_next_selection();
                 Action::NavigateToSidebar(next_selection)
             }
-            KeyCode::Char('K') | KeyCode::Up => {
+            KeyCode::Char('K') => {
+                let prev_selection = self.get_previous_selection();
+                Action::NavigateToSidebar(prev_selection)
+            }
+            KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                let next_selection = self.get_next_selection();
+                Action::NavigateToSidebar(next_selection)
+            }
+            KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
                 let prev_selection = self.get_previous_selection();
                 Action::NavigateToSidebar(prev_selection)
             }
@@ -294,8 +304,8 @@ impl Component for SidebarComponent {
 
         // Add projects (sorted hierarchically)
         let sorted_projects = self.get_sorted_projects();
-        for (original_index, project) in sorted_projects {
-            let is_selected = matches!(self.selection, SidebarSelection::Project(i) if i == original_index);
+        for (i, (original_index, project)) in sorted_projects.iter().enumerate() {
+            let is_selected = matches!(self.selection, SidebarSelection::Project(idx) if idx == *original_index);
             let style = if is_selected {
                 Style::default()
                     .fg(Color::Yellow)
@@ -304,30 +314,41 @@ impl Component for SidebarComponent {
                 Style::default().fg(Color::White)
             };
 
-            // Calculate indentation based on tree depth
             let depth = self.calculate_tree_depth(project);
-            let indent = "  ".repeat(depth);
+            let tree_prefix = if depth > 0 {
+                let is_last = i + 1 == sorted_projects.len() || sorted_projects[i + 1].1.parent_id != project.parent_id;
+                if is_last {
+                    "└─"
+                } else {
+                    "├─"
+                }
+            } else {
+                ""
+            };
 
-            // Choose icon based on favorite status
             let icon = if project.is_favorite {
                 self.icons.project_favorite()
             } else {
                 self.icons.project_regular()
             };
 
-            // Truncate project name accounting for indentation
-            let available_width = max_name_width.saturating_sub(indent.len() as u16);
-            let truncated_name = if project.name.len() > available_width as usize {
+            let available_width = max_name_width.saturating_sub(tree_prefix.len() as u16);
+            let name = if project.name.len() > available_width as usize {
                 format!("{}...", &project.name[..available_width.saturating_sub(3) as usize])
             } else {
                 project.name.clone()
             };
 
-            all_items.push(ListItem::new(Line::from(vec![
-                Span::styled(indent, style),
+            let mut spans = vec![];
+            if !tree_prefix.is_empty() {
+                spans.push(Span::styled(tree_prefix, Style::default().fg(Color::DarkGray)));
+            }
+            spans.extend([
                 Span::styled(icon.to_string(), style),
-                Span::styled(truncated_name.to_string(), style),
-            ])));
+                Span::styled(name, style),
+            ]);
+
+            all_items.push(ListItem::new(Line::from(spans)));
         }
 
         let list = List::new(all_items)

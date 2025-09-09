@@ -115,7 +115,7 @@ pub fn create_task_badges(
     let mut badges = Vec::new();
 
     if is_recurring {
-        badges.push(create_bracket_badge("REC", BadgeStyle::Primary));
+        badges.push(Span::styled("🔄", Style::default()));
     }
 
     if has_deadline {
@@ -134,14 +134,27 @@ pub fn create_task_badges(
     badges
 }
 
-/// Create priority badges with better terminal support
+/// Create priority badges with flag symbols
 #[must_use]
 pub fn create_priority_badge(priority: i32) -> Option<Span<'static>> {
     match priority {
-        4 => Some(create_badge("P1", BadgeStyle::Danger)), // P1 = red (highest priority)
-        3 => Some(create_badge("P2", BadgeStyle::Warning)), // P2 = orange
-        2 => Some(create_badge("P3", BadgeStyle::Info)),   // P3 = blue
-        1 => Some(create_badge("P4", BadgeStyle::Secondary)), // P4 = white (no priority/default)
-        _ => Some(create_badge("P4", BadgeStyle::Secondary)), // Unknown priority = P4 = white
+        4 => Some(Span::styled(
+            "⚑",
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )), // P1 = red flag
+        3 => Some(Span::styled(
+            "⚑",
+            Style::default()
+                .fg(Color::Rgb(255, 165, 0))
+                .add_modifier(Modifier::BOLD),
+        )), // P2 = orange flag
+        2 => Some(Span::styled(
+            "⚑",
+            Style::default()
+                .fg(Color::Blue)
+                .add_modifier(Modifier::BOLD),
+        )), // P3 = blue flag
+        1 => Some(Span::styled("⚐", Style::default().fg(Color::White))), // P4 = white flag (default color)
+        _ => Some(Span::styled("⚐", Style::default().fg(Color::White))), // Unknown priority = P4 = white flag
     }
 }

@@ -424,6 +424,7 @@ impl Component for TaskListComponent {
                     Action::ShowDialog(DialogType::TaskEdit {
                         task_id: task.id.clone(),
                         content: task.content.clone(),
+                        project_id: task.project_id.clone(),
                     })
                 } else {
                     Action::None
