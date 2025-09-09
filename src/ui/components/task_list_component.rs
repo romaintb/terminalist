@@ -9,7 +9,7 @@ use crate::ui::core::{
 use chrono;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
-    layout::{Alignment, Rect},
+    layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, List, ListItem, ListState},
@@ -544,12 +544,8 @@ impl Component for TaskListComponent {
                 "No tasks in this project. Press 'a' to create a task."
             };
 
-            let empty_list = List::new(vec![ListItem::new(empty_message)]).block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(format!("{} Tasks", self.icons.tasks_title()))
-                    .title_alignment(Alignment::Center),
-            );
+            let empty_list = List::new(vec![ListItem::new(empty_message)])
+                .block(Block::default().borders(Borders::ALL).title("Tasks"));
 
             f.render_stateful_widget(empty_list, rect, &mut self.list_state);
         } else {
@@ -558,12 +554,7 @@ impl Component for TaskListComponent {
             let mut list_state = self.list_state.clone();
 
             let tasks_list = List::new(items)
-                .block(
-                    Block::default()
-                        .borders(Borders::ALL)
-                        .title(format!("{} Tasks", self.icons.tasks_title()))
-                        .title_alignment(Alignment::Center),
-                )
+                .block(Block::default().borders(Borders::ALL).title("Tasks"))
                 .highlight_style(
                     Style::default()
                         .bg(Color::DarkGray)
