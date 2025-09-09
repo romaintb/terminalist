@@ -30,6 +30,7 @@ async fn main() -> Result<()> {
         println!("NAVIGATION:");
         println!("    J/K           Navigate sidebar items (projects/labels/views)");
         println!("    j/k           Navigate task items");
+        println!("    Mouse         Click sidebar items to navigate");
         println!("    ?/h           Toggle help dialog");
         println!();
         return Ok(());

@@ -9,7 +9,7 @@ A terminal application for interacting with Todoist, built in Rust with a modern
 - ✅ **Smart Sync** - Automatic sync on startup and manual refresh with 'r'
 - ✅ **Project Management** - Browse projects with hierarchical display
 - ✅ **Task Management** - View, navigate, complete, and create tasks
-- ✅ **Keyboard Navigation** - Efficient keyboard-only operation
+- ✅ **Keyboard & Mouse Navigation** - Efficient keyboard operation with mouse support
 - ✅ **Real-time Updates** - Create, complete, and delete tasks/projects
 - ✅ **Label Support** - View task labels with colored badges
 - ✅ **Responsive Layout** - Adapts to terminal size with smart scaling
@@ -43,6 +43,7 @@ Once the application is running, you can use these keyboard shortcuts:
 ### **Navigation**
 - **`j/k`** Navigate between tasks (down/up)
 - **`J/K`** Navigate between projects (down/up)
+- **Mouse** Click on sidebar items to navigate
 
 ### **Task Management**
 - **`Space`** or **`Enter`** Toggle task completion (complete ↔ reopen)
@@ -135,7 +136,7 @@ This project uses the following Rust crates:
 ```
 src/
 ├── main.rs                    # Main application entry point
-├── lib.rs                     # Library exports  
+├── lib.rs                     # Library exports
 ├── todoist.rs                 # Todoist API models & display structs
 ├── sync.rs                    # Sync service with API integration
 ├── storage.rs                 # SQLite storage (in-memory)
