@@ -14,7 +14,7 @@ use std::io;
 use tokio::time::{interval, Duration};
 
 /// Enhanced async event loop with proper background task support
-pub async fn run_new_app(sync_service: SyncService) -> anyhow::Result<()> {
+pub async fn run_app(sync_service: SyncService) -> anyhow::Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
