@@ -534,10 +534,11 @@ impl Component for DialogComponent {
                     DialogType::TaskCreation { default_project_id } => {
                         self.input_buffer.clear();
                         self.cursor_position = 0;
-                        // Set the selected project index if a default project is provided
+                        // Set the selected task project index if a default project is provided
                         if let Some(project_id) = default_project_id {
-                            if let Some(index) = self.projects.iter().position(|p| &p.id == project_id) {
-                                self.selected_project_index = index;
+                            let task_projects = self.get_task_projects();
+                            if let Some(index) = task_projects.iter().position(|p| &p.id == project_id) {
+                                self.selected_task_project_index = Some(index);
                             }
                         }
                     }
