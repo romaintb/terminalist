@@ -1,6 +1,6 @@
 //! Layout management and calculations
 
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Rect};
 
 /// Manages layout calculations and constraints for the UI
 pub struct LayoutManager;
@@ -28,22 +28,18 @@ impl LayoutManager {
         let projects_width = std::cmp::min(area.width / 3, 30); // Projects: 1/3 of width, max 30
         let tasks_width = area.width.saturating_sub(projects_width); // Tasks: remaining width
 
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Length(projects_width),
-                Constraint::Length(tasks_width),
-            ])
-            .split(area)
-            .to_vec()
+        Layout::horizontal([
+            Constraint::Length(projects_width),
+            Constraint::Length(tasks_width),
+        ])
+        .split(area)
+        .to_vec()
     }
 
     /// Calculate the right pane layout (tasks + status bar)
     #[must_use]
     pub fn right_pane_layout(area: Rect, status_height: u16) -> Vec<Rect> {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([Constraint::Min(0), Constraint::Length(status_height)])
+        Layout::vertical([Constraint::Min(0), Constraint::Length(status_height)])
             .split(area)
             .to_vec()
     }
@@ -65,45 +61,37 @@ impl LayoutManager {
     /// Calculate a centered rectangle within the given area
     #[must_use]
     pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
-        let popup_layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Percentage((100 - percent_y) / 2),
-                Constraint::Percentage(percent_y),
-                Constraint::Percentage((100 - percent_y) / 2),
-            ])
-            .split(r);
+        let popup_layout = Layout::vertical([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
 
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage((100 - percent_x) / 2),
-                Constraint::Percentage(percent_x),
-                Constraint::Percentage((100 - percent_x) / 2),
-            ])
-            .split(popup_layout[1])[1]
+        Layout::horizontal([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
     }
 
     /// Calculate a centered rectangle with percentage width and fixed line height
     #[must_use]
     pub fn centered_rect_lines(percent_x: u16, height_lines: u16, r: Rect) -> Rect {
-        let popup_layout = Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Min(0),
-                Constraint::Length(height_lines),
-                Constraint::Min(0),
-            ])
-            .split(r);
+        let popup_layout = Layout::vertical([
+            Constraint::Min(0),
+            Constraint::Length(height_lines),
+            Constraint::Min(0),
+        ])
+        .split(r);
 
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage((100 - percent_x) / 2),
-                Constraint::Percentage(percent_x),
-                Constraint::Percentage((100 - percent_x) / 2),
-            ])
-            .split(popup_layout[1])[1]
+        Layout::horizontal([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
     }
 
     /// Calculate help panel dimensions based on screen size
