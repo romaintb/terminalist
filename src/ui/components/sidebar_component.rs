@@ -237,17 +237,16 @@ impl SidebarComponent {
 
     /// Handle mouse events
     pub fn handle_mouse(&mut self, mouse: MouseEvent, area: Rect) -> Action {
-        if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
-            if mouse.column >= area.x
-                && mouse.column < area.x + area.width
-                && mouse.row >= area.y + 1
-                && mouse.row < area.y + area.height - 1
-            {
-                let clicked_index = (mouse.row - area.y - 1) as usize;
-                let selection = self.index_to_selection(clicked_index);
-                self.list_state.select(Some(clicked_index));
-                return Action::NavigateToSidebar(selection);
-            }
+        if mouse.kind == MouseEventKind::Down(MouseButton::Left)
+            && mouse.column >= area.x
+            && mouse.column < area.x + area.width
+            && mouse.row > area.y
+            && mouse.row < area.y + area.height - 1
+        {
+            let clicked_index = (mouse.row - area.y - 1) as usize;
+            let selection = self.index_to_selection(clicked_index);
+            self.list_state.select(Some(clicked_index));
+            return Action::NavigateToSidebar(selection);
         }
         Action::None
     }
