@@ -301,6 +301,23 @@ impl TaskListComponent {
         items
     }
 
+    fn format_due_date(&self, due_date: &str) -> String {
+        if let Ok(task_date) = chrono::NaiveDate::parse_from_str(due_date, "%Y-%m-%d") {
+            let today = chrono::Utc::now().date_naive();
+            let tomorrow = today.succ_opt().unwrap_or(today);
+
+            if task_date == today {
+                "today".to_string()
+            } else if task_date == tomorrow {
+                "tomorrow".to_string()
+            } else {
+                due_date.to_string()
+            }
+        } else {
+            due_date.to_string()
+        }
+    }
+
     fn create_task_item(&self, task: &TaskDisplay, _max_width: usize) -> ListItem<'_> {
         // Create status indicator
         let status_icon = if task.is_deleted {
@@ -357,7 +374,7 @@ impl TaskListComponent {
         if let Some(due_date) = &task.due {
             line_spans.push(Span::raw(" "));
             line_spans.push(Span::styled(
-                due_date.clone(),
+                self.format_due_date(due_date),
                 Style::default().fg(Color::Rgb(255, 165, 0)), // Orange color
             ));
         }
