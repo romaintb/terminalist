@@ -255,6 +255,7 @@ Space       Toggle task completion
 a           Create new task
 e           Edit selected task
 d           Delete task (with confirmation)
+p           Cycle task priority
 t           Set task due date to today
 T           Set task due date to tomorrow
 w           Set task due date to next week (Monday)
@@ -285,8 +286,6 @@ TASK STATUS INDICATORS
 🔳          Pending task
 ✅          Completed task
 ❌          Deleted task
-
-Priority badges: [P1] (red, highest), [P2] (orange), [P3] (blue), [P4] (white, default)
 
 LAYOUT DETAILS
 --------------

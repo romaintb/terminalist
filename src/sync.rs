@@ -329,6 +329,39 @@ impl SyncService {
         Ok(())
     }
 
+    /// Update task priority
+    pub async fn update_task_priority(&self, task_id: &str, priority: i32) -> Result<()> {
+        self.log_debug(format!(
+            "API: Updating task priority for ID {} to {}",
+            task_id, priority
+        ));
+
+        // First, update task via API using the UpdateTaskArgs structure
+        let task_args = todoist_api::UpdateTaskArgs {
+            content: None,
+            description: None,
+            labels: None,
+            priority: Some(priority),
+            due_string: None,
+            due_date: None,
+            due_datetime: None,
+            due_lang: None,
+            deadline_date: None,
+            deadline_lang: None,
+            assignee_id: None,
+            duration: None,
+            duration_unit: None,
+        };
+        let _task = self.todoist.update_task(task_id, &task_args).await?;
+
+        // Then update local storage
+        let storage = self.storage.lock().await;
+        storage.update_task_priority(task_id, priority).await?;
+
+        self.log_debug(format!("API: Successfully updated task priority {}", task_id));
+        Ok(())
+    }
+
     /// Delete a project
     pub async fn delete_project(&self, project_id: &str) -> Result<()> {
         // Delete project via API
