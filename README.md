@@ -49,6 +49,7 @@ Once the application is running, you can use these keyboard shortcuts:
 - **`Space`** or **`Enter`** Toggle task completion (complete ↔ reopen)
 - **`a`** Create new task
 - **`d`** Delete selected task (with confirmation)
+- **`p`** Cycle task priority
 - **`t`** Set task due date to today
 - **`T`** Set task due date to tomorrow
 - **`w`** Set task due date to next week (Monday)

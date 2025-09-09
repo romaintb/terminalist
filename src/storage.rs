@@ -1044,6 +1044,18 @@ impl LocalStorage {
         Ok(())
     }
 
+    /// Update a task's priority in local storage
+    pub async fn update_task_priority(&self, task_id: &str, priority: i32) -> Result<()> {
+        sqlx::query("UPDATE tasks SET priority = ?, last_synced = ? WHERE id = ?")
+            .bind(priority)
+            .bind(Utc::now())
+            .bind(task_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
     /// Mark a task as deleted in local storage
     pub async fn delete_task(&self, task_id: &str) -> Result<()> {
         sqlx::query("UPDATE tasks SET is_deleted = true, last_synced = ? WHERE id = ?")

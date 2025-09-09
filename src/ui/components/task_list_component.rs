@@ -418,6 +418,14 @@ impl Component for TaskListComponent {
                     Action::None
                 }
             }
+            KeyCode::Char('p') => {
+                if let Some(task) = self.tasks.get(self.selected_index) {
+                    // Note: Detailed logging done when action is processed by AppComponent
+                    Action::CyclePriority(task.id.clone())
+                } else {
+                    Action::None
+                }
+            }
             KeyCode::Char('e') => {
                 if let Some(task) = self.tasks.get(self.selected_index) {
                     // Note: Detailed logging done when action is processed by AppComponent

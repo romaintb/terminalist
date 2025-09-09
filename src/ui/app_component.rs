@@ -427,6 +427,27 @@ impl AppComponent {
                 self.spawn_task_operation("Toggle task".to_string(), task_id);
                 Action::None
             }
+            Action::CyclePriority(task_id) => {
+                // Find task and cycle its priority
+                if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
+                    // Todoist priorities: 1 (Normal), 2 (High), 3 (Higher), 4 (Highest)
+                    let new_priority = match task.priority {
+                        4 => 1,                 // Highest -> Normal
+                        _ => task.priority + 1, // Normal/High/Higher -> next level
+                    };
+                    let task_desc = format!(
+                        "ID {} '{}' (P{} -> P{})",
+                        task_id, task.content, task.priority, new_priority
+                    );
+                    self.debug_logger
+                        .log(format!("Task: Cycling priority for task {}", task_desc));
+                    self.spawn_task_operation("Cycle priority".to_string(), format!("{}|{}", task_id, new_priority));
+                } else {
+                    self.debug_logger
+                        .log(format!("Task: Cannot cycle priority - task {} not found", task_id));
+                }
+                Action::None
+            }
             Action::DeleteTask(task_id) => {
                 // Find task name for better logging
                 let task_desc = if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
@@ -692,6 +713,21 @@ impl AppComponent {
                         Ok(()) => Ok(format!("✅ Task deleted: {}", task_info)),
                         Err(e) => Err(format!("❌ Failed to delete task: {}", e)),
                     },
+                    "Cycle priority" => {
+                        // task_info format: "task_id|new_priority"
+                        if let Some((task_id, priority_str)) = task_info.split_once('|') {
+                            if let Ok(priority) = priority_str.parse::<i32>() {
+                                match sync_service.update_task_priority(task_id, priority).await {
+                                    Ok(()) => Ok(format!("✅ Task priority updated to P{}: {}", priority, task_id)),
+                                    Err(e) => Err(format!("❌ Failed to update task priority: {}", e)),
+                                }
+                            } else {
+                                Err("❌ Invalid priority value format".to_string())
+                            }
+                        } else {
+                            Err("❌ Invalid task priority info format".to_string())
+                        }
+                    }
                     "Set task due today" => {
                         // task_info format: "task_id|today"
                         if let Some((task_id, _)) = task_info.split_once('|') {
