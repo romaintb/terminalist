@@ -5,74 +5,16 @@ use ratatui::{
 
 use crate::todoist::LabelDisplay;
 
-#[derive(Debug, Clone, Copy)]
-/// Badge styles optimized for terminal compatibility
-pub enum BadgeStyle {
-    Primary,
-    Success,
-    Warning,
-    Danger,
-    Info,
-    Secondary,
-    Bordered,
-    Bold,
-    Underlined,
-}
-
-impl BadgeStyle {
-    fn to_style(self) -> Style {
-        match self {
-            // Use bright colors with proper backgrounds for better visibility
-            BadgeStyle::Primary => Style::default()
-                .fg(Color::Black)
-                .bg(Color::LightBlue)
-                .add_modifier(Modifier::BOLD),
-            BadgeStyle::Success => Style::default()
-                .fg(Color::Black)
-                .bg(Color::LightGreen)
-                .add_modifier(Modifier::BOLD),
-            BadgeStyle::Warning => Style::default()
-                .fg(Color::Black)
-                .bg(Color::LightYellow)
-                .add_modifier(Modifier::BOLD),
-            BadgeStyle::Danger => Style::default()
-                .fg(Color::White)
-                .bg(Color::Red)
-                .add_modifier(Modifier::BOLD),
-            BadgeStyle::Info => Style::default()
-                .fg(Color::Black)
-                .bg(Color::LightCyan)
-                .add_modifier(Modifier::BOLD),
-            BadgeStyle::Secondary => Style::default()
-                .fg(Color::White)
-                .bg(Color::Gray)
-                .add_modifier(Modifier::BOLD),
-            BadgeStyle::Bordered | BadgeStyle::Bold => Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
-            BadgeStyle::Underlined => Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::UNDERLINED | Modifier::BOLD),
-        }
-    }
-}
-
-/// Create a terminal-optimized badge with text and style
+/// Create badges with parentheses for duration
 #[must_use]
-pub fn create_badge(text: &str, style: BadgeStyle) -> Span<'static> {
-    Span::styled(format!(" {text} "), style.to_style())
-}
-
-/// Create badges with brackets (ASCII fallback)
-#[must_use]
-pub fn create_bracket_badge(text: &str, style: BadgeStyle) -> Span<'static> {
-    Span::styled(format!("[{text}]"), style.to_style())
-}
-
-/// Create badges with parentheses
-#[must_use]
-pub fn create_paren_badge(text: &str, style: BadgeStyle) -> Span<'static> {
-    Span::styled(format!("({text})"), style.to_style())
+pub fn create_paren_badge(text: &str) -> Span<'static> {
+    Span::styled(
+        format!("({text})"),
+        Style::default()
+            .fg(Color::Black)
+            .bg(Color::LightYellow)
+            .add_modifier(Modifier::BOLD),
+    )
 }
 
 /// Create a label badge with custom color
@@ -108,7 +50,7 @@ pub fn create_label_badge(name: &str, color: &str) -> Span<'static> {
 #[must_use]
 pub fn create_task_badges(
     is_recurring: bool,
-    has_deadline: bool,
+    _has_deadline: bool,
     duration: Option<&str>,
     labels: &[LabelDisplay],
 ) -> Vec<Span<'static>> {
@@ -118,12 +60,8 @@ pub fn create_task_badges(
         badges.push(Span::styled("🔄", Style::default()));
     }
 
-    if has_deadline {
-        badges.push(create_bracket_badge("DUE", BadgeStyle::Danger));
-    }
-
     if let Some(duration) = duration {
-        badges.push(create_paren_badge(duration, BadgeStyle::Warning));
+        badges.push(create_paren_badge(duration));
     }
 
     // Add label badges

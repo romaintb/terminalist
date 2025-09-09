@@ -541,8 +541,7 @@ impl Component for TaskListComponent {
                 )
                 .highlight_style(
                     Style::default()
-                        .fg(Color::Black)
-                        .bg(Color::White)
+                        .bg(Color::DarkGray)
                         .add_modifier(Modifier::BOLD),
                 );
 
