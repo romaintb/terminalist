@@ -291,7 +291,6 @@ LAYOUT DETAILS
 --------------
 Left pane:  Projects list with selection
 Right pane: Tasks for selected project
-Bottom:     Status bar with shortcuts
 Help:       Modal overlay with scrollable content
 
 NOTES

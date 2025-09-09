@@ -106,13 +106,13 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 #### 3.1.3 Data Synchronization
 - **FR-016**: Application syncs with Todoist API on startup
 - **FR-017**: Users can force sync with 'r' key
-- **FR-018**: Sync status is displayed in status bar
+- **FR-018**: Sync status is displayed during operations
 - **FR-019**: Local data is cached for instant access
 - **FR-020**: Sync errors are displayed with retry options
 
 #### 3.1.4 User Interface
 - **FR-021**: Two-pane layout: projects (left) and tasks (right)
-- **FR-022**: Status bar shows current shortcuts and sync status
+- **FR-022**: Help panel shows available shortcuts
 - **FR-023**: Help panel accessible with '?' key
 - **FR-024**: Responsive design adapts to terminal size
 - **FR-025**: Error messages are displayed prominently
@@ -223,7 +223,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - **renderer.rs**: Main rendering loop and terminal management
 - **events.rs**: Keyboard event handling and shortcuts
 - **layout.rs**: Layout management and responsive design
-- **components/**: Reusable UI components (lists, dialogs, status bar)
+- **components/**: Reusable UI components (lists, dialogs)
 
 #### 5.2.2 Business Logic (`src/`)
 - **sync.rs**: Data synchronization with Todoist API

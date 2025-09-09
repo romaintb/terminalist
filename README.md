@@ -81,8 +81,7 @@ Once the application is running, you can use these keyboard shortcuts:
 The interface consists of:
 
 ### **Layout Structure**
-- **Top Area**: Projects list (1/3 width) | Tasks list (2/3 width) - side by side
-- **Bottom Area**: Status bar (full width, 1 line height)
+- **Main Area**: Projects list (1/3 width) | Tasks list (2/3 width) - side by side
 
 ### **Components**
 - **Projects List (Left)**: Hierarchical display of all Todoist projects
@@ -92,7 +91,6 @@ The interface consists of:
 - **Tasks List (Right)**: Shows tasks for the currently selected project
   - Takes remaining width after projects list
   - Displays task content, priority, labels, and status
-- **Status Bar (Bottom)**: Full-width bar showing available shortcuts and current status
 - **Help Panel**: Modal overlay accessible with `?` key
 
 ### **Task Display Features**
@@ -117,7 +115,7 @@ Terminalist uses a smart sync mechanism for optimal performance:
 - **First Run**: Automatically syncs all data from Todoist
 - **Startup**: Loads local data instantly, then syncs in background if data is older than 5 minutes
 - **Manual Sync**: Press `r` to force refresh from Todoist API
-- **Sync Indicators**: Status bar shows sync progress and data freshness
+- **Sync Indicators**: Sync progress is shown during operations
 
 ### **Data Management**
 - **Projects**: Hierarchical structure with parent-child relationships

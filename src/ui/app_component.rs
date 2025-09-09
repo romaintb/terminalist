@@ -1022,8 +1022,6 @@ impl Component for AppComponent {
         if self.dialog.is_visible() {
             self.dialog.render(f, rect);
         }
-
-        // TODO: Add status bar, etc.
     }
 }
 
