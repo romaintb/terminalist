@@ -2,44 +2,70 @@ use crate::debug_logger::DebugLogger;
 use crate::icons::IconService;
 use crate::ui::layout::LayoutManager;
 use ratatui::{
-    layout::{Alignment, Rect},
-    style::{Color, Style},
-    widgets::{Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    layout::{Alignment, Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    widgets::{Block, BorderType, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
 
 pub fn render_delete_confirmation_dialog(f: &mut Frame, area: Rect, icons: &IconService, item_type: &str) {
-    let dialog_area = LayoutManager::centered_rect_lines(50, 6, area);
+    let dialog_area = LayoutManager::centered_rect_lines(60, 8, area);
     f.render_widget(Clear, dialog_area);
 
+    // Main dialog block with rounded borders and red theme (appropriate for deletion)
     let title = format!("{} Confirm Delete", icons.warning());
-    let message = format!("Are you sure you want to delete this {}?", item_type);
-    let instructions = "Press Enter to confirm, Esc to cancel";
-
-    let block = Block::default()
+    let main_block = Block::default()
         .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
         .title(title)
+        .title_style(
+            Style::default()
+                .fg(Color::Red)
+                .add_modifier(Modifier::BOLD),
+        )
         .style(Style::default().fg(Color::Red));
 
+    // Create layout for content
+    let inner_area = main_block.inner(dialog_area);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints([
+            Constraint::Length(2), // Confirmation message
+            Constraint::Length(1), // Spacer
+            Constraint::Length(1), // Instructions
+        ])
+        .split(inner_area);
+
+    // Confirmation message
+    let message = format!("Are you sure you want to delete this {}?", item_type);
     let message_paragraph = Paragraph::new(message)
         .style(Style::default().fg(Color::White))
         .alignment(Alignment::Center);
 
-    let instructions_paragraph = Paragraph::new(instructions)
-        .style(Style::default().fg(Color::Gray))
-        .alignment(Alignment::Center);
+    // Enhanced instructions with color-coded shortcuts
+    let instructions = vec![
+        ("Enter", Color::Red, " Delete"),
+        (" • ", Color::Gray, ""),
+        ("Esc", Color::Green, " Cancel"),
+    ];
 
-    let chunks = ratatui::layout::Layout::default()
-        .direction(ratatui::layout::Direction::Vertical)
-        .constraints([
-            ratatui::layout::Constraint::Length(2),
-            ratatui::layout::Constraint::Length(1),
-        ])
-        .split(dialog_area);
+    let mut instruction_text = Vec::new();
+    for (key, color, desc) in instructions {
+        instruction_text.push(ratatui::text::Span::styled(
+            key,
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ));
+        instruction_text.push(ratatui::text::Span::styled(desc, Style::default().fg(Color::Gray)));
+    }
 
-    f.render_widget(block, dialog_area);
+    let instructions_paragraph =
+        Paragraph::new(ratatui::text::Line::from(instruction_text)).alignment(Alignment::Center);
+
+    // Render all components
+    f.render_widget(main_block, dialog_area);
     f.render_widget(message_paragraph, chunks[0]);
-    f.render_widget(instructions_paragraph, chunks[1]);
+    f.render_widget(instructions_paragraph, chunks[2]);
 }
 
 pub fn render_info_dialog(
