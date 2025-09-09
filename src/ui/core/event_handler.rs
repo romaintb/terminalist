@@ -1,4 +1,4 @@
-use crossterm::event::{poll, Event, KeyEvent};
+use crossterm::event::{poll, Event, KeyEvent, MouseEvent};
 use tokio::time::{interval, Duration, Instant};
 
 pub struct EventHandler {
@@ -25,6 +25,9 @@ impl EventHandler {
                 Event::Key(key) => {
                     return Ok(EventType::Key(key));
                 }
+                Event::Mouse(mouse) => {
+                    return Ok(EventType::Mouse(mouse));
+                }
                 Event::Resize(w, h) => return Ok(EventType::Resize(w, h)),
                 _ => return Ok(EventType::Other),
             }
@@ -49,6 +52,7 @@ impl EventHandler {
 #[derive(Debug, Clone)]
 pub enum EventType {
     Key(KeyEvent),
+    Mouse(MouseEvent),
     Resize(u16, u16),
     Tick,
     Render,

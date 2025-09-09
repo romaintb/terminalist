@@ -2,12 +2,12 @@ use crate::icons::IconService;
 use crate::todoist::{LabelDisplay, ProjectDisplay};
 use crate::ui::core::SidebarSelection;
 use crate::ui::core::{actions::Action, Component};
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem},
+    widgets::{Block, Borders, List, ListItem, ListState},
     Frame,
 };
 
@@ -16,6 +16,7 @@ pub struct SidebarComponent {
     pub projects: Vec<ProjectDisplay>,
     pub labels: Vec<LabelDisplay>,
     pub icons: IconService,
+    list_state: ListState,
 }
 
 impl Default for SidebarComponent {
@@ -26,11 +27,14 @@ impl Default for SidebarComponent {
 
 impl SidebarComponent {
     pub fn new() -> Self {
+        let mut list_state = ListState::default();
+        list_state.select(Some(0)); // Start with Today selected
         Self {
             selection: SidebarSelection::Today,
             projects: Vec::new(),
             labels: Vec::new(),
             icons: IconService::default(),
+            list_state,
         }
     }
 
@@ -207,6 +211,46 @@ impl SidebarComponent {
             0
         }
     }
+
+    /// Convert list index to SidebarSelection
+    fn index_to_selection(&self, index: usize) -> SidebarSelection {
+        if index == 0 {
+            return SidebarSelection::Today;
+        }
+        if index == 1 {
+            return SidebarSelection::Tomorrow;
+        }
+
+        let label_count = self.labels.len();
+        if index < 2 + label_count {
+            return SidebarSelection::Label(index - 2);
+        }
+
+        let project_index = index - 2 - label_count;
+        let sorted_projects = self.get_sorted_projects();
+        if let Some((original_index, _)) = sorted_projects.get(project_index) {
+            SidebarSelection::Project(*original_index)
+        } else {
+            SidebarSelection::Today
+        }
+    }
+
+    /// Handle mouse events
+    pub fn handle_mouse(&mut self, mouse: MouseEvent, area: Rect) -> Action {
+        if mouse.kind == MouseEventKind::Down(MouseButton::Left) {
+            if mouse.column >= area.x
+                && mouse.column < area.x + area.width
+                && mouse.row >= area.y + 1
+                && mouse.row < area.y + area.height - 1
+            {
+                let clicked_index = (mouse.row - area.y - 1) as usize;
+                let selection = self.index_to_selection(clicked_index);
+                self.list_state.select(Some(clicked_index));
+                return Action::NavigateToSidebar(selection);
+            }
+        }
+        Action::None
+    }
 }
 
 impl Component for SidebarComponent {
@@ -360,6 +404,6 @@ impl Component for SidebarComponent {
             )
             .style(Style::default().fg(Color::White));
 
-        f.render_widget(list, rect);
+        f.render_stateful_widget(list, rect, &mut self.list_state);
     }
 }
