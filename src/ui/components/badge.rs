@@ -50,7 +50,7 @@ pub fn create_label_badge(name: &str, color: &str) -> Span<'static> {
 #[must_use]
 pub fn create_task_badges(
     is_recurring: bool,
-    has_deadline: bool,
+    _has_deadline: bool,
     duration: Option<&str>,
     labels: &[LabelDisplay],
 ) -> Vec<Span<'static>> {
