@@ -504,8 +504,7 @@ fn render_complex_layout(f: &mut Frame, area: Rect) {
     // Main area vertical split
     let main_area_chunks = Layout::vertical([
         Constraint::Length(3),     // Header/toolbar
-        Constraint::Fill(1),       // Content
-        Constraint::Length(2)      // Footer/statusbar
+        Constraint::Fill(1)        // Content
     ]).split(main_chunks[1]);
     
     // Use the layout chunks for rendering...
