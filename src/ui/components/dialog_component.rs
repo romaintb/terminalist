@@ -18,7 +18,7 @@ pub struct DialogComponent {
     pub labels: Vec<LabelDisplay>,
     pub selected_project_index: usize,
     pub selected_parent_project_index: Option<usize>, // For project creation parent selection
-    pub selected_task_project_index: Option<usize>, // For task creation project selection (None = no project/inbox)
+    pub selected_task_project_index: Option<usize>,   // For task creation project selection (None = no project/inbox)
     pub icons: IconService,
     // Scrolling support for long content dialogs
     pub scroll_offset: usize,
@@ -272,7 +272,23 @@ impl DialogComponent {
     }
 
     fn render_task_edit_dialog(&self, f: &mut Frame, area: Rect) {
-        task_dialogs::render_task_edit_dialog(f, area, &self.icons, &self.input_buffer);
+        let task_projects = self.get_task_projects();
+
+        // Find the current project index for the task being edited
+        let current_project_index = if let Some(DialogType::TaskEdit { project_id, .. }) = &self.dialog_type {
+            task_projects.iter().position(|p| p.id == *project_id)
+        } else {
+            None
+        };
+
+        task_dialogs::render_task_edit_dialog(
+            f,
+            area,
+            &self.icons,
+            &self.input_buffer,
+            &task_projects,
+            current_project_index,
+        );
     }
 
     fn render_delete_confirmation_dialog(&self, f: &mut Frame, area: Rect, item_type: &str) {

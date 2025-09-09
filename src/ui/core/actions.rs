@@ -85,13 +85,28 @@ pub enum Action {
 
 #[derive(Debug, Clone)]
 pub enum DialogType {
-    TaskCreation { default_project_id: Option<String> },
-    TaskEdit { task_id: String, content: String },
+    TaskCreation {
+        default_project_id: Option<String>,
+    },
+    TaskEdit {
+        task_id: String,
+        content: String,
+        project_id: String,
+    },
     ProjectCreation,
-    ProjectEdit { project_id: String, name: String },
+    ProjectEdit {
+        project_id: String,
+        name: String,
+    },
     LabelCreation,
-    LabelEdit { label_id: String, name: String },
-    DeleteConfirmation { item_type: String, item_id: String },
+    LabelEdit {
+        label_id: String,
+        name: String,
+    },
+    DeleteConfirmation {
+        item_type: String,
+        item_id: String,
+    },
     Error(String),
     Info(String),
     Help,
