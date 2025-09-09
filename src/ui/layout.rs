@@ -6,7 +6,6 @@ use ratatui::layout::{Constraint, Layout, Rect};
 pub struct LayoutManager;
 
 impl LayoutManager {
-
     /// Calculate a centered rectangle within the given area
     #[must_use]
     pub fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
@@ -42,5 +41,4 @@ impl LayoutManager {
         ])
         .split(popup_layout[1])[1]
     }
-
 }

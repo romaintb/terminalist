@@ -109,4 +109,3 @@ async fn run_app_loop<B: Backend>(
 
     Ok(())
 }
-

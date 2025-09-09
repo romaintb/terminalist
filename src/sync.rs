@@ -124,7 +124,6 @@ impl SyncService {
         *self.sync_in_progress.lock().await
     }
 
-
     /// Get last sync time for projects
     pub async fn get_last_sync_time(&self) -> Result<Option<DateTime<Utc>>> {
         let storage = self.storage.lock().await;
@@ -532,13 +531,10 @@ impl SyncService {
         Ok(SyncStatus::Success { last_sync: Utc::now() })
     }
 
-
-
     /// Force sync regardless of last sync time
     pub async fn force_sync(&self) -> Result<SyncStatus> {
         self.sync().await
     }
-
 
     /// Complete a task (mark as done)
     pub async fn complete_task(&self, task_id: &str) -> Result<()> {
@@ -575,6 +571,4 @@ impl SyncService {
 
         Ok(())
     }
-
 }
-
