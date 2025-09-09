@@ -2,8 +2,14 @@
 name = "terminalist"
 version = "0.2.0"
 edition = "2021"
-keywords = ["terminal", "tui", "todoist", "productivity", "cli", "rust", "ratatui", "async"]
+keywords = ["terminal", "tui", "todoist", "productivity", "cli"]
 description = "A terminal-based Todoist client with modern TUI interface"
+authors = ["Romain Bertrand"]
+license = "MIT"
+repository = "https://github.com/romaintb/terminalist"
+homepage = "https://github.com/romaintb/terminalist"
+readme = "README.md"
+categories = ["command-line-utilities"]
 
 [[bin]]
 name = "terminalist"
