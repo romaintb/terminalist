@@ -20,23 +20,7 @@ pub fn create_paren_badge(text: &str) -> Span<'static> {
 /// Create a label badge with custom color
 #[must_use]
 pub fn create_label_badge(name: &str, color: &str) -> Span<'static> {
-    // Convert Todoist color names to terminal colors
-    let bg_color = match color.to_lowercase().as_str() {
-        "red" => Color::Red,
-        "orange" => Color::Rgb(255, 165, 0), // Orange
-        "yellow" => Color::Yellow,
-        "green" => Color::Green,
-        "blue" => Color::Blue,
-        "purple" => Color::Magenta,
-        "pink" => Color::Rgb(255, 192, 203), // Pink
-        "brown" => Color::Rgb(139, 69, 19),  // Brown
-        "charcoal" => Color::DarkGray,
-        "gray" => Color::Gray,
-        "silver" => Color::White, // Changed from LightGray which doesn't exist
-        "teal" => Color::Cyan,
-        "navy" => Color::Rgb(0, 0, 128), // Navy
-        _ => Color::Blue,                // Default fallback
-    };
+    let bg_color = crate::utils::color::convert_todoist_color(color);
 
     let style = Style::default()
         .bg(bg_color)
