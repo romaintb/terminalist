@@ -115,7 +115,7 @@ pub fn render_project_edit_dialog(f: &mut Frame, area: Rect, _icons: &IconServic
     f.render_widget(Clear, dialog_area);
 
     // Main dialog block with rounded borders and yellow theme for edit
-    let title = "✏️  Edit Project".to_string();
+    let title = "Edit Project".to_string();
     let main_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)

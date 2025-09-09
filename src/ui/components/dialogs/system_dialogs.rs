@@ -242,10 +242,11 @@ J/K         Navigate projects (down/up)
 Enter       Select project/task or confirm action
 Esc         Cancel action or close dialogs
 
-PROJECT MANAGEMENT
------------------
+PROJECT & LABEL MANAGEMENT
+--------------------------
 A           Create new project
-D           Delete selected project (with confirmation)
+E           Edit selected item (project or label)
+D           Delete selected item (project or label)
 
 TASK MANAGEMENT
 --------------

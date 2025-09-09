@@ -246,6 +246,53 @@ impl AppComponent {
                     }
                 }
             }
+            KeyCode::Char('E') => {
+                // Edit current sidebar selection (project or label)
+                match &self.state.sidebar_selection {
+                    SidebarSelection::Project(index) => {
+                        if let Some(project) = self.state.projects.get(*index) {
+                            self.debug_logger.log(format!(
+                                "Global key: 'E' - editing project '{}' (ID: {})",
+                                project.name, project.id
+                            ));
+                            Action::ShowDialog(DialogType::ProjectEdit {
+                                project_id: project.id.clone(),
+                                name: project.name.clone(),
+                            })
+                        } else {
+                            self.debug_logger
+                                .log("Global key: 'E' - no project selected (invalid index)".to_string());
+                            Action::ShowDialog(DialogType::Error("No project selected to edit".to_string()))
+                        }
+                    }
+                    SidebarSelection::Today => {
+                        self.debug_logger
+                            .log("Global key: 'E' - cannot edit Today view".to_string());
+                        Action::ShowDialog(DialogType::Info("Cannot edit the Today view".to_string()))
+                    }
+                    SidebarSelection::Tomorrow => {
+                        self.debug_logger
+                            .log("Global key: 'E' - cannot edit Tomorrow view".to_string());
+                        Action::ShowDialog(DialogType::Info("Cannot edit the Tomorrow view".to_string()))
+                    }
+                    SidebarSelection::Label(index) => {
+                        if let Some(label) = self.state.labels.get(*index) {
+                            self.debug_logger.log(format!(
+                                "Global key: 'E' - editing label '{}' (ID: {})",
+                                label.name, label.id
+                            ));
+                            Action::ShowDialog(DialogType::LabelEdit {
+                                label_id: label.id.clone(),
+                                name: label.name.clone(),
+                            })
+                        } else {
+                            self.debug_logger
+                                .log("Global key: 'E' - no label selected (invalid index)".to_string());
+                            Action::ShowDialog(DialogType::Error("No label selected to edit".to_string()))
+                        }
+                    }
+                }
+            }
             KeyCode::Char('r') => {
                 self.debug_logger
                     .log("Global key: 'r' - starting manual sync".to_string());
@@ -484,6 +531,36 @@ impl AppComponent {
                 self.debug_logger
                     .log(format!("Label: Deleting label {}", label_desc));
                 self.spawn_task_operation("Delete label".to_string(), label_id);
+                Action::None
+            }
+            Action::CreateLabel { name } => {
+                self.debug_logger
+                    .log(format!("Label: Creating label '{}'", name));
+                self.spawn_task_operation("Create label".to_string(), name);
+                Action::None
+            }
+            Action::EditProject { id, name } => {
+                // Find project name for better logging
+                let project_desc = if let Some(project) = self.state.projects.iter().find(|p| p.id == id) {
+                    format!("ID {} '{}' -> '{}'", id, project.name, name)
+                } else {
+                    format!("ID {} [unknown] -> '{}'", id, name)
+                };
+                self.debug_logger
+                    .log(format!("Project: Editing project {}", project_desc));
+                self.spawn_task_operation("Edit project".to_string(), format!("{}: {}", id, name));
+                Action::None
+            }
+            Action::EditLabel { id, name } => {
+                // Find label name for better logging
+                let label_desc = if let Some(label) = self.state.labels.iter().find(|l| l.id == id) {
+                    format!("ID {} '{}' -> '{}'", id, label.name, name)
+                } else {
+                    format!("ID {} [unknown] -> '{}'", id, name)
+                };
+                self.debug_logger
+                    .log(format!("Label: Editing label {}", label_desc));
+                self.spawn_task_operation("Edit label".to_string(), format!("{}: {}", id, name));
                 Action::None
             }
             Action::DataLoaded {
@@ -732,6 +809,32 @@ impl AppComponent {
                         Ok(()) => Ok(format!("✅ Label deleted: {}", task_info)),
                         Err(e) => Err(format!("❌ Failed to delete label: {}", e)),
                     },
+                    "Create label" => match sync_service.create_label(&task_info, None).await {
+                        Ok(()) => Ok(format!("✅ Label created: {}", task_info)),
+                        Err(e) => Err(format!("❌ Failed to create label: {}", e)),
+                    },
+                    "Edit project" => {
+                        // task_info format: "project_id: new_name"
+                        if let Some((project_id, name)) = task_info.split_once(": ") {
+                            match sync_service.update_project_content(project_id, name).await {
+                                Ok(()) => Ok(format!("✅ Project updated: {}", project_id)),
+                                Err(e) => Err(format!("❌ Failed to update project: {}", e)),
+                            }
+                        } else {
+                            Err("❌ Invalid project edit format".to_string())
+                        }
+                    }
+                    "Edit label" => {
+                        // task_info format: "label_id: new_name"
+                        if let Some((label_id, name)) = task_info.split_once(": ") {
+                            match sync_service.update_label_content(label_id, name).await {
+                                Ok(()) => Ok(format!("✅ Label updated: {}", label_id)),
+                                Err(e) => Err(format!("❌ Failed to update label: {}", e)),
+                            }
+                        } else {
+                            Err("❌ Invalid label edit format".to_string())
+                        }
+                    }
                     _ => Err(format!("❌ Unknown operation: {}", op_name)),
                 };
 

@@ -188,6 +188,8 @@ impl SyncService {
 
     /// Create a new label
     pub async fn create_label(&self, name: &str, color: Option<&str>) -> Result<()> {
+        self.log_debug(format!("API: Creating label '{}' with color {:?}", name, color));
+
         // Create label via API using the CreateLabelArgs structure
         let label_args = todoist_api::CreateLabelArgs {
             name: name.to_string(),
@@ -195,14 +197,20 @@ impl SyncService {
             order: None,
             is_favorite: None,
         };
-        let _label = self.todoist.create_label(&label_args).await?;
+        let label = self.todoist.create_label(&label_args).await?;
 
-        // The UI will handle the sync separately to ensure proper error handling
+        // Store the created label in local database immediately for UI refresh
+        self.log_debug(format!("Storage: Storing new label locally with ID {}", label.id));
+        let storage = self.storage.lock().await;
+        storage.store_single_label(label).await?;
+
         Ok(())
     }
 
     /// Update label content (name only for now)
     pub async fn update_label_content(&self, label_id: &str, name: &str) -> Result<()> {
+        self.log_debug(format!("API: Updating label name for ID {} to '{}'", label_id, name));
+
         // Update label via API using the UpdateLabelArgs structure
         let label_args = todoist_api::UpdateLabelArgs {
             name: Some(name.to_string()),
@@ -213,7 +221,14 @@ impl SyncService {
         };
         let _label = self.todoist.update_label(label_id, &label_args).await?;
 
-        // The UI will handle the sync separately to ensure proper error handling
+        // Update local storage immediately after successful API call
+        self.log_debug(format!(
+            "Storage: Updating local label name for ID {} to '{}'",
+            label_id, name
+        ));
+        let storage = self.storage.lock().await;
+        storage.update_label_name(label_id, name).await?;
+
         Ok(())
     }
 
@@ -228,6 +243,11 @@ impl SyncService {
 
     /// Update project content (name only for now)
     pub async fn update_project_content(&self, project_id: &str, name: &str) -> Result<()> {
+        self.log_debug(format!(
+            "API: Updating project name for ID {} to '{}'",
+            project_id, name
+        ));
+
         // Update project via API using the UpdateProjectArgs structure
         let project_args = todoist_api::UpdateProjectArgs {
             name: Some(name.to_string()),
@@ -241,7 +261,14 @@ impl SyncService {
             .update_project(project_id, &project_args)
             .await?;
 
-        // The UI will handle the sync separately to ensure proper error handling
+        // Update local storage immediately after successful API call
+        self.log_debug(format!(
+            "Storage: Updating local project name for ID {} to '{}'",
+            project_id, name
+        ));
+        let storage = self.storage.lock().await;
+        storage.update_project_name(project_id, name).await?;
+
         Ok(())
     }
 

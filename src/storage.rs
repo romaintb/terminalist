@@ -471,6 +471,28 @@ impl LocalStorage {
         Ok(())
     }
 
+    /// Store a single label in the database (for immediate insertion after API calls)
+    pub async fn store_single_label(&self, label: Label) -> Result<()> {
+        let local_label: LocalLabel = label.into();
+
+        sqlx::query(
+            r"
+            INSERT OR REPLACE INTO labels (id, name, color, order_index, is_favorite, last_synced)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ",
+        )
+        .bind(&local_label.id)
+        .bind(&local_label.name)
+        .bind(&local_label.color)
+        .bind(local_label.order_index)
+        .bind(local_label.is_favorite)
+        .bind(local_label.last_synced)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
     /// Store labels in local database
     pub async fn store_labels(&self, labels: Vec<Label>) -> Result<()> {
         let mut tx = self.pool.begin().await?;
@@ -592,6 +614,28 @@ impl LocalStorage {
             .await?;
 
         tx.commit().await?;
+        Ok(())
+    }
+
+    /// Update project name in local storage
+    pub async fn update_project_name(&self, project_id: &str, name: &str) -> Result<()> {
+        sqlx::query("UPDATE projects SET name = ?, last_synced = ? WHERE id = ?")
+            .bind(name)
+            .bind(Utc::now())
+            .bind(project_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// Update label name in local storage  
+    pub async fn update_label_name(&self, label_id: &str, name: &str) -> Result<()> {
+        sqlx::query("UPDATE labels SET name = ?, last_synced = ? WHERE id = ?")
+            .bind(name)
+            .bind(Utc::now())
+            .bind(label_id)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
