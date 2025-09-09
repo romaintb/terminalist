@@ -1,5 +1,5 @@
 use anyhow::Result;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -122,12 +122,6 @@ impl SyncService {
     /// Check if sync is currently in progress
     pub async fn is_syncing(&self) -> bool {
         *self.sync_in_progress.lock().await
-    }
-
-    /// Check if we have local data available
-    pub async fn has_local_data(&self) -> Result<bool> {
-        let storage = self.storage.lock().await;
-        storage.has_data().await
     }
 
     /// Get last sync time for projects
@@ -537,41 +531,9 @@ impl SyncService {
         Ok(SyncStatus::Success { last_sync: Utc::now() })
     }
 
-    /// Check if sync is needed based on last sync time
-    pub async fn should_sync(&self) -> Result<bool> {
-        let last_sync = self.get_last_sync_time().await?;
-
-        match last_sync {
-            None => Ok(true), // Never synced
-            Some(last) => {
-                // Sync if last sync was more than 1 minute ago
-                let threshold = Utc::now() - Duration::minutes(1);
-                Ok(last < threshold)
-            }
-        }
-    }
-
-    /// Sync if needed (smart sync)
-    pub async fn sync_if_needed(&self) -> Result<SyncStatus> {
-        if self.should_sync().await? {
-            self.sync().await
-        } else {
-            match self.get_last_sync_time().await? {
-                Some(last_sync) => Ok(SyncStatus::Success { last_sync }),
-                None => Ok(SyncStatus::Idle),
-            }
-        }
-    }
-
     /// Force sync regardless of last sync time
     pub async fn force_sync(&self) -> Result<SyncStatus> {
         self.sync().await
-    }
-
-    /// Clear all local data (useful for reset)
-    pub async fn clear_local_data(&self) -> Result<()> {
-        let storage = self.storage.lock().await;
-        storage.clear_all_data().await
     }
 
     /// Complete a task (mark as done)
@@ -608,61 +570,5 @@ impl SyncService {
         storage.delete_task(task_id).await?;
 
         Ok(())
-    }
-
-    /// Get sync statistics
-    pub async fn get_sync_stats(&self) -> Result<SyncStats> {
-        let storage = self.storage.lock().await;
-        let project_count = storage.get_projects().await?.len();
-        let task_count = storage.get_all_tasks().await?.len();
-        let last_sync = storage.get_last_sync("projects").await?;
-
-        Ok(SyncStats {
-            project_count,
-            task_count,
-            last_sync,
-            has_data: project_count > 0,
-        })
-    }
-}
-
-/// Statistics about local data and sync status
-#[derive(Debug, Clone)]
-pub struct SyncStats {
-    pub project_count: usize,
-    pub task_count: usize,
-    pub last_sync: Option<DateTime<Utc>>,
-    pub has_data: bool,
-}
-
-impl SyncStats {
-    /// Get a human-readable description of sync status
-    #[must_use]
-    pub fn status_description(&self) -> String {
-        if self.has_data {
-            match &self.last_sync {
-                Some(last) => {
-                    let elapsed = Utc::now() - *last;
-                    if elapsed.num_minutes() < 1 {
-                        "Just synced".to_string()
-                    } else if elapsed.num_minutes() < 60 {
-                        format!("Synced {elapsed} minutes ago", elapsed = elapsed.num_minutes())
-                    } else if elapsed.num_hours() < 24 {
-                        format!("Synced {elapsed} hours ago", elapsed = elapsed.num_hours())
-                    } else {
-                        format!("Synced {elapsed} days ago", elapsed = elapsed.num_days())
-                    }
-                }
-                None => "Never synced".to_string(),
-            }
-        } else {
-            "No local data - sync needed".to_string()
-        }
-    }
-
-    /// Get a summary of local data
-    #[must_use]
-    pub fn data_summary(&self) -> String {
-        format!("{} projects, {} tasks", self.project_count, self.task_count)
     }
 }

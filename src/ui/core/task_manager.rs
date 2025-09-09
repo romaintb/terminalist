@@ -160,26 +160,11 @@ impl TaskManager {
         completed
     }
 
-    /// Get information about currently running tasks
-    pub fn active_tasks(&self) -> Vec<&BackgroundTask> {
-        self.tasks.values().collect()
-    }
-
     /// Check if any sync tasks are currently running
     pub fn is_syncing(&self) -> bool {
         self.tasks
             .values()
             .any(|task| task.description.contains("sync"))
-    }
-
-    /// Cancel a specific task
-    pub fn cancel_task(&mut self, task_id: TaskId) -> bool {
-        if let Some(task) = self.tasks.remove(&task_id) {
-            task.handle.abort();
-            true
-        } else {
-            false
-        }
     }
 
     /// Cancel all running tasks
