@@ -4,7 +4,7 @@ version = "0.2.0"
 edition = "2021"
 keywords = ["terminal", "tui", "todoist", "productivity", "cli"]
 description = "A terminal-based Todoist client with modern TUI interface"
-authors = ["Romain Bertrand"]
+authors = ["Romain Bertrand <romain@doxin.net>"]
 license = "MIT"
 repository = "https://github.com/romaintb/terminalist"
 homepage = "https://github.com/romaintb/terminalist"
@@ -33,4 +33,4 @@ sqlx = { version = "0.8", features = [
     "uuid",
 ] }
 chrono = { version = "0.4", features = ["serde"] }
-todoist-api = { git = "https://github.com/romaintb/todoist-api", branch = "main" }
+todoist-api = "0.3.0"
