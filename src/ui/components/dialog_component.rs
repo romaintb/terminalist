@@ -64,11 +64,11 @@ impl DialogComponent {
             .collect()
     }
 
-    /// Get root non-inbox projects for task creation (excludes inbox project)
+    /// Get all non-inbox projects for task creation (excludes inbox project)
     pub fn get_task_projects(&self) -> Vec<&ProjectDisplay> {
         self.projects
             .iter()
-            .filter(|project| project.parent_id.is_none() && !project.is_inbox_project)
+            .filter(|project| !project.is_inbox_project)
             .collect()
     }
 
