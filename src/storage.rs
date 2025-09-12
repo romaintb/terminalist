@@ -2,8 +2,8 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{
-    sqlite::{SqlitePool, SqlitePoolOptions},
-    Row,
+    sqlite::{SqliteConnection, SqlitePool, SqlitePoolOptions},
+    Connection, Row,
 };
 
 use crate::todoist::{Label, Project, ProjectDisplay, Section, SectionDisplay, Task, TaskDisplay};
@@ -192,26 +192,48 @@ impl From<Label> for LocalLabel {
 }
 
 /// Local storage manager for Todoist data
-#[derive(Clone)]
 pub struct LocalStorage {
     pool: SqlitePool,
+    _anchor: SqliteConnection,
 }
 
 impl LocalStorage {
     /// Initialize the local storage with `SQLite` database
     pub async fn new() -> Result<Self> {
-        // Use shared-cache in-memory SQLite database that persists for app lifetime
         let database_url = "sqlite:file:terminalist_memdb?mode=memory&cache=shared".to_string();
+
         let pool = SqlitePoolOptions::new()
             .min_connections(1)
             .max_connections(4)
+            .idle_timeout(None) // avoid idle reaping
+            .max_lifetime(None) // avoid lifetime rotation
             .connect(&database_url)
             .await?;
 
-        let storage = LocalStorage { pool };
+        // Anchor connection outside the pool
+        let anchor = SqliteConnection::connect(&database_url).await?;
+
+        let storage = LocalStorage { pool, _anchor: anchor };
         storage.init_schema().await?;
         storage.run_migrations().await?;
+        storage.start_keepalive_task();
+
         Ok(storage)
+    }
+
+    /// Start a background task to keep the database connection alive
+    fn start_keepalive_task(&self) {
+        let pool = self.pool.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
+
+            loop {
+                interval.tick().await;
+
+                // Execute a simple query to keep the connection alive
+                let _ = sqlx::query("SELECT 1").execute(&pool).await;
+            }
+        });
     }
 
     /// Initialize database schema
