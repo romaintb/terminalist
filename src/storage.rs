@@ -2,8 +2,8 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::{
-    sqlite::{SqlitePool, SqlitePoolOptions},
-    Row,
+    sqlite::{SqliteConnection, SqlitePool, SqlitePoolOptions},
+    Connection, Row,
 };
 
 use crate::todoist::{Label, Project, ProjectDisplay, Section, SectionDisplay, Task, TaskDisplay};
@@ -192,27 +192,30 @@ impl From<Label> for LocalLabel {
 }
 
 /// Local storage manager for Todoist data
-#[derive(Clone)]
 pub struct LocalStorage {
     pool: SqlitePool,
+    _anchor: SqliteConnection,
 }
 
 impl LocalStorage {
     /// Initialize the local storage with `SQLite` database
     pub async fn new() -> Result<Self> {
-        // Use shared-cache in-memory SQLite database that persists for app lifetime
         let database_url = "sqlite:file:terminalist_memdb?mode=memory&cache=shared".to_string();
+
         let pool = SqlitePoolOptions::new()
             .min_connections(1)
             .max_connections(4)
+            .idle_timeout(None) // avoid idle reaping
+            .max_lifetime(None) // avoid lifetime rotation
             .connect(&database_url)
             .await?;
 
-        let storage = LocalStorage { pool };
+        // Anchor connection outside the pool
+        let anchor = SqliteConnection::connect(&database_url).await?;
+
+        let storage = LocalStorage { pool, _anchor: anchor };
         storage.init_schema().await?;
         storage.run_migrations().await?;
-
-        // Start database keep-alive task
         storage.start_keepalive_task();
 
         Ok(storage)
