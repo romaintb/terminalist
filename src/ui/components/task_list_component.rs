@@ -160,7 +160,7 @@ impl TaskListComponent {
 
         // Add overdue section if there are overdue tasks
         if !overdue_tasks.is_empty() {
-            items.push(self.create_section_header("⚠️ Overdue"));
+            items.push(self.create_section_header("⏰ Overdue"));
 
             for task in &overdue_tasks {
                 let item = self.create_task_item(task, 0);
