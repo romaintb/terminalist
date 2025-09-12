@@ -215,7 +215,6 @@ impl LocalStorage {
 
         let storage = LocalStorage { pool, _anchor: anchor };
         storage.init_schema().await?;
-        storage.run_migrations().await?;
         storage.start_keepalive_task();
 
         Ok(storage)
@@ -1102,24 +1101,6 @@ impl LocalStorage {
             .await?;
 
         tx.commit().await?;
-        Ok(())
-    }
-
-    async fn run_migrations(&self) -> Result<()> {
-        // Check if parent_id column exists in projects table
-        let has_parent_id = sqlx::query_scalar::<_, Option<String>>(
-            "SELECT name FROM pragma_table_info('projects') WHERE name = 'parent_id'",
-        )
-        .fetch_optional(&self.pool)
-        .await?
-        .is_some();
-
-        if !has_parent_id {
-            sqlx::query("ALTER TABLE projects ADD COLUMN parent_id TEXT")
-                .execute(&self.pool)
-                .await?;
-        }
-
         Ok(())
     }
 }
