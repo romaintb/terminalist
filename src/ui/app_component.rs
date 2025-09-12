@@ -440,20 +440,34 @@ impl AppComponent {
 
                     // If completing the task, also complete all subtasks
                     if will_be_completed {
-                        let subtasks = self.collect_all_subtasks(&task_id);
-                        if !subtasks.is_empty() {
-                            let subtask_count = subtasks.len();
+                        let all_subtasks = self.collect_all_subtasks(&task_id);
+
+                        // Filter subtasks to only include incomplete ones
+                        let incomplete_subtasks: Vec<String> = all_subtasks
+                            .into_iter()
+                            .filter(|subtask_id| {
+                                self.state
+                                    .tasks
+                                    .iter()
+                                    .find(|t| t.id == *subtask_id)
+                                    .map(|t| !t.is_completed)
+                                    .unwrap_or(false)
+                            })
+                            .collect();
+
+                        if !incomplete_subtasks.is_empty() {
+                            let subtask_count = incomplete_subtasks.len();
                             self.debug_logger.log(format!(
-                                "Task: Auto-completing {} subtask(s) of task {}",
+                                "Task: Auto-completing {} incomplete subtask(s) of task {}",
                                 subtask_count, task_desc
                             ));
 
                             // Format task list: "parent_id|subtask1_id,subtask2_id,..."
-                            let subtask_ids = subtasks.join(",");
+                            let subtask_ids = incomplete_subtasks.join(",");
                             let toggle_info = format!("{}|{}", task_id, subtask_ids);
                             self.spawn_task_operation("Toggle task with subtasks".to_string(), toggle_info);
                         } else {
-                            // No subtasks, just toggle the main task
+                            // No incomplete subtasks, just toggle the main task
                             self.spawn_task_operation("Toggle task".to_string(), task_id);
                         }
                     } else {
