@@ -228,6 +228,11 @@ impl AppComponent {
                             .log("Global key: 'D' - cannot delete Tomorrow view".to_string());
                         Action::ShowDialog(DialogType::Info("Cannot delete the Tomorrow view".to_string()))
                     }
+                    SidebarSelection::Upcoming => {
+                        self.debug_logger
+                            .log("Global key: 'D' - cannot delete Upcoming view".to_string());
+                        Action::ShowDialog(DialogType::Info("Cannot delete the Upcoming view".to_string()))
+                    }
                     SidebarSelection::Label(index) => {
                         if let Some(label) = self.state.labels.get(*index) {
                             self.debug_logger.log(format!(
@@ -274,6 +279,11 @@ impl AppComponent {
                         self.debug_logger
                             .log("Global key: 'E' - cannot edit Tomorrow view".to_string());
                         Action::ShowDialog(DialogType::Info("Cannot edit the Tomorrow view".to_string()))
+                    }
+                    SidebarSelection::Upcoming => {
+                        self.debug_logger
+                            .log("Global key: 'E' - cannot edit Upcoming view".to_string());
+                        Action::ShowDialog(DialogType::Info("Cannot edit the Upcoming view".to_string()))
                     }
                     SidebarSelection::Label(index) => {
                         if let Some(label) = self.state.labels.get(*index) {
@@ -371,6 +381,7 @@ impl AppComponent {
                 let selection_desc = match &selection {
                     SidebarSelection::Today => "Today".to_string(),
                     SidebarSelection::Tomorrow => "Tomorrow".to_string(),
+                    SidebarSelection::Upcoming => "Upcoming".to_string(),
                     SidebarSelection::Project(index) => {
                         if let Some(project) = self.state.projects.get(*index) {
                             format!("Project({}) '{}'", index, project.name)
@@ -594,6 +605,7 @@ impl AppComponent {
                 let selection_context = match &self.state.sidebar_selection {
                     SidebarSelection::Today => "Today view".to_string(),
                     SidebarSelection::Tomorrow => "Tomorrow view".to_string(),
+                    SidebarSelection::Upcoming => "Upcoming view".to_string(),
                     SidebarSelection::Project(index) => {
                         if let Some(project) = projects.get(*index) {
                             format!("Project '{}'", project.name)

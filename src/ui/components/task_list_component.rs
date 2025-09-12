@@ -84,7 +84,8 @@ impl TaskListComponent {
         // This mirrors the logic in create_task_list_items to count items before the selected task
         match &self.sidebar_selection {
             SidebarSelection::Today => self.calculate_today_rendered_index(),
-            SidebarSelection::Tomorrow => self.selected_index, // Tomorrow has simple 1:1 mapping
+            SidebarSelection::Tomorrow => self.calculate_tomorrow_rendered_index(),
+            SidebarSelection::Upcoming => self.calculate_upcoming_rendered_index(),
             SidebarSelection::Project(project_index) => {
                 if let Some(project) = self.projects.get(*project_index) {
                     self.calculate_project_rendered_index(&project.id)
@@ -109,6 +110,11 @@ impl TaskListComponent {
         // Handle Tomorrow view specially
         if matches!(self.sidebar_selection, SidebarSelection::Tomorrow) {
             return self.create_tomorrow_task_items(area);
+        }
+
+        // Handle Upcoming view specially
+        if matches!(self.sidebar_selection, SidebarSelection::Upcoming) {
+            return self.create_upcoming_task_items(area);
         }
 
         // Handle different selection types
@@ -210,6 +216,83 @@ impl TaskListComponent {
         for task in self.tasks.iter() {
             let item = self.create_task_item(task, 0);
             items.push(item);
+        }
+
+        items
+    }
+
+    fn create_upcoming_task_items(&self, _area: Rect) -> Vec<ListItem<'_>> {
+        use std::collections::BTreeMap;
+        let mut items = Vec::new();
+
+        if self.tasks.is_empty() {
+            return items;
+        }
+
+        // Separate overdue tasks from future tasks
+        let mut overdue_tasks = Vec::new();
+        let mut future_tasks_by_date: BTreeMap<chrono::NaiveDate, Vec<&TaskDisplay>> = BTreeMap::new();
+        let today = chrono::Utc::now().date_naive();
+
+        for task in &self.tasks {
+            if let Some(due_date_str) = &task.due {
+                if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
+                    if due_date < today {
+                        // Group all overdue tasks together
+                        overdue_tasks.push(task);
+                    } else {
+                        // Keep future tasks grouped by date
+                        future_tasks_by_date.entry(due_date).or_default().push(task);
+                    }
+                }
+            }
+        }
+
+        // Add overdue section first (if any overdue tasks exist)
+        if !overdue_tasks.is_empty() {
+            items.push(self.create_section_header("⏰ Overdue"));
+
+            for task in &overdue_tasks {
+                let item = self.create_task_item(task, 0);
+                items.push(item);
+            }
+        }
+
+        // Create sections for each future date
+        for (due_date, tasks) in future_tasks_by_date {
+            // Add blank line before section (except if it's the first section)
+            if !overdue_tasks.is_empty() || !items.is_empty() {
+                items.push(ListItem::new(Line::from(vec![Span::styled("", Style::default())])));
+            }
+
+            // Format the date nicely
+            let date_header = if due_date == today {
+                "📅 Today".to_string()
+            } else if due_date == today + chrono::Duration::days(1) {
+                "📅 Tomorrow".to_string()
+            } else if due_date == today + chrono::Duration::days(2) {
+                "📊 Day After Tomorrow".to_string()
+            } else {
+                let weekday = due_date.format("%A").to_string();
+                let formatted_date = due_date.format("%b %d").to_string();
+                format!("📊 {} - {}", weekday, formatted_date)
+            };
+
+            items.push(self.create_section_header(&date_header));
+
+            // Add tasks for this date
+            for task in tasks {
+                let item = self.create_task_item(task, 0);
+                items.push(item);
+            }
+        }
+
+        // If no upcoming tasks, show a message
+        if items.is_empty() {
+            items.push(ListItem::new(Line::from(Span::styled(
+                "No upcoming tasks scheduled",
+                Style::default().fg(Color::DarkGray),
+            ))));
         }
 
         items
@@ -614,6 +697,78 @@ impl TaskListComponent {
         if !today_tasks.is_empty() {
             rendered_index += 1; // Section header
             for _ in &today_tasks {
+                if task_index == self.selected_index {
+                    return rendered_index;
+                }
+                rendered_index += 1;
+                task_index += 1;
+            }
+        }
+
+        rendered_index
+    }
+
+    /// Calculate rendered index for Tomorrow view (with section header)
+    fn calculate_tomorrow_rendered_index(&self) -> usize {
+        if self.tasks.is_empty() {
+            return 0;
+        }
+
+        // Tomorrow view has one section header followed by tasks
+        // Header: "📅 Tomorrow"
+        // Tasks: all tasks (already filtered by database)
+        1 + self.selected_index // 1 for section header + task index
+    }
+
+    /// Calculate rendered index for Upcoming view (with overdue and date sections)
+    fn calculate_upcoming_rendered_index(&self) -> usize {
+        use std::collections::BTreeMap;
+
+        if self.tasks.is_empty() {
+            return 0;
+        }
+
+        // Separate overdue tasks from future tasks (mirrors create_upcoming_task_items logic)
+        let mut overdue_tasks = Vec::new();
+        let mut future_tasks_by_date: BTreeMap<chrono::NaiveDate, Vec<&TaskDisplay>> = BTreeMap::new();
+        let today = chrono::Utc::now().date_naive();
+
+        for task in &self.tasks {
+            if let Some(due_date_str) = &task.due {
+                if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
+                    if due_date < today {
+                        overdue_tasks.push(task);
+                    } else {
+                        future_tasks_by_date.entry(due_date).or_default().push(task);
+                    }
+                }
+            }
+        }
+
+        let mut rendered_index = 0;
+        let mut task_index = 0;
+
+        // Count overdue section
+        if !overdue_tasks.is_empty() {
+            rendered_index += 1; // Section header "⏰ Overdue"
+            for _ in &overdue_tasks {
+                if task_index == self.selected_index {
+                    return rendered_index;
+                }
+                rendered_index += 1;
+                task_index += 1;
+            }
+        }
+
+        // Count future date sections
+        for (_due_date, tasks) in future_tasks_by_date {
+            // Add blank line before section (except if it's the first section)
+            if !overdue_tasks.is_empty() || rendered_index > 0 {
+                rendered_index += 1; // Blank line
+            }
+
+            rendered_index += 1; // Section header (Today, Tomorrow, etc.)
+            for _ in tasks {
                 if task_index == self.selected_index {
                     return rendered_index;
                 }

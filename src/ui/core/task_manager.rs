@@ -201,6 +201,10 @@ impl TaskManager {
                             .get_tasks_for_tomorrow()
                             .await
                             .unwrap_or_default(),
+                        SidebarSelection::Upcoming => sync_service
+                            .get_tasks_for_upcoming()
+                            .await
+                            .unwrap_or_default(),
                         SidebarSelection::Project(index) => {
                             if let Some(project) = projects.get(index) {
                                 sync_service

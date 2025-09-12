@@ -6,6 +6,7 @@ pub enum SidebarSelection {
     #[default]
     Today, // Today view (special view)
     Tomorrow,       // Tomorrow view (special view)
+    Upcoming,       // Upcoming view (tasks with future due dates)
     Label(usize),   // Index into labels vector
     Project(usize), // Index into projects vector
 }
