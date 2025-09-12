@@ -148,11 +148,12 @@ impl TaskListComponent {
         // we just need to separate them for display purposes
         let now = chrono::Utc::now().date_naive();
 
-        // Separate tasks into overdue and today
+        // Separate tasks into overdue and today (use hierarchical sorting)
         let mut overdue_tasks = Vec::new();
         let mut today_tasks = Vec::new();
 
-        for task in &self.tasks {
+        let sorted_tasks = self.get_sorted_tasks();
+        for task in sorted_tasks {
             if let Some(due_date_str) = &task.due {
                 if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
                     if due_date < now {
@@ -213,7 +214,15 @@ impl TaskListComponent {
         items.push(self.create_section_header("📅 Tomorrow"));
 
         // Add all tasks (they're already filtered for tomorrow by the database query)
-        for task in self.tasks.iter() {
+        // For date-filtered views, use simple sorting to avoid hierarchy issues
+        let mut tasks = self.tasks.iter().collect::<Vec<_>>();
+        tasks.sort_by(|a, b| match (a.is_completed, b.is_completed) {
+            (false, true) => std::cmp::Ordering::Less,
+            (true, false) => std::cmp::Ordering::Greater,
+            _ => a.priority.cmp(&b.priority),
+        });
+
+        for task in tasks {
             let item = self.create_task_item(task, 0);
             items.push(item);
         }
@@ -229,12 +238,13 @@ impl TaskListComponent {
             return items;
         }
 
-        // Separate overdue tasks from future tasks
+        // Separate overdue tasks from future tasks (use hierarchical sorting)
         let mut overdue_tasks = Vec::new();
         let mut future_tasks_by_date: BTreeMap<chrono::NaiveDate, Vec<&TaskDisplay>> = BTreeMap::new();
         let today = chrono::Utc::now().date_naive();
 
-        for task in &self.tasks {
+        let sorted_tasks = self.get_sorted_tasks();
+        for task in sorted_tasks {
             if let Some(due_date_str) = &task.due {
                 if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
                     if due_date < today {
@@ -309,9 +319,10 @@ impl TaskListComponent {
             .filter(|section| section.project_id == *project_id)
             .collect();
 
-        // Group tasks by section
+        // Group tasks by section (use hierarchical sorting)
         let mut tasks_by_section: HashMap<Option<String>, Vec<&TaskDisplay>> = HashMap::new();
-        for task in &self.tasks {
+        let sorted_tasks = self.get_sorted_tasks();
+        for task in sorted_tasks {
             tasks_by_section
                 .entry(task.section_id.clone())
                 .or_default()
@@ -361,8 +372,9 @@ impl TaskListComponent {
         let mut items = Vec::new();
         let area_width = area.width.saturating_sub(4);
 
-        // Filter tasks that have the specific label
-        for task in self.tasks.iter() {
+        // Filter tasks that have the specific label and sort hierarchically
+        let sorted_tasks = self.get_sorted_tasks();
+        for task in sorted_tasks {
             if task.labels.iter().any(|label| label.id == label_id) {
                 let item = self.create_task_item(task, area_width as usize);
                 items.push(item);
@@ -376,7 +388,9 @@ impl TaskListComponent {
         let mut items = Vec::new();
         let area_width = area.width.saturating_sub(4);
 
-        for task in self.tasks.iter() {
+        // Use hierarchical sorting for subtasks
+        let sorted_tasks = self.get_sorted_tasks();
+        for task in sorted_tasks {
             let item = self.create_task_item(task, area_width as usize);
             items.push(item);
         }
@@ -401,6 +415,104 @@ impl TaskListComponent {
         }
     }
 
+    /// Get child task completion statistics (completed, total)
+    fn get_child_task_stats(&self, parent_id: &str) -> (usize, usize) {
+        let mut total_children = 0;
+        let mut completed_children = 0;
+
+        // Find direct children only
+        for task in &self.tasks {
+            if let Some(task_parent_id) = &task.parent_id {
+                if task_parent_id == parent_id {
+                    total_children += 1;
+                    if task.is_completed {
+                        completed_children += 1;
+                    }
+                }
+            }
+        }
+
+        (completed_children, total_children)
+    }
+
+    /// Calculate the tree depth of a task for indentation (supports n-levels)
+    fn calculate_task_tree_depth(&self, task: &TaskDisplay) -> usize {
+        let mut depth = 0;
+        let mut current_task = task;
+
+        // Traverse up the parent chain to calculate depth
+        while let Some(parent_id) = &current_task.parent_id {
+            depth += 1;
+
+            // Find the parent task
+            if let Some(parent_task) = self.tasks.iter().find(|t| &t.id == parent_id) {
+                current_task = parent_task;
+            } else {
+                // Parent not found in current task list, stop here
+                break;
+            }
+
+            // Safety check to prevent infinite loops
+            if depth > 10 {
+                break;
+            }
+        }
+
+        depth
+    }
+
+    /// Get sorted tasks hierarchically: root → subtasks (supports n-levels)
+    fn get_sorted_tasks(&self) -> Vec<&TaskDisplay> {
+        let mut result = Vec::new();
+
+        // Find root tasks (tasks with no parent)
+        let mut root_tasks: Vec<&TaskDisplay> = self
+            .tasks
+            .iter()
+            .filter(|task| task.parent_id.is_none())
+            .collect();
+
+        // Sort root tasks by completion status and priority
+        root_tasks.sort_by(|a, b| {
+            match (a.is_completed, b.is_completed) {
+                (false, true) => std::cmp::Ordering::Less,    // Active tasks first
+                (true, false) => std::cmp::Ordering::Greater, // Active tasks first
+                _ => a.priority.cmp(&b.priority),             // Then by priority
+            }
+        });
+
+        // Recursively add each root task and its descendants
+        for root_task in root_tasks {
+            self.add_task_and_children(&mut result, root_task);
+        }
+
+        result
+    }
+
+    /// Recursively add a task and all its children to the result list
+    fn add_task_and_children<'a>(&'a self, result: &mut Vec<&'a TaskDisplay>, task: &'a TaskDisplay) {
+        result.push(task);
+
+        // Find all direct children of this task
+        let mut children: Vec<&TaskDisplay> = self
+            .tasks
+            .iter()
+            .filter(|t| t.parent_id.as_ref() == Some(&task.id))
+            .collect();
+
+        // Sort children by completion status and priority
+        children.sort_by(|a, b| match (a.is_completed, b.is_completed) {
+            (false, true) => std::cmp::Ordering::Less,
+            (true, false) => std::cmp::Ordering::Greater,
+            _ => a.priority.cmp(&b.priority),
+        });
+
+        // Recursively add each child and their descendants
+        for child in children {
+            self.add_task_and_children(result, child);
+        }
+    }
+
     fn create_task_item(&self, task: &TaskDisplay, _max_width: usize) -> ListItem<'_> {
         // Create status indicator
         let status_icon = if task.is_deleted {
@@ -413,6 +525,23 @@ impl TaskListComponent {
 
         // Build the line with multiple spans for proper color rendering
         let mut line_spans = Vec::new();
+
+        // Add hierarchical indentation for subtasks (supports n-levels)
+        let depth = self.calculate_task_tree_depth(task);
+        if depth > 0 {
+            // Create indentation based on depth
+            let mut indent_str = String::new();
+
+            // Add spaces for each level (2 spaces per level)
+            for _ in 0..(depth - 1) {
+                indent_str.push_str("    ");
+            }
+
+            // Add tree connector for the current level
+            indent_str.push_str(" └─ ");
+
+            line_spans.push(Span::styled(indent_str, Style::default().fg(Color::DarkGray)));
+        }
 
         // Status icon
         let status_style = if task.is_deleted {
@@ -443,6 +572,20 @@ impl TaskListComponent {
             Style::default().fg(Color::White)
         };
         line_spans.push(Span::styled(task.content.clone(), content_style));
+
+        // Child task progress indicator (for tasks with children)
+        let (completed_children, total_children) = self.get_child_task_stats(&task.id);
+        if total_children > 0 {
+            let progress_text = format!(" ({}/{})", completed_children, total_children);
+            let progress_style = if completed_children == total_children {
+                Style::default().fg(Color::Green) // All children completed
+            } else if completed_children == 0 {
+                Style::default().fg(Color::Gray) // No children completed
+            } else {
+                Style::default().fg(Color::Yellow) // Partially completed
+            };
+            line_spans.push(Span::styled(progress_text, progress_style));
+        }
 
         // Project display
         if let Some(project) = self.projects.iter().find(|p| p.id == task.project_id) {

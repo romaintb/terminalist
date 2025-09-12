@@ -427,15 +427,43 @@ impl AppComponent {
                 Action::None
             }
             Action::ToggleTask(task_id) => {
-                // Find task name for better logging
-                let task_desc = if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
-                    format!("ID {} '{}'", task_id, task.content)
+                // Find the task being toggled and determine its new completion state
+                if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
+                    let task_desc = format!("ID {} '{}'", task_id, task.content);
+                    let will_be_completed = !task.is_completed;
+
+                    self.debug_logger.log(format!(
+                        "Task: Toggling completion status for task {} (will be {})",
+                        task_desc,
+                        if will_be_completed { "completed" } else { "incomplete" }
+                    ));
+
+                    // If completing the task, also complete all subtasks
+                    if will_be_completed {
+                        let subtasks = self.collect_all_subtasks(&task_id);
+                        if !subtasks.is_empty() {
+                            let subtask_count = subtasks.len();
+                            self.debug_logger.log(format!(
+                                "Task: Auto-completing {} subtask(s) of task {}",
+                                subtask_count, task_desc
+                            ));
+
+                            // Format task list: "parent_id|subtask1_id,subtask2_id,..."
+                            let subtask_ids = subtasks.join(",");
+                            let toggle_info = format!("{}|{}", task_id, subtask_ids);
+                            self.spawn_task_operation("Toggle task with subtasks".to_string(), toggle_info);
+                        } else {
+                            // No subtasks, just toggle the main task
+                            self.spawn_task_operation("Toggle task".to_string(), task_id);
+                        }
+                    } else {
+                        // Just toggle the main task (uncompleting doesn't affect subtasks)
+                        self.spawn_task_operation("Toggle task".to_string(), task_id);
+                    }
                 } else {
-                    format!("ID {} [unknown]", task_id)
-                };
-                self.debug_logger
-                    .log(format!("Task: Toggling completion status for task {}", task_desc));
-                self.spawn_task_operation("Toggle task".to_string(), task_id);
+                    self.debug_logger
+                        .log(format!("Task: Cannot toggle - task {} not found", task_id));
+                }
                 Action::None
             }
             Action::CyclePriority(task_id) => {
@@ -706,6 +734,26 @@ impl AppComponent {
         self.active_sync_task = Some(task_id);
     }
 
+    /// Recursively collect all subtasks of a given task
+    fn collect_all_subtasks(&self, parent_id: &str) -> Vec<String> {
+        let mut subtask_ids = Vec::new();
+
+        // Find direct children
+        for task in &self.state.tasks {
+            if let Some(task_parent_id) = &task.parent_id {
+                if task_parent_id == parent_id {
+                    subtask_ids.push(task.id.clone());
+
+                    // Recursively collect subtasks of this subtask
+                    let nested_subtasks = self.collect_all_subtasks(&task.id);
+                    subtask_ids.extend(nested_subtasks);
+                }
+            }
+        }
+
+        subtask_ids
+    }
+
     /// Spawn a generic task operation (now with actual API calls and data refresh)
     fn spawn_task_operation(&mut self, operation_name: String, task_info: String) {
         let description = format!("{}: {}", operation_name, task_info);
@@ -721,6 +769,43 @@ impl AppComponent {
                         Ok(()) => Ok(format!("✅ Task toggled: {}", task_info)),
                         Err(e) => Err(format!("❌ Failed to toggle task: {}", e)),
                     },
+                    "Toggle task with subtasks" => {
+                        // task_info format: "parent_id|subtask1_id,subtask2_id,..."
+                        match task_info.split_once('|') {
+                            Some((parent_id, subtask_ids_str)) => {
+                                let subtask_ids: Vec<&str> = subtask_ids_str.split(',').collect();
+                                let subtask_count = subtask_ids.len();
+
+                                // First toggle the parent task
+                                match sync_service.toggle_task(parent_id).await {
+                                    Ok(()) => {
+                                        // Then toggle all subtasks
+                                        let mut failed_subtasks = Vec::new();
+                                        for subtask_id in &subtask_ids {
+                                            if let Err(e) = sync_service.toggle_task(subtask_id).await {
+                                                failed_subtasks.push(format!("{}: {}", subtask_id, e));
+                                            }
+                                        }
+
+                                        if failed_subtasks.is_empty() {
+                                            Ok(format!(
+                                                "✅ Task and {} subtask(s) toggled: {}",
+                                                subtask_count, parent_id
+                                            ))
+                                        } else {
+                                            Ok(format!(
+                                                "⚠️ Task toggled but {} subtask(s) failed: {}",
+                                                failed_subtasks.len(),
+                                                failed_subtasks.join(", ")
+                                            ))
+                                        }
+                                    }
+                                    Err(e) => Err(format!("❌ Failed to toggle parent task: {}", e)),
+                                }
+                            }
+                            None => Err("❌ Invalid task with subtasks info format".to_string()),
+                        }
+                    }
                     "Delete task" => match sync_service.delete_task(&task_info).await {
                         Ok(()) => Ok(format!("✅ Task deleted: {}", task_info)),
                         Err(e) => Err(format!("❌ Failed to delete task: {}", e)),
