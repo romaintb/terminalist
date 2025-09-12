@@ -211,7 +211,26 @@ impl LocalStorage {
         let storage = LocalStorage { pool };
         storage.init_schema().await?;
         storage.run_migrations().await?;
+
+        // Start database keep-alive task
+        storage.start_keepalive_task();
+
         Ok(storage)
+    }
+
+    /// Start a background task to keep the database connection alive
+    fn start_keepalive_task(&self) {
+        let pool = self.pool.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
+
+            loop {
+                interval.tick().await;
+
+                // Execute a simple query to keep the connection alive
+                let _ = sqlx::query("SELECT 1").execute(&pool).await;
+            }
+        });
     }
 
     /// Initialize database schema
