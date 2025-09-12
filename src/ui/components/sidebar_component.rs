@@ -46,7 +46,8 @@ impl SidebarComponent {
     fn get_next_selection(&self) -> SidebarSelection {
         match &self.selection {
             SidebarSelection::Today => SidebarSelection::Tomorrow,
-            SidebarSelection::Tomorrow => {
+            SidebarSelection::Tomorrow => SidebarSelection::Upcoming,
+            SidebarSelection::Upcoming => {
                 if !self.labels.is_empty() {
                     SidebarSelection::Label(0)
                 } else if !self.projects.is_empty() {
@@ -115,11 +116,12 @@ impl SidebarComponent {
                 }
             }
             SidebarSelection::Tomorrow => SidebarSelection::Today,
+            SidebarSelection::Upcoming => SidebarSelection::Tomorrow,
             SidebarSelection::Label(index) => {
                 if *index > 0 {
                     SidebarSelection::Label(index - 1)
                 } else {
-                    SidebarSelection::Tomorrow
+                    SidebarSelection::Upcoming
                 }
             }
             SidebarSelection::Project(index) => {
@@ -137,7 +139,7 @@ impl SidebarComponent {
                     } else if !self.labels.is_empty() {
                         SidebarSelection::Label(self.labels.len() - 1)
                     } else {
-                        SidebarSelection::Tomorrow
+                        SidebarSelection::Upcoming
                     }
                 } else {
                     SidebarSelection::Today
@@ -220,13 +222,16 @@ impl SidebarComponent {
         if index == 1 {
             return SidebarSelection::Tomorrow;
         }
-
-        let label_count = self.labels.len();
-        if index < 2 + label_count {
-            return SidebarSelection::Label(index - 2);
+        if index == 2 {
+            return SidebarSelection::Upcoming;
         }
 
-        let project_index = index - 2 - label_count;
+        let label_count = self.labels.len();
+        if index < 3 + label_count {
+            return SidebarSelection::Label(index - 3);
+        }
+
+        let project_index = index - 3 - label_count;
         let sorted_projects = self.get_sorted_projects();
         if let Some((original_index, _)) = sorted_projects.get(project_index) {
             SidebarSelection::Project(*original_index)
@@ -320,6 +325,21 @@ impl Component for SidebarComponent {
         all_items.push(ListItem::new(Line::from(vec![
             Span::styled(self.icons.tomorrow().to_string(), tomorrow_style),
             Span::styled("Tomorrow".to_string(), tomorrow_style),
+        ])));
+
+        // Add Upcoming item
+        let is_upcoming_selected = matches!(self.selection, SidebarSelection::Upcoming);
+        let upcoming_style = if is_upcoming_selected {
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+
+        all_items.push(ListItem::new(Line::from(vec![
+            Span::styled(self.icons.upcoming().to_string(), upcoming_style),
+            Span::styled("Upcoming".to_string(), upcoming_style),
         ])));
 
         // Add labels
