@@ -1,10 +1,8 @@
 use anyhow::Result;
 use sqlx::{
     sqlite::{SqliteConnection, SqlitePool, SqlitePoolOptions},
-    Connection, Row,
+    Connection,
 };
-
-use crate::todoist::TaskDisplay;
 
 /// Local storage manager for Todoist data
 pub struct LocalStorage {
@@ -100,7 +98,6 @@ impl LocalStorage {
                 is_recurring BOOLEAN NOT NULL DEFAULT 0,
                 deadline TEXT,
                 duration TEXT,
-                labels TEXT NOT NULL DEFAULT '',
                 FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE
             )
             ",
@@ -123,39 +120,31 @@ impl LocalStorage {
         .execute(&self.pool)
         .await?;
 
+        // Create task_labels junction table for many-to-many relationship
+        sqlx::query(
+            r"
+            CREATE TABLE IF NOT EXISTS task_labels (
+                task_id TEXT NOT NULL,
+                label_id TEXT NOT NULL,
+                PRIMARY KEY (task_id, label_id),
+                FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                FOREIGN KEY (label_id) REFERENCES labels(id) ON DELETE CASCADE
+            )
+            ",
+        )
+        .execute(&self.pool)
+        .await?;
+
+        // Create indexes for performance
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_task_labels_task_id ON task_labels(task_id)")
+            .execute(&self.pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_task_labels_label_id ON task_labels(label_id)")
+            .execute(&self.pool)
+            .await?;
+
         Ok(())
-    }
-
-    /// Create TaskDisplay from database row with label parsing
-    pub(crate) fn task_display_from_row(row: &sqlx::sqlite::SqliteRow) -> TaskDisplay {
-        // Parse labels from JSON string
-        let label_names: Vec<String> = serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
-
-        // Convert label names to LabelDisplay objects (colors will be filled in later)
-        let labels = label_names
-            .into_iter()
-            .map(|name| crate::todoist::LabelDisplay {
-                id: name.clone(), // Use name as ID for now
-                name,
-                color: "blue".to_string(), // Default color, will be updated from storage
-            })
-            .collect();
-
-        TaskDisplay {
-            id: row.get("id"),
-            content: row.get("content"),
-            project_id: row.get("project_id"),
-            section_id: row.get("section_id"),
-            parent_id: row.get("parent_id"),
-            priority: row.get("priority"),
-            due: row.get("due_date"),
-            due_datetime: row.get("due_datetime"),
-            is_recurring: row.get("is_recurring"),
-            deadline: row.get("deadline"),
-            duration: row.get("duration"),
-            labels,
-            description: row.get("description"),
-        }
     }
 
     /// Check if the database has any data
@@ -168,6 +157,7 @@ impl LocalStorage {
 
     /// Clear all data from the database
     pub async fn clear_all_data(&self) -> Result<()> {
+        sqlx::query("DELETE FROM task_labels").execute(&self.pool).await?;
         sqlx::query("DELETE FROM tasks").execute(&self.pool).await?;
         sqlx::query("DELETE FROM projects").execute(&self.pool).await?;
         sqlx::query("DELETE FROM labels").execute(&self.pool).await?;

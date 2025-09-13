@@ -1,7 +1,7 @@
 use anyhow::Result;
+use sqlx::Row;
 
 use super::db::LocalStorage;
-use super::labels::LocalLabel;
 use crate::todoist::{Task, TaskDisplay};
 
 /// Local task representation with sync metadata
@@ -20,7 +20,6 @@ pub struct LocalTask {
     pub is_recurring: bool,
     pub deadline: Option<String>,
     pub duration: Option<String>,
-    pub labels: String,
 }
 
 impl From<Task> for LocalTask {
@@ -45,60 +44,157 @@ impl From<Task> for LocalTask {
             is_recurring: task.due.as_ref().is_some_and(|d| d.is_recurring),
             deadline: task.deadline.map(|d| d.date),
             duration: duration_string,
-            labels: serde_json::to_string(&task.labels).unwrap_or_default(),
             description: Some(task.description),
         }
     }
 }
 
-impl From<LocalTask> for TaskDisplay {
-    fn from(local: LocalTask) -> Self {
-        // Parse labels from JSON string
-        let label_names: Vec<String> = serde_json::from_str(&local.labels).unwrap_or_default();
+impl LocalStorage {
+    async fn get_tasks_with_labels_joined(
+        &self,
+        where_and_order_clause: &str,
+        params: &[&str],
+    ) -> Result<Vec<TaskDisplay>> {
+        let default_order = if where_and_order_clause.contains("ORDER BY") {
+            ""
+        } else {
+            "ORDER BY t.priority DESC, t.order_index ASC"
+        };
 
-        // Convert label names to LabelDisplay objects (colors will be filled in later)
-        let labels = label_names
+        let query = format!(
+            r"
+            SELECT
+                t.id, t.content, t.project_id, t.section_id, t.parent_id, t.priority,
+                t.due_date, t.due_datetime, t.is_recurring, t.deadline, t.duration, t.description,
+                GROUP_CONCAT(l.id || ':' || l.name || ':' || l.color, '|') as labels_data
+            FROM tasks t
+            LEFT JOIN task_labels tl ON t.id = tl.task_id
+            LEFT JOIN labels l ON tl.label_id = l.id
+            {}
+            GROUP BY t.id, t.content, t.project_id, t.section_id, t.parent_id, t.priority,
+                     t.due_date, t.due_datetime, t.is_recurring, t.deadline, t.duration, t.description
+            {}
+            ",
+            where_and_order_clause, default_order
+        );
+
+        let mut query_builder = sqlx::query(&query);
+        for param in params {
+            query_builder = query_builder.bind(param);
+        }
+
+        let rows = query_builder.fetch_all(&self.pool).await?;
+
+        let tasks = rows
             .into_iter()
-            .map(|name| crate::todoist::LabelDisplay {
-                id: name.clone(), // Use name as ID for now
-                name,
-                color: "blue".to_string(), // Default color, will be updated from storage
+            .map(|row| {
+                // Parse the concatenated labels data
+                let labels_data: Option<String> = row.get("labels_data");
+                let labels = if let Some(data) = labels_data {
+                    if data.is_empty() {
+                        Vec::new()
+                    } else {
+                        data.split('|')
+                            .filter_map(|label_str| {
+                                let parts: Vec<&str> = label_str.split(':').collect();
+                                if parts.len() == 3 {
+                                    Some(crate::todoist::LabelDisplay {
+                                        id: parts[0].to_string(),
+                                        name: parts[1].to_string(),
+                                        color: parts[2].to_string(),
+                                    })
+                                } else {
+                                    None
+                                }
+                            })
+                            .collect()
+                    }
+                } else {
+                    Vec::new()
+                };
+
+                TaskDisplay {
+                    id: row.get("id"),
+                    content: row.get("content"),
+                    project_id: row.get("project_id"),
+                    section_id: row.get("section_id"),
+                    parent_id: row.get("parent_id"),
+                    priority: row.get("priority"),
+                    due: row.get("due_date"),
+                    due_datetime: row.get("due_datetime"),
+                    is_recurring: row.get("is_recurring"),
+                    deadline: row.get("deadline"),
+                    duration: row.get("duration"),
+                    labels,
+                    description: row.get("description"),
+                }
             })
             .collect();
 
-        Self {
-            id: local.id,
-            content: local.content,
-            project_id: local.project_id,
-            section_id: local.section_id,
-            parent_id: local.parent_id,
-            priority: local.priority,
-            due: local.due_date,
-            due_datetime: local.due_datetime,
-            is_recurring: local.is_recurring,
-            deadline: local.deadline,
-            duration: local.duration,
-            labels,
-            description: local.description.unwrap_or_default(),
-        }
+        Ok(tasks)
     }
-}
 
-impl LocalStorage {
+    /// Store task-label relationships in junction table
+    async fn store_task_labels(&self, task_id: &str, label_names: &[String]) -> Result<()> {
+        // First, get label IDs from names
+        if label_names.is_empty() {
+            return Ok(());
+        }
+
+        let placeholders = label_names.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let query = format!("SELECT id, name FROM labels WHERE name IN ({placeholders})");
+
+        let mut query_builder = sqlx::query(&query);
+        for name in label_names {
+            query_builder = query_builder.bind(name);
+        }
+
+        let label_rows = query_builder.fetch_all(&self.pool).await?;
+
+        // Insert task-label relationships
+        for row in label_rows {
+            let label_id: String = row.get("id");
+            sqlx::query("INSERT OR IGNORE INTO task_labels (task_id, label_id) VALUES (?, ?)")
+                .bind(task_id)
+                .bind(&label_id)
+                .execute(&self.pool)
+                .await?;
+        }
+
+        Ok(())
+    }
+
+    /// Remove all label relationships for a task
+    async fn clear_task_labels(&self, task_id: &str) -> Result<()> {
+        sqlx::query("DELETE FROM task_labels WHERE task_id = ?")
+            .bind(task_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
     /// Store tasks in local database
     pub async fn store_tasks(&self, tasks: Vec<Task>) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 
-        // Clear existing tasks
+        // Clear existing tasks and their label relationships
+        sqlx::query("DELETE FROM task_labels").execute(&mut *tx).await?;
         sqlx::query("DELETE FROM tasks").execute(&mut *tx).await?;
+
+        // Collect task info for label processing
+        let mut task_labels: Vec<(String, Vec<String>)> = Vec::new();
 
         // Insert new tasks
         for task in tasks {
+            let label_names = task.labels.clone();
             let local_task: LocalTask = task.into();
+
+            task_labels.push((local_task.id.clone(), label_names));
+
             sqlx::query(
                 r"
-                INSERT INTO tasks (id, content, project_id, section_id, parent_id, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tasks (id, content, project_id, section_id, parent_id, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ",
             )
             .bind(&local_task.id)
@@ -113,24 +209,32 @@ impl LocalStorage {
             .bind(local_task.is_recurring)
             .bind(&local_task.deadline)
             .bind(&local_task.duration)
-            .bind(&local_task.labels)
             .bind(&local_task.description)
             .execute(&mut *tx)
             .await?;
         }
 
         tx.commit().await?;
+
+        // Store label relationships after transaction commits
+        for (task_id, label_names) in task_labels {
+            self.store_task_labels(&task_id, &label_names).await?;
+        }
         Ok(())
     }
 
     /// Store a single task in the database (for immediate insertion after API calls)
     pub async fn store_single_task(&self, task: Task) -> Result<()> {
+        let label_names = task.labels.clone();
         let local_task: LocalTask = task.into();
+
+        // Use transaction for atomic operation
+        let mut tx = self.pool.begin().await?;
 
         sqlx::query(
             r"
-            INSERT OR REPLACE INTO tasks (id, content, project_id, section_id, parent_id, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO tasks (id, content, project_id, section_id, parent_id, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ",
         )
         .bind(&local_task.id)
@@ -145,111 +249,26 @@ impl LocalStorage {
         .bind(local_task.is_recurring)
         .bind(&local_task.deadline)
         .bind(&local_task.duration)
-        .bind(&local_task.labels)
         .bind(&local_task.description)
-        .execute(&self.pool)
+        .execute(&mut *tx)
         .await?;
 
-        Ok(())
-    }
+        tx.commit().await?;
 
-    /// Get labels by their IDs
-    pub async fn get_labels_by_ids(&self, label_ids: &[String]) -> Result<Vec<LocalLabel>> {
-        if label_ids.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        // Create placeholders for the IN clause
-        let placeholders = label_ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-        let query = format!("SELECT * FROM labels WHERE id IN ({placeholders}) ORDER BY order_index");
-
-        let mut query_builder = sqlx::query_as::<_, LocalLabel>(&query);
-        for id in label_ids {
-            query_builder = query_builder.bind(id);
-        }
-
-        let labels = query_builder.fetch_all(&self.pool).await?;
-        Ok(labels)
-    }
-
-    /// Update task labels with proper color information
-    pub async fn update_task_labels(&self, task_display: &mut TaskDisplay) -> Result<()> {
-        if task_display.labels.is_empty() {
-            return Ok(());
-        }
-
-        // Extract label names from the task
-        let label_names: Vec<String> = task_display.labels.iter().map(|l| l.name.clone()).collect();
-
-        // Get the actual label objects from storage
-        let stored_labels = self.get_labels_by_ids(&label_names).await?;
-
-        // Create a map of label names to colors
-        let mut label_color_map = std::collections::HashMap::new();
-        for label in stored_labels {
-            label_color_map.insert(label.name, label.color);
-        }
-
-        // Update the task labels with proper colors
-        for label_display in &mut task_display.labels {
-            if let Some(color) = label_color_map.get(&label_display.name) {
-                label_display.color = color.clone();
-            }
-        }
-
+        // Store label relationships after transaction commits
+        self.clear_task_labels(&local_task.id).await?;
+        self.store_task_labels(&local_task.id, &label_names).await?;
         Ok(())
     }
 
     /// Get tasks for a specific project from local storage
     pub async fn get_tasks_for_project(&self, project_id: &str) -> Result<Vec<TaskDisplay>> {
-        let rows = sqlx::query(
-            r"
-            SELECT id, content, project_id, section_id, parent_id, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
-            FROM tasks
-            WHERE project_id = ?
-            ORDER BY priority DESC, order_index ASC
-            ",
-        )
-        .bind(project_id)
-        .fetch_all(&self.pool)
-        .await?;
-
-        let mut tasks = rows
-            .into_iter()
-            .map(|row| Self::task_display_from_row(&row))
-            .collect::<Vec<TaskDisplay>>();
-
-        // Update label colors for all tasks
-        for task in &mut tasks {
-            self.update_task_labels(task).await?;
-        }
-
-        Ok(tasks)
+        self.get_tasks_with_labels_joined("WHERE t.project_id = ?", &[project_id]).await
     }
 
     /// Get all tasks from local storage
     pub async fn get_all_tasks(&self) -> Result<Vec<TaskDisplay>> {
-        let rows = sqlx::query(
-            r"
-            SELECT id, content, project_id, section_id, parent_id, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
-            FROM tasks
-            ORDER BY priority DESC, order_index ASC
-            ",
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        let mut tasks = rows
-            .into_iter()
-            .map(|row| Self::task_display_from_row(&row))
-            .collect::<Vec<TaskDisplay>>();
-
-        // Update label colors for all tasks
-        for task in &mut tasks {
-            self.update_task_labels(task).await?;
-        }
-
-        Ok(tasks)
+        self.get_tasks_with_labels_joined("", &[]).await
     }
 
     /// Get tasks due today and overdue tasks from local storage
@@ -257,37 +276,18 @@ impl LocalStorage {
         // Get current date in YYYY-MM-DD format
         let current_date: String = sqlx::query_scalar("SELECT date('now')").fetch_one(&self.pool).await?;
 
-        let rows = sqlx::query(
-            r"
-            SELECT id, content, project_id, section_id, parent_id, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
-            FROM tasks
-            WHERE due_date IS NOT NULL
-              AND due_date <= ?
-            ORDER BY
-              CASE
-                WHEN due_date < ? THEN 0  -- Overdue first
-                ELSE 1  -- Today second
-              END,
-              priority DESC,
-              order_index ASC
-            ",
+        self.get_tasks_with_labels_joined(
+            r"WHERE t.due_date IS NOT NULL AND t.due_date <= ?
+              ORDER BY
+                CASE
+                  WHEN t.due_date < ? THEN 0  -- Overdue first
+                  ELSE 1  -- Today second
+                END,
+                t.priority DESC,
+                t.order_index ASC",
+            &[&current_date, &current_date],
         )
-        .bind(&current_date)
-        .bind(&current_date)
-        .fetch_all(&self.pool)
-        .await?;
-
-        let mut tasks = rows
-            .into_iter()
-            .map(|row| Self::task_display_from_row(&row))
-            .collect::<Vec<TaskDisplay>>();
-
-        // Update label colors for all tasks
-        for task in &mut tasks {
-            self.update_task_labels(task).await?;
-        }
-
-        Ok(tasks)
+        .await
     }
 
     /// Get tasks due tomorrow from local storage
@@ -295,92 +295,32 @@ impl LocalStorage {
         // Get tomorrow's date in YYYY-MM-DD format
         let tomorrow_date: String = sqlx::query_scalar("SELECT date('now', '+1 day')").fetch_one(&self.pool).await?;
 
-        let rows = sqlx::query(
-            r"
-            SELECT id, content, project_id, section_id, parent_id, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
-            FROM tasks
-            WHERE due_date IS NOT NULL
-              AND due_date = ?
-            ORDER BY
-              priority DESC,
-              order_index ASC
-            ",
-        )
-        .bind(&tomorrow_date)
-        .fetch_all(&self.pool)
-        .await?;
-
-        let mut tasks = rows
-            .into_iter()
-            .map(|row| Self::task_display_from_row(&row))
-            .collect::<Vec<TaskDisplay>>();
-
-        // Update label colors for all tasks
-        for task in &mut tasks {
-            self.update_task_labels(task).await?;
-        }
-
-        Ok(tasks)
+        self.get_tasks_with_labels_joined("WHERE t.due_date IS NOT NULL AND t.due_date = ?", &[&tomorrow_date])
+            .await
     }
 
     /// Get tasks for upcoming from local storage (overdue + next 3 months)
     pub async fn get_tasks_for_upcoming(&self) -> Result<Vec<TaskDisplay>> {
-        let rows = sqlx::query(
-            r"
-            SELECT *
-            FROM tasks
-            WHERE due_date IS NOT NULL
-              AND due_date <= date('now', '+3 months')
-            ORDER BY
-              CASE
-                WHEN due_date < date('now') THEN 0      -- Overdue tasks first
-                WHEN due_date = date('now') THEN 1      -- Today's tasks second
-                ELSE 2                                  -- Future tasks third
-              END,
-              due_date ASC,                            -- Then chronological order
-              priority DESC,                           -- Then priority (high to low)
-              order_index ASC                          -- Finally by user's manual order
-            ",
+        self.get_tasks_with_labels_joined(
+            r"WHERE t.due_date IS NOT NULL AND t.due_date <= date('now', '+3 months')
+              ORDER BY
+                CASE
+                  WHEN t.due_date < date('now') THEN 0      -- Overdue tasks first
+                  WHEN t.due_date = date('now') THEN 1      -- Today's tasks second
+                  ELSE 2                                    -- Future tasks third
+                END,
+                t.due_date ASC,                            -- Then chronological order
+                t.priority DESC,                           -- Then priority (high to low)
+                t.order_index ASC",
+            &[],
         )
-        .fetch_all(&self.pool)
-        .await?;
-
-        let mut tasks = rows
-            .into_iter()
-            .map(|row| Self::task_display_from_row(&row))
-            .collect::<Vec<TaskDisplay>>();
-
-        // Update label colors for all tasks
-        for task in &mut tasks {
-            self.update_task_labels(task).await?;
-        }
-
-        Ok(tasks)
+        .await
     }
 
     /// Get a single task by ID from local storage
     pub async fn get_task_by_id(&self, task_id: &str) -> Result<Option<TaskDisplay>> {
-        let row = sqlx::query(
-            r"
-            SELECT id, content, project_id, section_id, parent_id, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
-            FROM tasks
-            WHERE id = ?
-            ",
-        )
-        .bind(task_id)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        if let Some(row) = row {
-            let mut task = Self::task_display_from_row(&row);
-
-            // Update label colors
-            self.update_task_labels(&mut task).await?;
-
-            Ok(Some(task))
-        } else {
-            Ok(None)
-        }
+        let tasks = self.get_tasks_with_labels_joined("WHERE t.id = ?", &[task_id]).await?;
+        Ok(tasks.into_iter().next())
     }
 
     /// Delete a task and its subtasks from local storage
