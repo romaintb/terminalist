@@ -27,12 +27,6 @@ async fn main() -> Result<()> {
         println!("ENVIRONMENT VARIABLES:");
         println!("    TODOIST_API_TOKEN    Your Todoist API token (required)");
         println!();
-        println!("NAVIGATION:");
-        println!("    J/K           Navigate sidebar items (projects/labels/views)");
-        println!("    j/k           Navigate task items");
-        println!("    Mouse         Click sidebar items to navigate");
-        println!("    ?/h           Toggle help dialog");
-        println!();
         return Ok(());
     }
 
