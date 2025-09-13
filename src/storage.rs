@@ -332,6 +332,42 @@ impl LocalStorage {
         Ok(())
     }
 
+
+    /// Create TaskDisplay from database row with label parsing
+    fn task_display_from_row(row: &sqlx::sqlite::SqliteRow) -> TaskDisplay {
+        // Parse labels from JSON string
+        let label_names: Vec<String> =
+            serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
+
+        // Convert label names to LabelDisplay objects (colors will be filled in later)
+        let labels = label_names
+            .into_iter()
+            .map(|name| crate::todoist::LabelDisplay {
+                id: name.clone(), // Use name as ID for now
+                name,
+                color: "blue".to_string(), // Default color, will be updated from storage
+            })
+            .collect();
+
+        TaskDisplay {
+            id: row.get("id"),
+            content: row.get("content"),
+            project_id: row.get("project_id"),
+            section_id: row.get("section_id"),
+            parent_id: row.get("parent_id"),
+            is_completed: row.get("is_completed"),
+            is_deleted: row.get("is_deleted"),
+            priority: row.get("priority"),
+            due: row.get("due_date"),
+            due_datetime: row.get("due_datetime"),
+            is_recurring: row.get("is_recurring"),
+            deadline: row.get("deadline"),
+            duration: row.get("duration"),
+            labels,
+            description: row.get("description"),
+        }
+    }
+
     /// Store projects in local database
     pub async fn store_projects(&self, projects: Vec<Project>) -> Result<()> {
         let mut tx = self.pool.begin().await?;
@@ -757,39 +793,7 @@ impl LocalStorage {
 
         let mut tasks = rows
             .into_iter()
-            .map(|row| {
-                // Parse labels from JSON string
-                let label_names: Vec<String> =
-                    serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
-
-                // Convert label names to LabelDisplay objects (colors will be filled in later)
-                let labels = label_names
-                    .into_iter()
-                    .map(|name| crate::todoist::LabelDisplay {
-                        id: name.clone(), // Use name as ID for now
-                        name,
-                        color: "blue".to_string(), // Default color, will be updated from storage
-                    })
-                    .collect();
-
-                TaskDisplay {
-                    id: row.get("id"),
-                    content: row.get("content"),
-                    project_id: row.get("project_id"),
-                    section_id: row.get("section_id"),
-                    parent_id: row.get("parent_id"),
-                    is_completed: row.get("is_completed"),
-                    is_deleted: row.get("is_deleted"),
-                    priority: row.get("priority"),
-                    due: row.get("due_date"),
-                    due_datetime: row.get("due_datetime"),
-                    is_recurring: row.get("is_recurring"),
-                    deadline: row.get("deadline"),
-                    duration: row.get("duration"),
-                    labels,
-                    description: row.get("description"),
-                }
-            })
+            .map(|row| Self::task_display_from_row(&row))
             .collect::<Vec<TaskDisplay>>();
 
         // Update label colors for all tasks
@@ -814,39 +818,7 @@ impl LocalStorage {
 
         let mut tasks = rows
             .into_iter()
-            .map(|row| {
-                // Parse labels from JSON string
-                let label_names: Vec<String> =
-                    serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
-
-                // Convert label names to LabelDisplay objects (colors will be filled in later)
-                let labels = label_names
-                    .into_iter()
-                    .map(|name| crate::todoist::LabelDisplay {
-                        id: name.clone(), // Use name as ID for now
-                        name,
-                        color: "blue".to_string(), // Default color, will be updated from storage
-                    })
-                    .collect();
-
-                TaskDisplay {
-                    id: row.get("id"),
-                    content: row.get("content"),
-                    project_id: row.get("project_id"),
-                    section_id: row.get("section_id"),
-                    parent_id: row.get("parent_id"),
-                    is_completed: row.get("is_completed"),
-                    is_deleted: row.get("is_deleted"),
-                    priority: row.get("priority"),
-                    due: row.get("due_date"),
-                    due_datetime: row.get("due_datetime"),
-                    is_recurring: row.get("is_recurring"),
-                    deadline: row.get("deadline"),
-                    duration: row.get("duration"),
-                    labels,
-                    description: row.get("description"),
-                }
-            })
+            .map(|row| Self::task_display_from_row(&row))
             .collect::<Vec<TaskDisplay>>();
 
         // Update label colors for all tasks
@@ -888,39 +860,7 @@ impl LocalStorage {
 
         let mut tasks = rows
             .into_iter()
-            .map(|row| {
-                // Parse labels from JSON string
-                let label_names: Vec<String> =
-                    serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
-
-                // Convert label names to LabelDisplay objects (colors will be filled in later)
-                let labels = label_names
-                    .into_iter()
-                    .map(|name| crate::todoist::LabelDisplay {
-                        id: name.clone(), // Use name as ID for now
-                        name,
-                        color: "blue".to_string(), // Default color, will be updated from storage
-                    })
-                    .collect();
-
-                TaskDisplay {
-                    id: row.get("id"),
-                    content: row.get("content"),
-                    project_id: row.get("project_id"),
-                    section_id: row.get("section_id"),
-                    parent_id: row.get("parent_id"),
-                    is_completed: row.get("is_completed"),
-                    is_deleted: row.get("is_deleted"),
-                    priority: row.get("priority"),
-                    due: row.get("due_date"),
-                    due_datetime: row.get("due_datetime"),
-                    is_recurring: row.get("is_recurring"),
-                    deadline: row.get("deadline"),
-                    duration: row.get("duration"),
-                    labels,
-                    description: row.get("description"),
-                }
-            })
+            .map(|row| Self::task_display_from_row(&row))
             .collect::<Vec<TaskDisplay>>();
 
         // Update label colors for all tasks
@@ -957,39 +897,7 @@ impl LocalStorage {
 
         let mut tasks = rows
             .into_iter()
-            .map(|row| {
-                // Parse labels from JSON string
-                let label_names: Vec<String> =
-                    serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
-
-                // Convert label names to LabelDisplay objects (colors will be filled in later)
-                let labels = label_names
-                    .into_iter()
-                    .map(|name| crate::todoist::LabelDisplay {
-                        id: name.clone(), // Use name as ID for now
-                        name,
-                        color: "blue".to_string(), // Default color, will be updated from storage
-                    })
-                    .collect();
-
-                TaskDisplay {
-                    id: row.get("id"),
-                    content: row.get("content"),
-                    project_id: row.get("project_id"),
-                    section_id: row.get("section_id"),
-                    parent_id: row.get("parent_id"),
-                    is_completed: row.get("is_completed"),
-                    is_deleted: row.get("is_deleted"),
-                    priority: row.get("priority"),
-                    due: row.get("due_date"),
-                    due_datetime: row.get("due_datetime"),
-                    is_recurring: row.get("is_recurring"),
-                    deadline: row.get("deadline"),
-                    duration: row.get("duration"),
-                    labels,
-                    description: row.get("description"),
-                }
-            })
+            .map(|row| Self::task_display_from_row(&row))
             .collect::<Vec<TaskDisplay>>();
 
         // Update label colors for all tasks
@@ -1026,39 +934,7 @@ impl LocalStorage {
 
         let mut tasks = rows
             .into_iter()
-            .map(|row| {
-                // Parse labels from JSON string
-                let label_names: Vec<String> =
-                    serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
-
-                // Convert label names to LabelDisplay objects (colors will be filled in later)
-                let labels = label_names
-                    .into_iter()
-                    .map(|name| crate::todoist::LabelDisplay {
-                        id: name.clone(), // Use name as ID for now
-                        name,
-                        color: "blue".to_string(), // Default color, will be updated from storage
-                    })
-                    .collect();
-
-                TaskDisplay {
-                    id: row.get("id"),
-                    content: row.get("content"),
-                    project_id: row.get("project_id"),
-                    section_id: row.get("section_id"),
-                    parent_id: row.get("parent_id"),
-                    is_completed: row.get("is_completed"),
-                    is_deleted: row.get("is_deleted"),
-                    priority: row.get("priority"),
-                    due: row.get("due_date"),
-                    due_datetime: row.get("due_datetime"),
-                    is_recurring: row.get("is_recurring"),
-                    deadline: row.get("deadline"),
-                    duration: row.get("duration"),
-                    labels,
-                    description: row.get("description"),
-                }
-            })
+            .map(|row| Self::task_display_from_row(&row))
             .collect::<Vec<TaskDisplay>>();
 
         // Update label colors for all tasks
