@@ -87,7 +87,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 #### 3.1.1 Core Task Management
 - **FR-001**: Users can view all tasks in a project with status indicators
 - **FR-002**: Users can create new tasks with content, project assignment, and priority
-- **FR-003**: Users can toggle task completion status (complete ↔ reopen)
+- **FR-003**: Users can complete tasks
 - **FR-004**: Users can delete tasks with confirmation dialog
 - **FR-005**: Users can navigate tasks using j/k keys (down/up)
 - **FR-006**: Tasks display priority badges (P0-P3) and label badges

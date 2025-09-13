@@ -424,25 +424,20 @@ impl AppComponent {
                 self.spawn_task_operation("Create task".to_string(), task_info);
                 Action::None
             }
-            Action::ToggleTask(task_id) => {
-                // Find the task being toggled and determine its new completion state
+            Action::CompleteTask(task_id) => {
+                // Find the task being completed
                 let sync_service = self.sync_service.clone();
                 if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
                     let task_desc = format!("ID {} '{}'", task_id, task.content);
-                    let will_be_completed = !task.is_completed;
 
-                    self.logger.log(format!(
-                        "Task: Toggling completion status for task {} (will be {})",
-                        task_desc,
-                        if will_be_completed { "completed" } else { "incomplete" }
-                    ));
+                    self.logger
+                        .log(format!("Task: Completing task {}", task_desc));
 
                     // Todoist API automatically handles subtasks when parent is completed
-                    // No need for complex recursive logic - just toggle the parent task
-                    self.spawn_task_operation("Toggle task".to_string(), task_id);
+                    self.spawn_task_operation("Complete task".to_string(), task_id);
                 } else {
                     self.logger
-                        .log(format!("Task: Cannot toggle - task {} not found", task_id));
+                        .log(format!("Task: Cannot complete - task {} not found", task_id));
                 }
                 Action::None
             }
@@ -729,9 +724,9 @@ impl AppComponent {
         let _task_id = self.task_manager.spawn_task_operation(
             move || async move {
                 let result = match op_name.as_str() {
-                    "Toggle task" => match sync_service.toggle_task(&task_info).await {
-                        Ok(()) => Ok(format!("✅ Task toggled: {}", task_info)),
-                        Err(e) => Err(format!("❌ Failed to toggle task: {}", e)),
+                    "Complete task" => match sync_service.complete_task(&task_info).await {
+                        Ok(()) => Ok(format!("✅ Task completed: {}", task_info)),
+                        Err(e) => Err(format!("❌ Failed to complete task: {}", e)),
                     },
                     "Delete task" => match sync_service.delete_task(&task_info).await {
                         Ok(()) => Ok(format!("✅ Task deleted: {}", task_info)),

@@ -1021,17 +1021,6 @@ impl LocalStorage {
         Ok(())
     }
 
-    /// Mark a task as incomplete in local storage (reopen)
-    pub async fn mark_task_incomplete(&self, task_id: &str) -> Result<()> {
-        sqlx::query("UPDATE tasks SET is_completed = false, last_synced = ? WHERE id = ?")
-            .bind(Utc::now())
-            .bind(task_id)
-            .execute(&self.pool)
-            .await?;
-
-        Ok(())
-    }
-
     /// Delete a completed task and its subtasks from local storage
     /// Thanks to CASCADE DELETE, subtasks are automatically removed
     pub async fn delete_completed_task(&self, task_id: &str) -> Result<()> {

@@ -645,7 +645,7 @@ impl Component for TaskListComponent {
             KeyCode::Enter | KeyCode::Char(' ') => {
                 if let Some(task) = self.tasks.get(self.selected_index) {
                     // Note: Detailed logging done when action is processed by AppComponent
-                    Action::ToggleTask(task.id.clone())
+                    Action::CompleteTask(task.id.clone())
                 } else {
                     Action::None
                 }

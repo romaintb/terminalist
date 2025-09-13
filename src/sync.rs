@@ -386,38 +386,6 @@ impl SyncService {
         Ok(())
     }
 
-    /// Toggle task completion status
-    pub async fn toggle_task(&self, task_id: &str) -> Result<()> {
-        self.log(format!("API: Toggling task completion for ID {}", task_id));
-
-        // Get current task state from local storage to determine if we should complete or reopen
-        let storage = self.storage.lock().await;
-        let current_task = storage.get_task_by_id(task_id).await?;
-        drop(storage); // Release lock early
-
-        if let Some(task) = current_task {
-            if task.is_completed {
-                // Task is completed, reopen it
-                self.log(format!("API: Reopening completed task {}", task_id));
-                self.reopen_task(task_id).await?;
-            } else {
-                // Task is not completed, complete it
-                self.log(format!("API: Completing task {}", task_id));
-                self.complete_task(task_id).await?;
-            }
-        } else {
-            // Task not found in local storage, assume it needs to be completed
-            self.log(format!(
-                "API: Task not found locally, attempting to complete {}",
-                task_id
-            ));
-            self.complete_task(task_id).await?;
-        }
-
-        self.log(format!("API: Successfully toggled task {}", task_id));
-        Ok(())
-    }
-
     /// Perform full sync with Todoist API
     pub async fn sync(&self) -> Result<SyncStatus> {
         // Check if sync is already in progress and acquire lock
@@ -562,18 +530,6 @@ impl SyncService {
         storage.mark_task_completed(task_id).await?; // Mark completed first
         storage.delete_completed_task(task_id).await?; // Then delete
         drop(storage);
-
-        Ok(())
-    }
-
-    /// Reopen a task (mark as incomplete)
-    pub async fn reopen_task(&self, task_id: &str) -> Result<()> {
-        // First, reopen the task via API
-        self.todoist.reopen_task(task_id).await?;
-
-        // Then update local storage
-        let storage = self.storage.lock().await;
-        storage.mark_task_incomplete(task_id).await?;
 
         Ok(())
     }

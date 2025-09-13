@@ -53,7 +53,7 @@ Once the application is running, you can use these keyboard shortcuts:
 - **Mouse** Click on sidebar items to navigate
 
 ### **Task Management**
-- **`Space`** or **`Enter`** Toggle task completion (complete ↔ reopen)
+- **`Space`** or **`Enter`** Complete task
 - **`a`** Create new task
 - **`d`** Delete selected task (with confirmation)
 - **`p`** Cycle task priority
