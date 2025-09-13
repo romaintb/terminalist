@@ -34,7 +34,6 @@ pub struct TaskDisplay {
     pub project_id: String,
     pub section_id: Option<String>,
     pub parent_id: Option<String>,
-    pub is_completed: bool,
     pub is_deleted: bool,
     pub priority: i32,
     pub due: Option<String>,
@@ -97,7 +96,6 @@ impl From<Task> for TaskDisplay {
             project_id: task.project_id,
             section_id: task.section_id,
             parent_id: task.parent_id,
-            is_completed: task.is_completed,
             is_deleted: false, // New tasks are not deleted
             priority: task.priority,
             due: task.due.as_ref().map(|d| d.date.clone()),

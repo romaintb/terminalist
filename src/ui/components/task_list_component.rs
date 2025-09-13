@@ -216,11 +216,7 @@ impl TaskListComponent {
         // Add all tasks (they're already filtered for tomorrow by the database query)
         // For date-filtered views, use simple sorting to avoid hierarchy issues
         let mut tasks = self.tasks.iter().collect::<Vec<_>>();
-        tasks.sort_by(|a, b| match (a.is_completed, b.is_completed) {
-            (false, true) => std::cmp::Ordering::Less,
-            (true, false) => std::cmp::Ordering::Greater,
-            _ => a.priority.cmp(&b.priority),
-        });
+        tasks.sort_by(|a, b| a.priority.cmp(&b.priority));
 
         for task in tasks {
             let item = self.create_task_item(task, 0);
@@ -412,24 +408,15 @@ impl TaskListComponent {
         }
     }
 
-    /// Get child task completion statistics (completed, total)
+    /// Get child task statistics (total count only)
     fn get_child_task_stats(&self, parent_id: &str) -> (usize, usize) {
-        let mut total_children = 0;
-        let mut completed_children = 0;
+        let total_children = self
+            .tasks
+            .iter()
+            .filter(|task| task.parent_id.as_deref() == Some(parent_id))
+            .count();
 
-        // Find direct children only
-        for task in &self.tasks {
-            if let Some(task_parent_id) = &task.parent_id {
-                if task_parent_id == parent_id {
-                    total_children += 1;
-                    if task.is_completed {
-                        completed_children += 1;
-                    }
-                }
-            }
-        }
-
-        (completed_children, total_children)
+        (0, total_children)
     }
 
     /// Calculate the tree depth of a task for indentation (supports n-levels)
@@ -465,14 +452,8 @@ impl TaskListComponent {
         // Find root tasks (tasks with no parent)
         let mut root_tasks: Vec<&TaskDisplay> = self.tasks.iter().filter(|task| task.parent_id.is_none()).collect();
 
-        // Sort root tasks by completion status and priority
-        root_tasks.sort_by(|a, b| {
-            match (a.is_completed, b.is_completed) {
-                (false, true) => std::cmp::Ordering::Less,    // Active tasks first
-                (true, false) => std::cmp::Ordering::Greater, // Active tasks first
-                _ => a.priority.cmp(&b.priority),             // Then by priority
-            }
-        });
+        // Sort root tasks by priority
+        root_tasks.sort_by(|a, b| a.priority.cmp(&b.priority));
 
         // Recursively add each root task and its descendants
         for root_task in root_tasks {
@@ -490,12 +471,8 @@ impl TaskListComponent {
         let mut children: Vec<&TaskDisplay> =
             self.tasks.iter().filter(|t| t.parent_id.as_ref() == Some(&task.id)).collect();
 
-        // Sort children by completion status and priority
-        children.sort_by(|a, b| match (a.is_completed, b.is_completed) {
-            (false, true) => std::cmp::Ordering::Less,
-            (true, false) => std::cmp::Ordering::Greater,
-            _ => a.priority.cmp(&b.priority),
-        });
+        // Sort children by priority
+        children.sort_by(|a, b| a.priority.cmp(&b.priority));
 
         // Recursively add each child and their descendants
         for child in children {
@@ -507,8 +484,6 @@ impl TaskListComponent {
         // Create status indicator
         let status_icon = if task.is_deleted {
             self.icons.task_deleted()
-        } else if task.is_completed {
-            self.icons.task_completed()
         } else {
             self.icons.task_pending()
         };
@@ -536,8 +511,6 @@ impl TaskListComponent {
         // Status icon
         let status_style = if task.is_deleted {
             Style::default().fg(Color::Red)
-        } else if task.is_completed {
-            Style::default().fg(Color::Green)
         } else {
             Style::default().fg(Color::White)
         };
@@ -552,24 +525,16 @@ impl TaskListComponent {
         // Task content with appropriate styling
         let content_style = if task.is_deleted {
             Style::default().fg(Color::Red).add_modifier(Modifier::CROSSED_OUT)
-        } else if task.is_completed {
-            Style::default().fg(Color::Green).add_modifier(Modifier::DIM)
         } else {
             Style::default().fg(Color::White)
         };
         line_spans.push(Span::styled(task.content.clone(), content_style));
 
         // Child task progress indicator (for tasks with children)
-        let (completed_children, total_children) = self.get_child_task_stats(&task.id);
+        let (_, total_children) = self.get_child_task_stats(&task.id);
         if total_children > 0 {
-            let progress_text = format!(" ({}/{})", completed_children, total_children);
-            let progress_style = if completed_children == total_children {
-                Style::default().fg(Color::Green) // All children completed
-            } else if completed_children == 0 {
-                Style::default().fg(Color::Gray) // No children completed
-            } else {
-                Style::default().fg(Color::Yellow) // Partially completed
-            };
+            let progress_text = format!(" ({})", total_children);
+            let progress_style = Style::default().fg(Color::Gray);
             line_spans.push(Span::styled(progress_text, progress_style));
         }
 

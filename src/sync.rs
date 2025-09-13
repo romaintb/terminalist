@@ -130,12 +130,6 @@ impl SyncService {
         storage.get_task_by_id(task_id).await
     }
 
-    /// Delete a completed task from local storage (subtasks deleted automatically via CASCADE)
-    pub async fn delete_completed_task(&self, task_id: &str) -> Result<()> {
-        let storage = self.storage.lock().await;
-        storage.delete_completed_task(task_id).await
-    }
-
     /// Check if sync is currently in progress
     pub async fn is_syncing(&self) -> bool {
         *self.sync_in_progress.lock().await
@@ -517,8 +511,7 @@ impl SyncService {
         // Then delete from local storage (subtasks deleted via CASCADE)
         // Since completed tasks aren't displayed, we can remove them entirely
         let storage = self.storage.lock().await;
-        storage.mark_task_completed(task_id).await?; // Mark completed first
-        storage.delete_completed_task(task_id).await?; // Then delete
+        storage.delete_task(task_id).await?;
         drop(storage);
 
         Ok(())
@@ -529,9 +522,9 @@ impl SyncService {
         // First, delete the task via API
         self.todoist.delete_task(task_id).await?;
 
-        // Then remove from local storage
+        // Then mark as deleted in local storage
         let storage = self.storage.lock().await;
-        storage.delete_task(task_id).await?;
+        storage.mark_task_deleted(task_id).await?;
 
         Ok(())
     }
