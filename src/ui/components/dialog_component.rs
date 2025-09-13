@@ -1,5 +1,5 @@
-use crate::debug_logger::DebugLogger;
 use crate::icons::IconService;
+use crate::logger::Logger;
 use crate::todoist::{LabelDisplay, ProjectDisplay};
 use crate::ui::core::{
     actions::{Action, DialogType},
@@ -24,7 +24,7 @@ pub struct DialogComponent {
     pub scroll_offset: usize,
     pub scrollbar_state: ScrollbarState,
     // Debug logger for logs dialog
-    pub debug_logger: Option<DebugLogger>,
+    pub logger: Option<Logger>,
 }
 
 impl Default for DialogComponent {
@@ -47,7 +47,7 @@ impl DialogComponent {
             icons: IconService::default(),
             scroll_offset: 0,
             scrollbar_state: ScrollbarState::new(0),
-            debug_logger: None,
+            logger: None,
         }
     }
 
@@ -72,8 +72,8 @@ impl DialogComponent {
             .collect()
     }
 
-    pub fn set_debug_logger(&mut self, logger: DebugLogger) {
-        self.debug_logger = Some(logger);
+    pub fn set_logger(&mut self, logger: Logger) {
+        self.logger = Some(logger);
     }
 
     pub fn is_visible(&self) -> bool {
@@ -322,13 +322,7 @@ impl DialogComponent {
     }
 
     fn render_logs_dialog(&mut self, f: &mut Frame, area: Rect) {
-        system_dialogs::render_logs_dialog(
-            f,
-            area,
-            &self.debug_logger,
-            self.scroll_offset,
-            &mut self.scrollbar_state,
-        );
+        system_dialogs::render_logs_dialog(f, area, &self.logger, self.scroll_offset, &mut self.scrollbar_state);
     }
 }
 

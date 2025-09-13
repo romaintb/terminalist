@@ -147,7 +147,7 @@ src/
 ├── sync.rs                    # Sync service with API integration
 ├── storage.rs                 # SQLite storage (in-memory)
 ├── icons.rs                   # Icon service for terminal compatibility
-├── debug_logger.rs            # Debug logging system
+├── logger.rs                  # Debug logging system
 ├── utils/                     # Utility modules
 │   ├── mod.rs
 │   └── date.rs                # Date/time utilities

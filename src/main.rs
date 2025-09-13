@@ -1,5 +1,5 @@
-pub mod debug_logger;
 pub mod icons;
+pub mod logger;
 pub mod storage;
 pub mod sync;
 pub mod todoist;
