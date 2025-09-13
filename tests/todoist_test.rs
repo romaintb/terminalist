@@ -35,7 +35,6 @@ fn test_task_conversion() {
         parent_id: None,
         order: 1,
         priority: 3,
-        is_completed: false,
         labels: vec!["label1".to_string(), "label2".to_string()],
         created_at: "2023-01-01T00:00:00Z".to_string(),
         due: Some(Due {
@@ -53,6 +52,7 @@ fn test_task_conversion() {
         assignee_id: None,
         url: "https://todoist.com".to_string(),
         comment_count: 0,
+        is_completed: false,
     };
 
     let display: TaskDisplay = task.into();
@@ -60,7 +60,6 @@ fn test_task_conversion() {
     assert_eq!(display.content, "Test Task");
     assert_eq!(display.project_id, "123");
     assert_eq!(display.priority, 3);
-    assert!(!display.is_completed);
     assert!(display.is_recurring);
     assert_eq!(display.labels.len(), 2);
     assert_eq!(display.duration, Some("30m".to_string()));

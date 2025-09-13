@@ -22,10 +22,7 @@ pub fn create_paren_badge(text: &str) -> Span<'static> {
 pub fn create_label_badge(name: &str, color: &str) -> Span<'static> {
     let bg_color = crate::utils::color::convert_todoist_color(color);
 
-    let style = Style::default()
-        .bg(bg_color)
-        .fg(Color::White)
-        .add_modifier(Modifier::BOLD);
+    let style = Style::default().bg(bg_color).fg(Color::White).add_modifier(Modifier::BOLD);
 
     Span::styled(name.to_string(), style)
 }
@@ -66,15 +63,11 @@ pub fn create_priority_badge(priority: i32) -> Option<Span<'static>> {
         )), // P1 = red flag
         3 => Some(Span::styled(
             "⚑",
-            Style::default()
-                .fg(Color::Rgb(255, 165, 0))
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::Rgb(255, 165, 0)).add_modifier(Modifier::BOLD),
         )), // P2 = orange flag
         2 => Some(Span::styled(
             "⚑",
-            Style::default()
-                .fg(Color::Blue)
-                .add_modifier(Modifier::BOLD),
+            Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD),
         )), // P3 = blue flag
         1 => Some(Span::styled("⚐", Style::default().fg(Color::White))), // P4 = white flag (default color)
         _ => Some(Span::styled("⚐", Style::default().fg(Color::White))), // Unknown priority = P4 = white flag

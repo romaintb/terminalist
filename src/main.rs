@@ -1,5 +1,5 @@
-pub mod debug_logger;
 pub mod icons;
+pub mod logger;
 pub mod storage;
 pub mod sync;
 pub mod todoist;
@@ -26,12 +26,6 @@ async fn main() -> Result<()> {
         println!();
         println!("ENVIRONMENT VARIABLES:");
         println!("    TODOIST_API_TOKEN    Your Todoist API token (required)");
-        println!();
-        println!("NAVIGATION:");
-        println!("    J/K           Navigate sidebar items (projects/labels/views)");
-        println!("    j/k           Navigate task items");
-        println!("    Mouse         Click sidebar items to navigate");
-        println!("    ?/h           Toggle help dialog");
         println!();
         return Ok(());
     }

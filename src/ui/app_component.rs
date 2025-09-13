@@ -1,4 +1,4 @@
-use crate::debug_logger::DebugLogger;
+use crate::logger::Logger;
 use crate::sync::{SyncService, SyncStatus};
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
 use crate::ui::components::{DialogComponent, SidebarComponent, TaskListComponent};
@@ -67,7 +67,7 @@ pub struct AppComponent {
     sync_service: SyncService,
     task_manager: TaskManager,
     background_action_rx: mpsc::UnboundedReceiver<Action>,
-    debug_logger: DebugLogger,
+    logger: Logger,
 
     // Simple UI state
     should_quit: bool,
@@ -79,7 +79,7 @@ impl AppComponent {
         let sidebar = SidebarComponent::new();
         let task_list = TaskListComponent::new();
         let (task_manager, background_action_rx) = TaskManager::new();
-        let debug_logger = DebugLogger::new();
+        let logger = Logger::new();
 
         let state = AppState {
             loading: true,
@@ -94,7 +94,7 @@ impl AppComponent {
             sync_service,
             task_manager,
             background_action_rx,
-            debug_logger,
+            logger,
             should_quit: false,
             active_sync_task: None,
         }
@@ -126,13 +126,12 @@ impl AppComponent {
 
     /// Trigger initial sync on startup
     pub fn trigger_initial_sync(&mut self) {
-        self.debug_logger
-            .log("AppComponent: Starting initial sync".to_string());
+        self.logger.log("AppComponent: Starting initial sync".to_string());
         if self.active_sync_task.is_none() {
             self.start_background_sync();
             // Also try to load any existing data
             self.schedule_data_fetch();
-            self.debug_logger
+            self.logger
                 .log("AppComponent: Initial sync and data fetch scheduled".to_string());
         }
     }
@@ -140,8 +139,7 @@ impl AppComponent {
     /// Update all components with current data
     fn sync_component_data(&mut self) {
         // Update sidebar
-        self.sidebar
-            .update_data(self.state.projects.clone(), self.state.labels.clone());
+        self.sidebar.update_data(self.state.projects.clone(), self.state.labels.clone());
         self.sidebar.selection = self.state.sidebar_selection.clone();
 
         // Update task list
@@ -154,9 +152,8 @@ impl AppComponent {
         );
 
         // Update dialog
-        self.dialog
-            .update_data(self.state.projects.clone(), self.state.labels.clone());
-        self.dialog.set_debug_logger(self.debug_logger.clone());
+        self.dialog.update_data(self.state.projects.clone(), self.state.labels.clone());
+        self.dialog.set_logger(self.logger.clone());
     }
 
     /// Handle global keyboard shortcuts that aren't component-specific
@@ -175,28 +172,23 @@ impl AppComponent {
 
         match key.code {
             KeyCode::Char('q') => {
-                self.debug_logger
-                    .log("Global key: 'q' - quitting application".to_string());
+                self.logger.log("Global key: 'q' - quitting application".to_string());
                 Action::Quit
             }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.debug_logger
-                    .log("Global key: Ctrl+C - quitting application".to_string());
+                self.logger.log("Global key: Ctrl+C - quitting application".to_string());
                 Action::Quit
             }
             KeyCode::Char('?') | KeyCode::Char('h') => {
-                self.debug_logger
-                    .log("Global key: '?' or 'h' - opening help dialog".to_string());
+                self.logger.log("Global key: '?' or 'h' - opening help dialog".to_string());
                 Action::ShowDialog(DialogType::Help)
             }
             KeyCode::Char('G') => {
-                self.debug_logger
-                    .log("Global key: 'G' - opening logs dialog".to_string());
+                self.logger.log("Global key: 'G' - opening logs dialog".to_string());
                 Action::ShowDialog(DialogType::Logs)
             }
             KeyCode::Char('A') => {
-                self.debug_logger
-                    .log("Global key: 'A' - opening project creation dialog".to_string());
+                self.logger.log("Global key: 'A' - opening project creation dialog".to_string());
                 Action::ShowDialog(DialogType::ProjectCreation)
             }
             KeyCode::Char('D') => {
@@ -204,7 +196,7 @@ impl AppComponent {
                 match &self.state.sidebar_selection {
                     SidebarSelection::Project(index) => {
                         if let Some(project) = self.state.projects.get(*index) {
-                            self.debug_logger.log(format!(
+                            self.logger.log(format!(
                                 "Global key: 'D' - deleting project '{}' (ID: {})",
                                 project.name, project.id
                             ));
@@ -213,29 +205,26 @@ impl AppComponent {
                                 item_id: project.id.clone(),
                             })
                         } else {
-                            self.debug_logger
+                            self.logger
                                 .log("Global key: 'D' - no project selected (invalid index)".to_string());
                             Action::ShowDialog(DialogType::Error("No project selected to delete".to_string()))
                         }
                     }
                     SidebarSelection::Today => {
-                        self.debug_logger
-                            .log("Global key: 'D' - cannot delete Today view".to_string());
+                        self.logger.log("Global key: 'D' - cannot delete Today view".to_string());
                         Action::ShowDialog(DialogType::Info("Cannot delete the Today view".to_string()))
                     }
                     SidebarSelection::Tomorrow => {
-                        self.debug_logger
-                            .log("Global key: 'D' - cannot delete Tomorrow view".to_string());
+                        self.logger.log("Global key: 'D' - cannot delete Tomorrow view".to_string());
                         Action::ShowDialog(DialogType::Info("Cannot delete the Tomorrow view".to_string()))
                     }
                     SidebarSelection::Upcoming => {
-                        self.debug_logger
-                            .log("Global key: 'D' - cannot delete Upcoming view".to_string());
+                        self.logger.log("Global key: 'D' - cannot delete Upcoming view".to_string());
                         Action::ShowDialog(DialogType::Info("Cannot delete the Upcoming view".to_string()))
                     }
                     SidebarSelection::Label(index) => {
                         if let Some(label) = self.state.labels.get(*index) {
-                            self.debug_logger.log(format!(
+                            self.logger.log(format!(
                                 "Global key: 'D' - deleting label '{}' (ID: {})",
                                 label.name, label.id
                             ));
@@ -244,7 +233,7 @@ impl AppComponent {
                                 item_id: label.id.clone(),
                             })
                         } else {
-                            self.debug_logger
+                            self.logger
                                 .log("Global key: 'D' - no label selected (invalid index)".to_string());
                             Action::ShowDialog(DialogType::Error("No label selected to delete".to_string()))
                         }
@@ -256,7 +245,7 @@ impl AppComponent {
                 match &self.state.sidebar_selection {
                     SidebarSelection::Project(index) => {
                         if let Some(project) = self.state.projects.get(*index) {
-                            self.debug_logger.log(format!(
+                            self.logger.log(format!(
                                 "Global key: 'E' - editing project '{}' (ID: {})",
                                 project.name, project.id
                             ));
@@ -265,29 +254,26 @@ impl AppComponent {
                                 name: project.name.clone(),
                             })
                         } else {
-                            self.debug_logger
+                            self.logger
                                 .log("Global key: 'E' - no project selected (invalid index)".to_string());
                             Action::ShowDialog(DialogType::Error("No project selected to edit".to_string()))
                         }
                     }
                     SidebarSelection::Today => {
-                        self.debug_logger
-                            .log("Global key: 'E' - cannot edit Today view".to_string());
+                        self.logger.log("Global key: 'E' - cannot edit Today view".to_string());
                         Action::ShowDialog(DialogType::Info("Cannot edit the Today view".to_string()))
                     }
                     SidebarSelection::Tomorrow => {
-                        self.debug_logger
-                            .log("Global key: 'E' - cannot edit Tomorrow view".to_string());
+                        self.logger.log("Global key: 'E' - cannot edit Tomorrow view".to_string());
                         Action::ShowDialog(DialogType::Info("Cannot edit the Tomorrow view".to_string()))
                     }
                     SidebarSelection::Upcoming => {
-                        self.debug_logger
-                            .log("Global key: 'E' - cannot edit Upcoming view".to_string());
+                        self.logger.log("Global key: 'E' - cannot edit Upcoming view".to_string());
                         Action::ShowDialog(DialogType::Info("Cannot edit the Upcoming view".to_string()))
                     }
                     SidebarSelection::Label(index) => {
                         if let Some(label) = self.state.labels.get(*index) {
-                            self.debug_logger.log(format!(
+                            self.logger.log(format!(
                                 "Global key: 'E' - editing label '{}' (ID: {})",
                                 label.name, label.id
                             ));
@@ -296,7 +282,7 @@ impl AppComponent {
                                 name: label.name.clone(),
                             })
                         } else {
-                            self.debug_logger
+                            self.logger
                                 .log("Global key: 'E' - no label selected (invalid index)".to_string());
                             Action::ShowDialog(DialogType::Error("No label selected to edit".to_string()))
                         }
@@ -304,18 +290,15 @@ impl AppComponent {
                 }
             }
             KeyCode::Char('r') => {
-                self.debug_logger
-                    .log("Global key: 'r' - starting manual sync".to_string());
+                self.logger.log("Global key: 'r' - starting manual sync".to_string());
                 Action::StartSync
             }
             KeyCode::Esc => {
                 if self.dialog.is_visible() {
-                    self.debug_logger
-                        .log("Global key: Esc - closing dialog".to_string());
+                    self.logger.log("Global key: Esc - closing dialog".to_string());
                     Action::HideDialog
                 } else {
-                    self.debug_logger
-                        .log("Global key: Esc - quitting application".to_string());
+                    self.logger.log("Global key: Esc - quitting application".to_string());
                     Action::Quit
                 }
             }
@@ -332,19 +315,16 @@ impl AppComponent {
             }
             Action::StartSync => {
                 if self.active_sync_task.is_none() {
-                    self.debug_logger
-                        .log("Starting background sync".to_string());
+                    self.logger.log("Starting background sync".to_string());
                     self.state.loading = true;
                     self.start_background_sync();
                 } else {
-                    self.debug_logger
-                        .log("Sync already in progress, ignoring".to_string());
+                    self.logger.log("Sync already in progress, ignoring".to_string());
                 }
                 Action::None
             }
             Action::SyncCompleted(status) => {
-                self.debug_logger
-                    .log(format!("Sync: Completed with status {:?}", status));
+                self.logger.log(format!("Sync: Completed with status {:?}", status));
                 self.active_sync_task = None;
                 self.state.loading = false;
 
@@ -353,26 +333,22 @@ impl AppComponent {
                 self.sync_component_data();
 
                 self.state.info_message = Some("Sync completed successfully".to_string());
-                self.debug_logger
-                    .log("Sync: Showing completion info dialog".to_string());
+                self.logger.log("Sync: Showing completion info dialog".to_string());
                 Action::ShowDialog(DialogType::Info(self.state.info_message.clone().unwrap()))
             }
             Action::SyncFailed(error) => {
-                self.debug_logger
-                    .log(format!("Sync: Failed with error: {}", error));
+                self.logger.log(format!("Sync: Failed with error: {}", error));
                 self.active_sync_task = None;
                 self.state.error_message = Some(error);
                 Action::ShowDialog(DialogType::Error(self.state.error_message.clone().unwrap_or_default()))
             }
             Action::ShowDialog(ref dialog_type) => {
-                self.debug_logger
-                    .log(format!("Dialog: Showing dialog {:?}", dialog_type));
+                self.logger.log(format!("Dialog: Showing dialog {:?}", dialog_type));
                 // Dialog component will handle the actual dialog setup
                 action
             }
             Action::HideDialog => {
-                self.debug_logger
-                    .log("Dialog: Hiding current dialog".to_string());
+                self.logger.log("Dialog: Hiding current dialog".to_string());
                 // Dialog component will handle hiding
                 action
             }
@@ -398,12 +374,12 @@ impl AppComponent {
                     }
                 };
 
-                self.debug_logger
+                self.logger
                     .log(format!("Navigation: Sidebar selection changed to {}", selection_desc));
                 self.state.sidebar_selection = selection.clone();
                 // Reload data for the new selection
                 self.schedule_data_fetch();
-                self.debug_logger
+                self.logger
                     .log("Navigation: Scheduled data fetch for new selection".to_string());
                 Action::None
             }
@@ -413,7 +389,7 @@ impl AppComponent {
                     Some(id) => format!(" in project {}", id),
                     None => " in inbox".to_string(),
                 };
-                self.debug_logger.log(format!(
+                self.logger.log(format!(
                     "Task: Creating task with content '{}'{}",
                     content, project_desc
                 ));
@@ -426,21 +402,25 @@ impl AppComponent {
                 self.spawn_task_operation("Create task".to_string(), task_info);
                 Action::None
             }
-            Action::ToggleTask(task_id) => {
-                // Find task name for better logging
-                let task_desc = if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
-                    format!("ID {} '{}'", task_id, task.content)
+            Action::CompleteTask(task_id) => {
+                // Find the task being completed
+                let sync_service = self.sync_service.clone();
+                if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
+                    let task_desc = format!("ID {} '{}'", task_id, task.content);
+
+                    self.logger.log(format!("Task: Completing task {}", task_desc));
+
+                    // Todoist API automatically handles subtasks when parent is completed
+                    self.spawn_task_operation("Complete task".to_string(), task_id);
                 } else {
-                    format!("ID {} [unknown]", task_id)
-                };
-                self.debug_logger
-                    .log(format!("Task: Toggling completion status for task {}", task_desc));
-                self.spawn_task_operation("Toggle task".to_string(), task_id);
+                    self.logger.log(format!("Task: Cannot complete - task {} not found", task_id));
+                }
                 Action::None
             }
             Action::CyclePriority(task_id) => {
                 // Find task and cycle its priority
-                if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
+                let sync_service = self.sync_service.clone();
+                if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
                     // Todoist priorities: 1 (Normal), 2 (High), 3 (Higher), 4 (Highest)
                     let new_priority = match task.priority {
                         4 => 1,                 // Highest -> Normal
@@ -450,77 +430,80 @@ impl AppComponent {
                         "ID {} '{}' (P{} -> P{})",
                         task_id, task.content, task.priority, new_priority
                     );
-                    self.debug_logger
-                        .log(format!("Task: Cycling priority for task {}", task_desc));
+                    self.logger.log(format!("Task: Cycling priority for task {}", task_desc));
                     self.spawn_task_operation("Cycle priority".to_string(), format!("{}|{}", task_id, new_priority));
                 } else {
-                    self.debug_logger
+                    self.logger
                         .log(format!("Task: Cannot cycle priority - task {} not found", task_id));
                 }
                 Action::None
             }
             Action::DeleteTask(task_id) => {
                 // Find task name for better logging
-                let task_desc = if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
+                let sync_service = self.sync_service.clone();
+                let task_desc = if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
                     format!("ID {} '{}'", task_id, task.content)
                 } else {
                     format!("ID {} [unknown]", task_id)
                 };
-                self.debug_logger
-                    .log(format!("Task: Deleting task {}", task_desc));
+                self.logger.log(format!("Task: Deleting task {}", task_desc));
                 self.spawn_task_operation("Delete task".to_string(), task_id);
                 Action::None
             }
             Action::SetTaskDueToday(task_id) => {
                 // Find task name for better logging
-                let task_desc = if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
+                let sync_service = self.sync_service.clone();
+                let task_desc = if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
                     format!("ID {} '{}'", task_id, task.content)
                 } else {
                     format!("ID {} [unknown]", task_id)
                 };
-                self.debug_logger
+                self.logger
                     .log(format!("Task: Setting due date to today for task {}", task_desc));
                 self.spawn_task_operation("Set task due today".to_string(), format!("{}|today", task_id));
                 Action::None
             }
             Action::SetTaskDueTomorrow(task_id) => {
                 // Find task name for better logging
-                let task_desc = if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
+                let sync_service = self.sync_service.clone();
+                let task_desc = if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
                     format!("ID {} '{}'", task_id, task.content)
                 } else {
                     format!("ID {} [unknown]", task_id)
                 };
-                self.debug_logger
+                self.logger
                     .log(format!("Task: Setting due date to tomorrow for task {}", task_desc));
                 self.spawn_task_operation("Set task due tomorrow".to_string(), format!("{}|tomorrow", task_id));
                 Action::None
             }
             Action::SetTaskDueNextWeek(task_id) => {
                 // Find task name for better logging
-                let task_desc = if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
+                let sync_service = self.sync_service.clone();
+                let task_desc = if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
                     format!("ID {} '{}'", task_id, task.content)
                 } else {
                     format!("ID {} [unknown]", task_id)
                 };
-                self.debug_logger
+                self.logger
                     .log(format!("Task: Setting due date to next week for task {}", task_desc));
                 self.spawn_task_operation("Set task due next week".to_string(), format!("{}|next_week", task_id));
                 Action::None
             }
             Action::SetTaskDueWeekEnd(task_id) => {
                 // Find task name for better logging
-                let task_desc = if let Some(task) = self.state.tasks.iter().find(|t| t.id == task_id) {
+                let sync_service = self.sync_service.clone();
+                let task_desc = if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
                     format!("ID {} '{}'", task_id, task.content)
                 } else {
                     format!("ID {} [unknown]", task_id)
                 };
-                self.debug_logger
+                self.logger
                     .log(format!("Task: Setting due date to weekend for task {}", task_desc));
                 self.spawn_task_operation("Set task due weekend".to_string(), format!("{}|weekend", task_id));
                 Action::None
             }
             Action::EditTask { id, content } => {
-                self.debug_logger
+                self.logger
                     .log(format!("Task: Editing task ID {} with new content '{}'", id, content));
                 self.spawn_task_operation("Edit task".to_string(), format!("{}: {}", id, content));
                 Action::None
@@ -530,8 +513,7 @@ impl AppComponent {
                     Some(id) => format!(" with parent {}", id),
                     None => "".to_string(),
                 };
-                self.debug_logger
-                    .log(format!("Project: Creating project '{}'{}", name, parent_desc));
+                self.logger.log(format!("Project: Creating project '{}'{}", name, parent_desc));
 
                 // Format project info to include both name and parent_id
                 let project_info = match parent_id {
@@ -548,8 +530,7 @@ impl AppComponent {
                 } else {
                     format!("ID {} [unknown]", project_id)
                 };
-                self.debug_logger
-                    .log(format!("Project: Deleting project {}", project_desc));
+                self.logger.log(format!("Project: Deleting project {}", project_desc));
                 self.spawn_task_operation("Delete project".to_string(), project_id);
                 Action::None
             }
@@ -560,14 +541,12 @@ impl AppComponent {
                 } else {
                     format!("ID {} [unknown]", label_id)
                 };
-                self.debug_logger
-                    .log(format!("Label: Deleting label {}", label_desc));
+                self.logger.log(format!("Label: Deleting label {}", label_desc));
                 self.spawn_task_operation("Delete label".to_string(), label_id);
                 Action::None
             }
             Action::CreateLabel { name } => {
-                self.debug_logger
-                    .log(format!("Label: Creating label '{}'", name));
+                self.logger.log(format!("Label: Creating label '{}'", name));
                 self.spawn_task_operation("Create label".to_string(), name);
                 Action::None
             }
@@ -578,8 +557,7 @@ impl AppComponent {
                 } else {
                     format!("ID {} [unknown] -> '{}'", id, name)
                 };
-                self.debug_logger
-                    .log(format!("Project: Editing project {}", project_desc));
+                self.logger.log(format!("Project: Editing project {}", project_desc));
                 self.spawn_task_operation("Edit project".to_string(), format!("{}: {}", id, name));
                 Action::None
             }
@@ -590,8 +568,7 @@ impl AppComponent {
                 } else {
                     format!("ID {} [unknown] -> '{}'", id, name)
                 };
-                self.debug_logger
-                    .log(format!("Label: Editing label {}", label_desc));
+                self.logger.log(format!("Label: Editing label {}", label_desc));
                 self.spawn_task_operation("Edit label".to_string(), format!("{}: {}", id, name));
                 Action::None
             }
@@ -622,7 +599,7 @@ impl AppComponent {
                     }
                 };
 
-                self.debug_logger.log(format!(
+                self.logger.log(format!(
                     "Data: Loaded {} projects, {} labels, {} sections, {} tasks for {}",
                     projects.len(),
                     labels.len(),
@@ -633,23 +610,19 @@ impl AppComponent {
                 // Update app state with loaded data
                 self.state.update_data(projects, labels, sections, tasks);
                 self.sync_component_data();
-                self.debug_logger
-                    .log("Data: Updated all component data after data load".to_string());
+                self.logger.log("Data: Updated all component data after data load".to_string());
                 Action::None
             }
             Action::NextTask => {
-                self.debug_logger
-                    .log("Navigation: Next task (j/down)".to_string());
+                self.logger.log("Navigation: Next task (j/down)".to_string());
                 action
             }
             Action::PreviousTask => {
-                self.debug_logger
-                    .log("Navigation: Previous task (k/up)".to_string());
+                self.logger.log("Navigation: Previous task (k/up)".to_string());
                 action
             }
             Action::RefreshData => {
-                self.debug_logger
-                    .log("Data: Refreshing UI data after task operation".to_string());
+                self.logger.log("Data: Refreshing UI data after task operation".to_string());
                 // Schedule a data fetch to reload current view with updated data
                 self.schedule_data_fetch();
                 Action::None
@@ -659,7 +632,7 @@ impl AppComponent {
                 if self.state.help_scroll_offset > 0 {
                     self.state.help_scroll_offset -= 1;
                 }
-                self.debug_logger.log(format!(
+                self.logger.log(format!(
                     "Help: Scrolled up, offset now {}",
                     self.state.help_scroll_offset
                 ));
@@ -667,7 +640,7 @@ impl AppComponent {
             }
             Action::HelpScrollDown => {
                 self.state.help_scroll_offset += 1;
-                self.debug_logger.log(format!(
+                self.logger.log(format!(
                     "Help: Scrolled down, offset now {}",
                     self.state.help_scroll_offset
                 ));
@@ -675,14 +648,13 @@ impl AppComponent {
             }
             Action::HelpScrollToTop => {
                 self.state.help_scroll_offset = 0;
-                self.debug_logger.log("Help: Scrolled to top".to_string());
+                self.logger.log("Help: Scrolled to top".to_string());
                 Action::None
             }
             Action::HelpScrollToBottom => {
                 // Set to a large value - dialog component will handle bounds checking
                 self.state.help_scroll_offset = usize::MAX;
-                self.debug_logger
-                    .log("Help: Scrolled to bottom".to_string());
+                self.logger.log("Help: Scrolled to bottom".to_string());
                 Action::None
             }
             Action::ShowHelp(show) => {
@@ -691,7 +663,7 @@ impl AppComponent {
                     // Reset scroll when hiding help
                     self.state.help_scroll_offset = 0;
                 }
-                self.debug_logger
+                self.logger
                     .log(format!("Help: {} help panel", if show { "Showing" } else { "Hiding" }));
                 action
             }
@@ -711,15 +683,15 @@ impl AppComponent {
         let description = format!("{}: {}", operation_name, task_info);
         let op_name = operation_name.clone();
         let sync_service = self.sync_service.clone();
-        self.debug_logger
+        self.logger
             .log(format!("Background: Spawning task operation '{}'", description));
 
         let _task_id = self.task_manager.spawn_task_operation(
             move || async move {
                 let result = match op_name.as_str() {
-                    "Toggle task" => match sync_service.toggle_task(&task_info).await {
-                        Ok(()) => Ok(format!("✅ Task toggled: {}", task_info)),
-                        Err(e) => Err(format!("❌ Failed to toggle task: {}", e)),
+                    "Complete task" => match sync_service.complete_task(&task_info).await {
+                        Ok(()) => Ok(format!("✅ Task completed: {}", task_info)),
+                        Err(e) => Err(format!("❌ Failed to complete task: {}", e)),
                     },
                     "Delete task" => match sync_service.delete_task(&task_info).await {
                         Ok(()) => Ok(format!("✅ Task deleted: {}", task_info)),
@@ -744,10 +716,7 @@ impl AppComponent {
                         // task_info format: "task_id|today"
                         if let Some((task_id, _)) = task_info.split_once('|') {
                             let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
-                            match sync_service
-                                .update_task_due_date(task_id, Some(&today))
-                                .await
-                            {
+                            match sync_service.update_task_due_date(task_id, Some(&today)).await {
                                 Ok(()) => Ok(format!("✅ Task due date set to today: {}", task_id)),
                                 Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
                             }
@@ -758,13 +727,9 @@ impl AppComponent {
                     "Set task due tomorrow" => {
                         // task_info format: "task_id|tomorrow"
                         if let Some((task_id, _)) = task_info.split_once('|') {
-                            let tomorrow = (chrono::Utc::now() + chrono::Duration::days(1))
-                                .format("%Y-%m-%d")
-                                .to_string();
-                            match sync_service
-                                .update_task_due_date(task_id, Some(&tomorrow))
-                                .await
-                            {
+                            let tomorrow =
+                                (chrono::Utc::now() + chrono::Duration::days(1)).format("%Y-%m-%d").to_string();
+                            match sync_service.update_task_due_date(task_id, Some(&tomorrow)).await {
                                 Ok(()) => Ok(format!("✅ Task due date set to tomorrow: {}", task_id)),
                                 Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
                             }
@@ -778,10 +743,7 @@ impl AppComponent {
                             let today = chrono::Utc::now().date_naive();
                             let next_monday = crate::utils::date::next_weekday(today, chrono::Weekday::Mon);
                             let next_monday_str = crate::utils::date::format_ymd(next_monday);
-                            match sync_service
-                                .update_task_due_date(task_id, Some(&next_monday_str))
-                                .await
-                            {
+                            match sync_service.update_task_due_date(task_id, Some(&next_monday_str)).await {
                                 Ok(()) => Ok(format!("✅ Task due date set to next Monday: {}", task_id)),
                                 Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
                             }
@@ -795,10 +757,7 @@ impl AppComponent {
                             let today = chrono::Utc::now().date_naive();
                             let next_saturday = crate::utils::date::next_weekday(today, chrono::Weekday::Sat);
                             let next_saturday_str = crate::utils::date::format_ymd(next_saturday);
-                            match sync_service
-                                .update_task_due_date(task_id, Some(&next_saturday_str))
-                                .await
-                            {
+                            match sync_service.update_task_due_date(task_id, Some(&next_saturday_str)).await {
                                 Ok(()) => Ok(format!("✅ Task due date set to next Saturday: {}", task_id)),
                                 Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
                             }
@@ -894,7 +853,7 @@ impl AppComponent {
 
     fn update_data_from_sync(&mut self, status: SyncStatus) {
         // Only proceed if sync was successful
-        if matches!(status, SyncStatus::Success { .. }) {
+        if matches!(status, SyncStatus::Success) {
             // Schedule a data fetch task
             self.schedule_data_fetch();
         }
@@ -913,15 +872,14 @@ impl AppComponent {
 
         // Process all available background actions
         while let Ok(action) = self.background_action_rx.try_recv() {
-            self.debug_logger
-                .log(format!("Background: Received action {:?}", action));
+            self.logger.log(format!("Background: Received action {:?}", action));
             actions.push(action);
         }
 
         // Clean up finished tasks
         let completed_tasks = self.task_manager.cleanup_finished_tasks();
         if !completed_tasks.is_empty() {
-            self.debug_logger.log(format!(
+            self.logger.log(format!(
                 "Background: Cleaned up {} finished tasks",
                 completed_tasks.len()
             ));
@@ -1049,19 +1007,12 @@ impl AppComponent {
 
         // Calculate centered area for the sync indicator
         let popup_area = {
-            let popup_layout = Layout::vertical([
-                Constraint::Percentage(40),
-                Constraint::Min(3),
-                Constraint::Percentage(40),
-            ])
-            .split(rect);
+            let popup_layout =
+                Layout::vertical([Constraint::Percentage(40), Constraint::Min(3), Constraint::Percentage(40)])
+                    .split(rect);
 
-            Layout::horizontal([
-                Constraint::Percentage(30),
-                Constraint::Min(30),
-                Constraint::Percentage(30),
-            ])
-            .split(popup_layout[1])[1]
+            Layout::horizontal([Constraint::Percentage(30), Constraint::Min(30), Constraint::Percentage(30)])
+                .split(popup_layout[1])[1]
         };
 
         let title = if self.state.loading {
@@ -1076,11 +1027,7 @@ impl AppComponent {
             Style::default().fg(Color::Yellow),
         )))
         .alignment(Alignment::Center)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .style(Style::default().fg(Color::Yellow)),
-        );
+        .block(Block::default().borders(Borders::ALL).style(Style::default().fg(Color::Yellow)));
 
         f.render_widget(Clear, popup_area);
         f.render_widget(content, popup_area);

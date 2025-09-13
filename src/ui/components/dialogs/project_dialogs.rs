@@ -24,11 +24,7 @@ pub fn render_project_creation_dialog(
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .title(title)
-        .title_style(
-            Style::default()
-                .fg(Color::Magenta)
-                .add_modifier(Modifier::BOLD),
-        )
+        .title_style(Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD))
         .style(Style::default().fg(Color::Magenta));
 
     // Create layout for content
@@ -120,11 +116,7 @@ pub fn render_project_edit_dialog(f: &mut Frame, area: Rect, _icons: &IconServic
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .title(title)
-        .title_style(
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )
+        .title_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
         .style(Style::default().fg(Color::Yellow));
 
     // Create layout for content

@@ -1,20 +1,20 @@
 use chrono::Utc;
 use std::sync::{Arc, Mutex};
 
-/// Shared debug logger that can be used across the application
+/// Shared logger that can be used across the application
 #[derive(Clone)]
-pub struct DebugLogger {
+pub struct Logger {
     logs: Arc<Mutex<Vec<String>>>,
 }
 
-impl DebugLogger {
+impl Logger {
     pub fn new() -> Self {
         Self {
             logs: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
-    /// Add a debug log entry
+    /// Add a log entry
     pub fn log(&self, message: String) {
         let timestamp = Utc::now().format("%H:%M:%S%.3f").to_string();
         let formatted_message = format!("[{}] {}", timestamp, message);
@@ -24,7 +24,7 @@ impl DebugLogger {
         }
     }
 
-    /// Get all debug logs sorted by date (newest first)
+    /// Get all logs sorted by date (newest first)
     pub fn get_logs(&self) -> Vec<String> {
         if let Ok(logs) = self.logs.lock() {
             let mut sorted_logs = logs.clone();
@@ -36,7 +36,7 @@ impl DebugLogger {
         }
     }
 
-    /// Clear all debug logs
+    /// Clear all logs
     pub fn clear(&self) {
         if let Ok(mut logs) = self.logs.lock() {
             logs.clear();
@@ -44,7 +44,7 @@ impl DebugLogger {
     }
 }
 
-impl Default for DebugLogger {
+impl Default for Logger {
     fn default() -> Self {
         Self::new()
     }

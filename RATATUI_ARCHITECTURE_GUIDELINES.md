@@ -1063,7 +1063,6 @@ pub struct AppState {
     
     // Background operations
     pub sync_in_progress: bool,
-    pub last_sync: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 impl AppState {

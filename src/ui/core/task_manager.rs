@@ -162,9 +162,7 @@ impl TaskManager {
 
     /// Check if any sync tasks are currently running
     pub fn is_syncing(&self) -> bool {
-        self.tasks
-            .values()
-            .any(|task| task.description.contains("sync"))
+        self.tasks.values().any(|task| task.description.contains("sync"))
     }
 
     /// Cancel all running tasks
@@ -197,30 +195,18 @@ impl TaskManager {
                     // Get tasks based on sidebar selection
                     let tasks = match sidebar_selection {
                         SidebarSelection::Today => sync_service.get_tasks_for_today().await.unwrap_or_default(),
-                        SidebarSelection::Tomorrow => sync_service
-                            .get_tasks_for_tomorrow()
-                            .await
-                            .unwrap_or_default(),
-                        SidebarSelection::Upcoming => sync_service
-                            .get_tasks_for_upcoming()
-                            .await
-                            .unwrap_or_default(),
+                        SidebarSelection::Tomorrow => sync_service.get_tasks_for_tomorrow().await.unwrap_or_default(),
+                        SidebarSelection::Upcoming => sync_service.get_tasks_for_upcoming().await.unwrap_or_default(),
                         SidebarSelection::Project(index) => {
                             if let Some(project) = projects.get(index) {
-                                sync_service
-                                    .get_tasks_for_project(&project.id)
-                                    .await
-                                    .unwrap_or_default()
+                                sync_service.get_tasks_for_project(&project.id).await.unwrap_or_default()
                             } else {
                                 Vec::new()
                             }
                         }
                         SidebarSelection::Label(index) => {
                             if let Some(label) = labels.get(index) {
-                                sync_service
-                                    .get_tasks_with_label(&label.name)
-                                    .await
-                                    .unwrap_or_default()
+                                sync_service.get_tasks_with_label(&label.name).await.unwrap_or_default()
                             } else {
                                 Vec::new()
                             }

@@ -1,6 +1,6 @@
 use crate::{
-    debug_logger::DebugLogger,
     icons::IconService,
+    logger::Logger,
     sync::SyncService,
     todoist::{LabelDisplay, ProjectDisplay, SectionDisplay},
 };
@@ -11,7 +11,7 @@ pub struct AppContext {
     pub labels: Vec<LabelDisplay>,
     pub sections: Vec<SectionDisplay>,
     pub icons: IconService,
-    pub debug_logger: DebugLogger,
+    pub logger: Logger,
 }
 
 impl AppContext {
@@ -22,7 +22,7 @@ impl AppContext {
             labels: Vec::new(),
             sections: Vec::new(),
             icons: IconService::default(),
-            debug_logger: DebugLogger::new(),
+            logger: Logger::new(),
         }
     }
 }
