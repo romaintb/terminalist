@@ -125,6 +125,18 @@ impl SyncService {
         storage.get_tasks_for_upcoming().await
     }
 
+    /// Get a single task by ID from local storage (fast)
+    pub async fn get_task_by_id(&self, task_id: &str) -> Result<Option<TaskDisplay>> {
+        let storage = self.storage.lock().await;
+        storage.get_task_by_id(task_id).await
+    }
+
+    /// Delete a completed task from local storage (subtasks deleted automatically via CASCADE)
+    pub async fn delete_completed_task(&self, task_id: &str) -> Result<()> {
+        let storage = self.storage.lock().await;
+        storage.delete_completed_task(task_id).await
+    }
+
     /// Check if sync is currently in progress
     pub async fn is_syncing(&self) -> bool {
         *self.sync_in_progress.lock().await
@@ -380,19 +392,17 @@ impl SyncService {
 
         // Get current task state from local storage to determine if we should complete or reopen
         let storage = self.storage.lock().await;
-        let tasks = storage.get_all_tasks().await?;
-        let current_task = tasks.iter().find(|t| t.id == task_id);
+        let current_task = storage.get_task_by_id(task_id).await?;
+        drop(storage); // Release lock early
 
         if let Some(task) = current_task {
             if task.is_completed {
                 // Task is completed, reopen it
                 self.log_debug(format!("API: Reopening completed task {}", task_id));
-                drop(storage); // Release lock before API call
                 self.reopen_task(task_id).await?;
             } else {
                 // Task is not completed, complete it
                 self.log_debug(format!("API: Completing task {}", task_id));
-                drop(storage); // Release lock before API call
                 self.complete_task(task_id).await?;
             }
         } else {
@@ -401,7 +411,6 @@ impl SyncService {
                 "API: Task not found locally, attempting to complete {}",
                 task_id
             ));
-            drop(storage); // Release lock before API call
             self.complete_task(task_id).await?;
         }
 
@@ -544,12 +553,15 @@ impl SyncService {
 
     /// Complete a task (mark as done)
     pub async fn complete_task(&self, task_id: &str) -> Result<()> {
-        // First, complete the task via API
+        // First, complete the task via API (this handles subtasks automatically)
         self.todoist.complete_task(task_id).await?;
 
-        // Then update local storage
+        // Then delete from local storage (subtasks deleted via CASCADE)
+        // Since completed tasks aren't displayed, we can remove them entirely
         let storage = self.storage.lock().await;
-        storage.mark_task_completed(task_id).await?;
+        storage.mark_task_completed(task_id).await?; // Mark completed first
+        storage.delete_completed_task(task_id).await?; // Then delete
+        drop(storage);
 
         Ok(())
     }

@@ -293,7 +293,8 @@ impl LocalStorage {
                 deadline TEXT,
                 duration TEXT,
                 labels TEXT NOT NULL DEFAULT '',
-                last_synced TEXT NOT NULL
+                last_synced TEXT NOT NULL,
+                FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE
             )
             ",
         )
@@ -945,6 +946,31 @@ impl LocalStorage {
         Ok(tasks)
     }
 
+    /// Get a single task by ID from local storage
+    pub async fn get_task_by_id(&self, task_id: &str) -> Result<Option<TaskDisplay>> {
+        let row = sqlx::query(
+            r"
+            SELECT id, content, project_id, section_id, parent_id, is_completed, is_deleted, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
+            FROM tasks 
+            WHERE id = ? AND is_deleted = false
+            ",
+        )
+        .bind(task_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if let Some(row) = row {
+            let mut task = Self::task_display_from_row(&row);
+
+            // Update label colors
+            self.update_task_labels(&mut task).await?;
+
+            Ok(Some(task))
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Check if we have any local data
     pub async fn has_data(&self) -> Result<bool> {
         let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM projects")
@@ -1001,6 +1027,17 @@ impl LocalStorage {
     pub async fn mark_task_incomplete(&self, task_id: &str) -> Result<()> {
         sqlx::query("UPDATE tasks SET is_completed = false, last_synced = ? WHERE id = ?")
             .bind(Utc::now())
+            .bind(task_id)
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Delete a completed task and its subtasks from local storage
+    /// Thanks to CASCADE DELETE, subtasks are automatically removed
+    pub async fn delete_completed_task(&self, task_id: &str) -> Result<()> {
+        sqlx::query("DELETE FROM tasks WHERE id = ? AND is_completed = true")
             .bind(task_id)
             .execute(&self.pool)
             .await?;
