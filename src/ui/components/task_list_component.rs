@@ -482,11 +482,7 @@ impl TaskListComponent {
 
     fn create_task_item(&self, task: &TaskDisplay, _max_width: usize) -> ListItem<'_> {
         // Create status indicator
-        let status_icon = if task.is_deleted {
-            self.icons.task_deleted()
-        } else {
-            self.icons.task_pending()
-        };
+        let status_icon = self.icons.task_pending();
 
         // Build the line with multiple spans for proper color rendering
         let mut line_spans = Vec::new();
@@ -509,11 +505,7 @@ impl TaskListComponent {
         }
 
         // Status icon
-        let status_style = if task.is_deleted {
-            Style::default().fg(Color::Red)
-        } else {
-            Style::default().fg(Color::White)
-        };
+        let status_style = Style::default().fg(Color::White);
         line_spans.push(Span::styled(format!("{} ", status_icon), status_style));
 
         // Priority badge (if any)
@@ -523,11 +515,7 @@ impl TaskListComponent {
         }
 
         // Task content with appropriate styling
-        let content_style = if task.is_deleted {
-            Style::default().fg(Color::Red).add_modifier(Modifier::CROSSED_OUT)
-        } else {
-            Style::default().fg(Color::White)
-        };
+        let content_style = Style::default().fg(Color::White);
         line_spans.push(Span::styled(task.content.clone(), content_style));
 
         // Child task progress indicator (for tasks with children)

@@ -13,7 +13,6 @@ pub struct LocalTask {
     pub project_id: String,
     pub section_id: Option<String>,
     pub parent_id: Option<String>,
-    pub is_deleted: bool,
     pub priority: i32,
     pub order_index: i32,
     pub due_date: Option<String>,
@@ -39,7 +38,6 @@ impl From<Task> for LocalTask {
             project_id: task.project_id,
             section_id: task.section_id,
             parent_id: task.parent_id,
-            is_deleted: false, // New tasks are not deleted
             priority: task.priority,
             order_index: task.order,
             due_date: task.due.as_ref().map(|d| d.date.clone()),
@@ -74,7 +72,6 @@ impl From<LocalTask> for TaskDisplay {
             project_id: local.project_id,
             section_id: local.section_id,
             parent_id: local.parent_id,
-            is_deleted: local.is_deleted,
             priority: local.priority,
             due: local.due_date,
             due_datetime: local.due_datetime,
@@ -100,8 +97,8 @@ impl LocalStorage {
             let local_task: LocalTask = task.into();
             sqlx::query(
                 r"
-                INSERT INTO tasks (id, content, project_id, section_id, parent_id, is_deleted, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tasks (id, content, project_id, section_id, parent_id, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ",
             )
             .bind(&local_task.id)
@@ -109,7 +106,6 @@ impl LocalStorage {
             .bind(&local_task.project_id)
             .bind(&local_task.section_id)
             .bind(&local_task.parent_id)
-            .bind(local_task.is_deleted)
             .bind(local_task.priority)
             .bind(local_task.order_index)
             .bind(&local_task.due_date)
@@ -133,8 +129,8 @@ impl LocalStorage {
 
         sqlx::query(
             r"
-            INSERT OR REPLACE INTO tasks (id, content, project_id, section_id, parent_id, is_deleted, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO tasks (id, content, project_id, section_id, parent_id, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ",
         )
         .bind(&local_task.id)
@@ -142,7 +138,6 @@ impl LocalStorage {
         .bind(&local_task.project_id)
         .bind(&local_task.section_id)
         .bind(&local_task.parent_id)
-        .bind(local_task.is_deleted)
         .bind(local_task.priority)
         .bind(local_task.order_index)
         .bind(&local_task.due_date)
@@ -209,7 +204,7 @@ impl LocalStorage {
     pub async fn get_tasks_for_project(&self, project_id: &str) -> Result<Vec<TaskDisplay>> {
         let rows = sqlx::query(
             r"
-            SELECT id, content, project_id, section_id, parent_id, is_deleted, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
+            SELECT id, content, project_id, section_id, parent_id, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
             FROM tasks
             WHERE project_id = ?
             ORDER BY priority DESC, order_index ASC
@@ -236,7 +231,7 @@ impl LocalStorage {
     pub async fn get_all_tasks(&self) -> Result<Vec<TaskDisplay>> {
         let rows = sqlx::query(
             r"
-            SELECT id, content, project_id, section_id, parent_id, is_deleted, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
+            SELECT id, content, project_id, section_id, parent_id, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
             FROM tasks
             ORDER BY priority DESC, order_index ASC
             ",
@@ -264,10 +259,9 @@ impl LocalStorage {
 
         let rows = sqlx::query(
             r"
-            SELECT id, content, project_id, section_id, parent_id, is_deleted, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
+            SELECT id, content, project_id, section_id, parent_id, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
             FROM tasks
-            WHERE is_deleted = false
-              AND due_date IS NOT NULL
+            WHERE due_date IS NOT NULL
               AND due_date <= ?
             ORDER BY
               CASE
@@ -303,10 +297,9 @@ impl LocalStorage {
 
         let rows = sqlx::query(
             r"
-            SELECT id, content, project_id, section_id, parent_id, is_deleted, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
+            SELECT id, content, project_id, section_id, parent_id, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
             FROM tasks
-            WHERE is_deleted = false
-              AND due_date IS NOT NULL
+            WHERE due_date IS NOT NULL
               AND due_date = ?
             ORDER BY
               priority DESC,
@@ -336,8 +329,7 @@ impl LocalStorage {
             r"
             SELECT *
             FROM tasks
-            WHERE is_deleted = false
-              AND due_date IS NOT NULL
+            WHERE due_date IS NOT NULL
               AND due_date <= date('now', '+3 months')
             ORDER BY
               CASE
@@ -370,9 +362,9 @@ impl LocalStorage {
     pub async fn get_task_by_id(&self, task_id: &str) -> Result<Option<TaskDisplay>> {
         let row = sqlx::query(
             r"
-            SELECT id, content, project_id, section_id, parent_id, is_deleted, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
+            SELECT id, content, project_id, section_id, parent_id, priority, due_date, due_datetime, is_recurring, deadline, duration, labels, description
             FROM tasks
-            WHERE id = ? AND is_deleted = false
+            WHERE id = ?
             ",
         )
         .bind(task_id)
@@ -415,18 +407,8 @@ impl LocalStorage {
 
     /// Update a task's priority in local storage
     pub async fn update_task_priority(&self, task_id: &str, priority: i32) -> Result<()> {
-        sqlx::query("UPDATE tasks SET priority = ?, WHERE id = ?")
+        sqlx::query("UPDATE tasks SET priority = ? WHERE id = ?")
             .bind(priority)
-            .bind(task_id)
-            .execute(&self.pool)
-            .await?;
-
-        Ok(())
-    }
-
-    /// Mark a task as deleted in local storage
-    pub async fn mark_task_deleted(&self, task_id: &str) -> Result<()> {
-        sqlx::query("UPDATE tasks SET is_deleted = true WHERE id = ?")
             .bind(task_id)
             .execute(&self.pool)
             .await?;

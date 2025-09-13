@@ -52,6 +52,7 @@ fn test_task_conversion() {
         assignee_id: None,
         url: "https://todoist.com".to_string(),
         comment_count: 0,
+        is_completed: false,
     };
 
     let display: TaskDisplay = task.into();

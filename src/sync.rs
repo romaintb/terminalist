@@ -522,9 +522,9 @@ impl SyncService {
         // First, delete the task via API
         self.todoist.delete_task(task_id).await?;
 
-        // Then mark as deleted in local storage
+        // Then remove from local storage
         let storage = self.storage.lock().await;
-        storage.mark_task_deleted(task_id).await?;
+        storage.delete_task(task_id).await?;
 
         Ok(())
     }
