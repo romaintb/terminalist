@@ -318,7 +318,7 @@ impl TaskListComponent {
         // Group tasks by section (use hierarchical sorting)
         let mut tasks_by_section: HashMap<Option<String>, Vec<&TaskDisplay>> = HashMap::new();
         let sorted_tasks = self.get_sorted_tasks();
-        for task in sorted_tasks {
+        for task in sorted_tasks.filter(|t| t.project_id == *project_id) {
             tasks_by_section.entry(task.section_id.clone()).or_default().push(task);
         }
 
