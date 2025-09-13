@@ -333,12 +333,10 @@ impl LocalStorage {
         Ok(())
     }
 
-
     /// Create TaskDisplay from database row with label parsing
     fn task_display_from_row(row: &sqlx::sqlite::SqliteRow) -> TaskDisplay {
         // Parse labels from JSON string
-        let label_names: Vec<String> =
-            serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
+        let label_names: Vec<String> = serde_json::from_str(&row.get::<String, _>("labels")).unwrap_or_default();
 
         // Convert label names to LabelDisplay objects (colors will be filled in later)
         let labels = label_names
