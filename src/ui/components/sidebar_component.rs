@@ -78,10 +78,7 @@ impl SidebarComponent {
             }
             SidebarSelection::Project(index) => {
                 let sorted_projects = self.get_sorted_projects();
-                if let Some(current_sorted_index) = sorted_projects
-                    .iter()
-                    .position(|(orig_idx, _)| orig_idx == index)
-                {
+                if let Some(current_sorted_index) = sorted_projects.iter().position(|(orig_idx, _)| orig_idx == index) {
                     let next_sorted_index = current_sorted_index + 1;
                     if next_sorted_index < sorted_projects.len() {
                         if let Some((original_index, _)) = sorted_projects.get(next_sorted_index) {
@@ -126,10 +123,7 @@ impl SidebarComponent {
             }
             SidebarSelection::Project(index) => {
                 let sorted_projects = self.get_sorted_projects();
-                if let Some(current_sorted_index) = sorted_projects
-                    .iter()
-                    .position(|(orig_idx, _)| orig_idx == index)
-                {
+                if let Some(current_sorted_index) = sorted_projects.iter().position(|(orig_idx, _)| orig_idx == index) {
                     if current_sorted_index > 0 {
                         if let Some((original_index, _)) = sorted_projects.get(current_sorted_index - 1) {
                             SidebarSelection::Project(*original_index)
@@ -189,10 +183,7 @@ impl SidebarComponent {
     /// Get the root project ID (top-level parent)
     /// Since Todoist only has parent/child, root is either the project itself or its parent
     fn get_root_project_id(&self, project: &ProjectDisplay) -> String {
-        project
-            .parent_id
-            .clone()
-            .unwrap_or_else(|| project.id.clone())
+        project.parent_id.clone().unwrap_or_else(|| project.id.clone())
     }
 
     /// Get the root project (top-level parent) - always returns from self.projects
@@ -300,9 +291,7 @@ impl Component for SidebarComponent {
         // Add Today item
         let is_today_selected = matches!(self.selection, SidebarSelection::Today);
         let today_style = if is_today_selected {
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::White)
         };
@@ -315,9 +304,7 @@ impl Component for SidebarComponent {
         // Add Tomorrow item
         let is_tomorrow_selected = matches!(self.selection, SidebarSelection::Tomorrow);
         let tomorrow_style = if is_tomorrow_selected {
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::White)
         };
@@ -330,9 +317,7 @@ impl Component for SidebarComponent {
         // Add Upcoming item
         let is_upcoming_selected = matches!(self.selection, SidebarSelection::Upcoming);
         let upcoming_style = if is_upcoming_selected {
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD)
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
             Style::default().fg(Color::White)
         };
@@ -346,9 +331,7 @@ impl Component for SidebarComponent {
         for (index, label) in self.labels.iter().enumerate() {
             let is_selected = matches!(self.selection, SidebarSelection::Label(i) if i == index);
             let style = if is_selected {
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
@@ -370,9 +353,7 @@ impl Component for SidebarComponent {
         for (i, (original_index, project)) in sorted_projects.iter().enumerate() {
             let is_selected = matches!(self.selection, SidebarSelection::Project(idx) if idx == *original_index);
             let style = if is_selected {
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
+                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(Color::White)
             };
@@ -406,10 +387,7 @@ impl Component for SidebarComponent {
             if !tree_prefix.is_empty() {
                 spans.push(Span::styled(tree_prefix, Style::default().fg(Color::DarkGray)));
             }
-            spans.extend([
-                Span::styled(icon.to_string(), style),
-                Span::styled(name, style),
-            ]);
+            spans.extend([Span::styled(icon.to_string(), style), Span::styled(name, style)]);
 
             all_items.push(ListItem::new(Line::from(spans)));
         }

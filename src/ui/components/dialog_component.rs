@@ -58,18 +58,12 @@ impl DialogComponent {
 
     /// Get root projects (projects without a parent) for parent selection
     pub fn get_root_projects(&self) -> Vec<&ProjectDisplay> {
-        self.projects
-            .iter()
-            .filter(|project| project.parent_id.is_none())
-            .collect()
+        self.projects.iter().filter(|project| project.parent_id.is_none()).collect()
     }
 
     /// Get all non-inbox projects for task creation (excludes inbox project)
     pub fn get_task_projects(&self) -> Vec<&ProjectDisplay> {
-        self.projects
-            .iter()
-            .filter(|project| !project.is_inbox_project)
-            .collect()
+        self.projects.iter().filter(|project| !project.is_inbox_project).collect()
     }
 
     pub fn set_logger(&mut self, logger: Logger) {

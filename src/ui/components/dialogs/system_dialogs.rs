@@ -110,12 +110,7 @@ pub fn render_info_dialog(
             .viewport_content_length(visible_height)
             .position(clamped_offset);
 
-        let visible_lines: Vec<&str> = lines
-            .iter()
-            .skip(clamped_offset)
-            .take(visible_height)
-            .copied()
-            .collect();
+        let visible_lines: Vec<&str> = lines.iter().skip(clamped_offset).take(visible_height).copied().collect();
         visible_lines.join("\n")
     } else {
         message.to_string()
@@ -193,12 +188,7 @@ pub fn render_error_dialog(
             .viewport_content_length(visible_height)
             .position(clamped_offset);
 
-        let visible_lines: Vec<&str> = lines
-            .iter()
-            .skip(clamped_offset)
-            .take(visible_height)
-            .copied()
-            .collect();
+        let visible_lines: Vec<&str> = lines.iter().skip(clamped_offset).take(visible_height).copied().collect();
         visible_lines.join("\n")
     } else {
         message.to_string()
@@ -324,12 +314,7 @@ Press 'Esc', '?' or 'h' to close this help panel
         .viewport_content_length(visible_height)
         .position(clamped_offset);
 
-    let visible_lines: Vec<&str> = lines
-        .iter()
-        .skip(clamped_offset)
-        .take(visible_height)
-        .copied()
-        .collect();
+    let visible_lines: Vec<&str> = lines.iter().skip(clamped_offset).take(visible_height).copied().collect();
 
     let help_text = visible_lines.join("\n");
 
@@ -401,12 +386,7 @@ pub fn render_logs_dialog(
         .viewport_content_length(visible_height)
         .position(clamped_offset);
 
-    let visible_lines: Vec<&str> = lines
-        .iter()
-        .skip(clamped_offset)
-        .take(visible_height)
-        .copied()
-        .collect();
+    let visible_lines: Vec<&str> = lines.iter().skip(clamped_offset).take(visible_height).copied().collect();
 
     let logs_text = visible_lines.join("\n");
 

@@ -261,10 +261,7 @@ impl SyncService {
             is_favorite: None,
             view_style: None,
         };
-        let _project = self
-            .todoist
-            .update_project(project_id, &project_args)
-            .await?;
+        let _project = self.todoist.update_project(project_id, &project_args).await?;
 
         // Update local storage immediately after successful API call
         self.log(format!(

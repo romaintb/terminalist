@@ -10,8 +10,8 @@ tab_spaces = 4
 max_width = 120
 
 # Array and slice formatting
-array_width = 60
-chain_width = 60
+array_width = 80
+chain_width = 80
 
 # Newlines
 newline_style = "Unix"

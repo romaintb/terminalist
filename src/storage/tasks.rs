@@ -265,9 +265,7 @@ impl LocalStorage {
     /// Get tasks due today and overdue tasks from local storage
     pub async fn get_tasks_for_today(&self) -> Result<Vec<TaskDisplay>> {
         // Get current date in YYYY-MM-DD format
-        let current_date: String = sqlx::query_scalar("SELECT date('now')")
-            .fetch_one(&self.pool)
-            .await?;
+        let current_date: String = sqlx::query_scalar("SELECT date('now')").fetch_one(&self.pool).await?;
 
         let rows = sqlx::query(
             r"
@@ -307,9 +305,7 @@ impl LocalStorage {
     /// Get tasks due tomorrow from local storage
     pub async fn get_tasks_for_tomorrow(&self) -> Result<Vec<TaskDisplay>> {
         // Get tomorrow's date in YYYY-MM-DD format
-        let tomorrow_date: String = sqlx::query_scalar("SELECT date('now', '+1 day')")
-            .fetch_one(&self.pool)
-            .await?;
+        let tomorrow_date: String = sqlx::query_scalar("SELECT date('now', '+1 day')").fetch_one(&self.pool).await?;
 
         let rows = sqlx::query(
             r"

@@ -323,10 +323,7 @@ impl TaskListComponent {
         let mut tasks_by_section: HashMap<Option<String>, Vec<&TaskDisplay>> = HashMap::new();
         let sorted_tasks = self.get_sorted_tasks();
         for task in sorted_tasks {
-            tasks_by_section
-                .entry(task.section_id.clone())
-                .or_default()
-                .push(task);
+            tasks_by_section.entry(task.section_id.clone()).or_default().push(task);
         }
 
         // Add tasks without sections first
@@ -466,11 +463,7 @@ impl TaskListComponent {
         let mut result = Vec::new();
 
         // Find root tasks (tasks with no parent)
-        let mut root_tasks: Vec<&TaskDisplay> = self
-            .tasks
-            .iter()
-            .filter(|task| task.parent_id.is_none())
-            .collect();
+        let mut root_tasks: Vec<&TaskDisplay> = self.tasks.iter().filter(|task| task.parent_id.is_none()).collect();
 
         // Sort root tasks by completion status and priority
         root_tasks.sort_by(|a, b| {
@@ -494,11 +487,8 @@ impl TaskListComponent {
         result.push(task);
 
         // Find all direct children of this task
-        let mut children: Vec<&TaskDisplay> = self
-            .tasks
-            .iter()
-            .filter(|t| t.parent_id.as_ref() == Some(&task.id))
-            .collect();
+        let mut children: Vec<&TaskDisplay> =
+            self.tasks.iter().filter(|t| t.parent_id.as_ref() == Some(&task.id)).collect();
 
         // Sort children by completion status and priority
         children.sort_by(|a, b| match (a.is_completed, b.is_completed) {
@@ -561,13 +551,9 @@ impl TaskListComponent {
 
         // Task content with appropriate styling
         let content_style = if task.is_deleted {
-            Style::default()
-                .fg(Color::Red)
-                .add_modifier(Modifier::CROSSED_OUT)
+            Style::default().fg(Color::Red).add_modifier(Modifier::CROSSED_OUT)
         } else if task.is_completed {
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::DIM)
+            Style::default().fg(Color::Green).add_modifier(Modifier::DIM)
         } else {
             Style::default().fg(Color::White)
         };
@@ -630,9 +616,7 @@ impl TaskListComponent {
     fn create_section_header(&self, name: &str) -> ListItem<'static> {
         ListItem::new(Line::from(Span::styled(
             name.to_string(),
-            Style::default()
-                .add_modifier(Modifier::BOLD)
-                .fg(Color::Cyan),
+            Style::default().add_modifier(Modifier::BOLD).fg(Color::Cyan),
         )))
     }
 }
@@ -781,11 +765,7 @@ impl Component for TaskListComponent {
 
             let tasks_list = List::new(items)
                 .block(Block::default().borders(Borders::ALL).title("Tasks"))
-                .highlight_style(
-                    Style::default()
-                        .bg(Color::DarkGray)
-                        .add_modifier(Modifier::BOLD),
-                );
+                .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD));
 
             f.render_stateful_widget(tasks_list, rect, &mut list_state);
             self.list_state = list_state;
@@ -941,10 +921,7 @@ impl TaskListComponent {
         // Group tasks by section
         let mut tasks_by_section: HashMap<Option<String>, Vec<&TaskDisplay>> = HashMap::new();
         for task in &self.tasks {
-            tasks_by_section
-                .entry(task.section_id.clone())
-                .or_default()
-                .push(task);
+            tasks_by_section.entry(task.section_id.clone()).or_default().push(task);
         }
 
         let mut rendered_index = 0;

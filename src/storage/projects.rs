@@ -50,9 +50,7 @@ impl LocalStorage {
         let mut tx = self.pool.begin().await?;
 
         // Clear existing projects
-        sqlx::query("DELETE FROM projects")
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query("DELETE FROM projects").execute(&mut *tx).await?;
 
         // Insert new projects
         for project in &projects {

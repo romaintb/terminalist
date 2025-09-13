@@ -41,9 +41,7 @@ impl LocalStorage {
         let mut tx = self.pool.begin().await?;
 
         // Clear existing sections
-        sqlx::query("DELETE FROM sections")
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query("DELETE FROM sections").execute(&mut *tx).await?;
 
         // Insert new sections
         for section in &sections {

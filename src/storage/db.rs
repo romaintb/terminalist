@@ -173,15 +173,9 @@ impl LocalStorage {
     /// Clear all data from the database
     pub async fn clear_all_data(&self) -> Result<()> {
         sqlx::query("DELETE FROM tasks").execute(&self.pool).await?;
-        sqlx::query("DELETE FROM projects")
-            .execute(&self.pool)
-            .await?;
-        sqlx::query("DELETE FROM labels")
-            .execute(&self.pool)
-            .await?;
-        sqlx::query("DELETE FROM sections")
-            .execute(&self.pool)
-            .await?;
+        sqlx::query("DELETE FROM projects").execute(&self.pool).await?;
+        sqlx::query("DELETE FROM labels").execute(&self.pool).await?;
+        sqlx::query("DELETE FROM sections").execute(&self.pool).await?;
         Ok(())
     }
 }
