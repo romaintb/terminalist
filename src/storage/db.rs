@@ -1,5 +1,4 @@
 use anyhow::Result;
-use chrono::{DateTime, Utc};
 use sqlx::{
     sqlite::{SqliteConnection, SqlitePool, SqlitePoolOptions},
     Connection, Row,
@@ -63,8 +62,7 @@ impl LocalStorage {
                 is_favorite BOOLEAN NOT NULL DEFAULT 0,
                 is_inbox_project BOOLEAN NOT NULL DEFAULT 0,
                 order_index INTEGER NOT NULL DEFAULT 0,
-                parent_id TEXT,
-                last_synced TEXT NOT NULL
+                parent_id TEXT
             )
             ",
         )
@@ -78,8 +76,7 @@ impl LocalStorage {
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 project_id TEXT NOT NULL,
-                order_index INTEGER NOT NULL DEFAULT 0,
-                last_synced TEXT NOT NULL
+                order_index INTEGER NOT NULL DEFAULT 0
             )
             ",
         )
@@ -106,7 +103,6 @@ impl LocalStorage {
                 deadline TEXT,
                 duration TEXT,
                 labels TEXT NOT NULL DEFAULT '',
-                last_synced TEXT NOT NULL,
                 FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE
             )
             ",
@@ -122,21 +118,7 @@ impl LocalStorage {
                 name TEXT NOT NULL,
                 color TEXT NOT NULL,
                 order_index INTEGER NOT NULL DEFAULT 0,
-                is_favorite BOOLEAN NOT NULL DEFAULT 0,
-                last_synced TEXT NOT NULL
-            )
-            ",
-        )
-        .execute(&self.pool)
-        .await?;
-
-        // Create sync metadata table
-        sqlx::query(
-            r"
-            CREATE TABLE IF NOT EXISTS sync_metadata (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                is_favorite BOOLEAN NOT NULL DEFAULT 0
             )
             ",
         )
@@ -188,20 +170,6 @@ impl LocalStorage {
         Ok(count > 0)
     }
 
-    /// Get the last sync time for a specific data type
-    pub async fn get_last_sync(&self, data_type: &str) -> Result<Option<DateTime<Utc>>> {
-        let result: Option<String> = sqlx::query_scalar("SELECT value FROM sync_metadata WHERE key = ?")
-            .bind(data_type)
-            .fetch_optional(&self.pool)
-            .await?;
-
-        if let Some(timestamp_str) = result {
-            Ok(Some(timestamp_str.parse()?))
-        } else {
-            Ok(None)
-        }
-    }
-
     /// Clear all data from the database
     pub async fn clear_all_data(&self) -> Result<()> {
         sqlx::query("DELETE FROM tasks").execute(&self.pool).await?;
@@ -214,27 +182,6 @@ impl LocalStorage {
         sqlx::query("DELETE FROM sections")
             .execute(&self.pool)
             .await?;
-        sqlx::query("DELETE FROM sync_metadata")
-            .execute(&self.pool)
-            .await?;
-        Ok(())
-    }
-
-    /// Update sync timestamp for a data type
-    pub(crate) async fn update_sync_timestamp(&self, data_type: &str) -> Result<()> {
-        let now = Utc::now();
-        sqlx::query(
-            r"
-            INSERT OR REPLACE INTO sync_metadata (key, value, updated_at)
-            VALUES (?, ?, ?)
-            ",
-        )
-        .bind(format!("last_sync_{data_type}"))
-        .bind(now.to_rfc3339())
-        .bind(now)
-        .execute(&self.pool)
-        .await?;
-
         Ok(())
     }
 }

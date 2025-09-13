@@ -1,5 +1,4 @@
 use anyhow::Result;
-use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -20,7 +19,7 @@ pub struct SyncService {
 pub enum SyncStatus {
     Idle,
     InProgress,
-    Success { last_sync: DateTime<Utc> },
+    Success,
     Error { message: String },
 }
 
@@ -140,12 +139,6 @@ impl SyncService {
     /// Check if sync is currently in progress
     pub async fn is_syncing(&self) -> bool {
         *self.sync_in_progress.lock().await
-    }
-
-    /// Get last sync time for projects
-    pub async fn get_last_sync_time(&self) -> Result<Option<DateTime<Utc>>> {
-        let storage = self.storage.lock().await;
-        storage.get_last_sync("projects").await
     }
 
     /// Create a new project
@@ -511,7 +504,7 @@ impl SyncService {
             }
         }
 
-        Ok(SyncStatus::Success { last_sync: Utc::now() })
+        Ok(SyncStatus::Success)
     }
 
     /// Force sync regardless of last sync time

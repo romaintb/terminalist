@@ -1,5 +1,4 @@
 use anyhow::Result;
-use chrono::{DateTime, Utc};
 use sqlx::Row;
 
 use super::db::LocalStorage;
@@ -12,7 +11,6 @@ pub struct LocalSection {
     pub name: String,
     pub project_id: String,
     pub order_index: i32,
-    pub last_synced: DateTime<Utc>,
 }
 
 impl From<LocalSection> for SectionDisplay {
@@ -33,7 +31,6 @@ impl From<Section> for LocalSection {
             name: section.name,
             project_id: section.project_id,
             order_index: section.order,
-            last_synced: Utc::now(),
         }
     }
 }
@@ -53,21 +50,19 @@ impl LocalStorage {
             let local_section: LocalSection = section.clone().into();
             sqlx::query(
                 r"
-                INSERT INTO sections (id, name, project_id, order_index, last_synced)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO sections (id, name, project_id, order_index)
+                VALUES (?, ?, ?, ?)
                 ",
             )
             .bind(&local_section.id)
             .bind(&local_section.name)
             .bind(&local_section.project_id)
             .bind(local_section.order_index)
-            .bind(local_section.last_synced)
             .execute(&mut *tx)
             .await?;
         }
 
         tx.commit().await?;
-        self.update_sync_timestamp("sections").await?;
         Ok(())
     }
 

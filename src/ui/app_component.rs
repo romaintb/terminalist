@@ -901,7 +901,7 @@ impl AppComponent {
 
     fn update_data_from_sync(&mut self, status: SyncStatus) {
         // Only proceed if sync was successful
-        if matches!(status, SyncStatus::Success { .. }) {
+        if matches!(status, SyncStatus::Success) {
             // Schedule a data fetch task
             self.schedule_data_fetch();
         }

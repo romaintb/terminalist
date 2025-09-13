@@ -1,5 +1,4 @@
 use anyhow::Result;
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::Row;
 
@@ -16,7 +15,6 @@ pub struct LocalProject {
     pub is_inbox_project: bool,
     pub order_index: i32,
     pub parent_id: Option<String>,
-    pub last_synced: DateTime<Utc>,
 }
 
 impl From<LocalProject> for ProjectDisplay {
@@ -42,7 +40,6 @@ impl From<Project> for LocalProject {
             is_inbox_project: project.is_inbox_project,
             order_index: project.order,
             parent_id: project.parent_id,
-            last_synced: Utc::now(),
         }
     }
 }
@@ -62,8 +59,8 @@ impl LocalStorage {
             let local_project: LocalProject = project.clone().into();
             sqlx::query(
                 r"
-                INSERT INTO projects (id, name, color, is_favorite, is_inbox_project, order_index, parent_id, last_synced)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO projects (id, name, color, is_favorite, is_inbox_project, order_index, parent_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ",
             )
             .bind(&local_project.id)
@@ -73,13 +70,11 @@ impl LocalStorage {
             .bind(local_project.is_inbox_project)
             .bind(local_project.order_index)
             .bind(&local_project.parent_id)
-            .bind(local_project.last_synced)
             .execute(&mut *tx)
             .await?;
         }
 
         tx.commit().await?;
-        self.update_sync_timestamp("projects").await?;
         Ok(())
     }
 
@@ -89,8 +84,8 @@ impl LocalStorage {
 
         sqlx::query(
             r"
-            INSERT OR REPLACE INTO projects (id, name, color, is_favorite, is_inbox_project, order_index, parent_id, last_synced)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO projects (id, name, color, is_favorite, is_inbox_project, order_index, parent_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             ",
         )
         .bind(&local_project.id)
@@ -100,7 +95,6 @@ impl LocalStorage {
         .bind(local_project.is_inbox_project)
         .bind(local_project.order_index)
         .bind(&local_project.parent_id)
-        .bind(local_project.last_synced)
         .execute(&self.pool)
         .await?;
 
@@ -128,9 +122,8 @@ impl LocalStorage {
 
     /// Update project name in local storage
     pub async fn update_project_name(&self, project_id: &str, name: &str) -> Result<()> {
-        sqlx::query("UPDATE projects SET name = ?, last_synced = ? WHERE id = ?")
+        sqlx::query("UPDATE projects SET name = ? WHERE id = ?")
             .bind(name)
-            .bind(Utc::now())
             .bind(project_id)
             .execute(&self.pool)
             .await?;

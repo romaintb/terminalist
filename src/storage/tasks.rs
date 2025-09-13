@@ -1,5 +1,4 @@
 use anyhow::Result;
-use chrono::Utc;
 
 use super::db::LocalStorage;
 use super::labels::LocalLabel;
@@ -24,7 +23,6 @@ pub struct LocalTask {
     pub deadline: Option<String>,
     pub duration: Option<String>,
     pub labels: String,
-    pub last_synced: String,
 }
 
 impl From<Task> for LocalTask {
@@ -52,7 +50,6 @@ impl From<Task> for LocalTask {
             deadline: task.deadline.map(|d| d.date),
             duration: duration_string,
             labels: serde_json::to_string(&task.labels).unwrap_or_default(),
-            last_synced: Utc::now().to_rfc3339(),
             description: Some(task.description),
         }
     }
@@ -106,8 +103,8 @@ impl LocalStorage {
             let local_task: LocalTask = task.into();
             sqlx::query(
                 r"
-                INSERT INTO tasks (id, content, project_id, section_id, parent_id, is_completed, is_deleted, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description, last_synced)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tasks (id, content, project_id, section_id, parent_id, is_completed, is_deleted, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ",
             )
             .bind(&local_task.id)
@@ -126,13 +123,11 @@ impl LocalStorage {
             .bind(&local_task.duration)
             .bind(&local_task.labels)
             .bind(&local_task.description)
-            .bind(local_task.last_synced)
             .execute(&mut *tx)
             .await?;
         }
 
         tx.commit().await?;
-        self.update_sync_timestamp("tasks").await?;
         Ok(())
     }
 
@@ -142,8 +137,8 @@ impl LocalStorage {
 
         sqlx::query(
             r"
-            INSERT OR REPLACE INTO tasks (id, content, project_id, section_id, parent_id, is_completed, is_deleted, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description, last_synced)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO tasks (id, content, project_id, section_id, parent_id, is_completed, is_deleted, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, labels, description)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ",
         )
         .bind(&local_task.id)
@@ -162,7 +157,6 @@ impl LocalStorage {
         .bind(&local_task.duration)
         .bind(&local_task.labels)
         .bind(&local_task.description)
-        .bind(local_task.last_synced)
         .execute(&self.pool)
         .await?;
 
@@ -411,8 +405,7 @@ impl LocalStorage {
 
     /// Mark a task as completed in local storage
     pub async fn mark_task_completed(&self, task_id: &str) -> Result<()> {
-        sqlx::query("UPDATE tasks SET is_completed = true, last_synced = ? WHERE id = ?")
-            .bind(Utc::now())
+        sqlx::query("UPDATE tasks SET is_completed = true WHERE id = ?")
             .bind(task_id)
             .execute(&self.pool)
             .await?;
@@ -433,9 +426,8 @@ impl LocalStorage {
 
     /// Update a task's due date in local storage
     pub async fn update_task_due_date(&self, task_id: &str, due_date: Option<&str>) -> Result<()> {
-        sqlx::query("UPDATE tasks SET due_date = ?, last_synced = ? WHERE id = ?")
+        sqlx::query("UPDATE tasks SET due_date = ? WHERE id = ?")
             .bind(due_date)
-            .bind(Utc::now())
             .bind(task_id)
             .execute(&self.pool)
             .await?;
@@ -445,9 +437,8 @@ impl LocalStorage {
 
     /// Update a task's priority in local storage
     pub async fn update_task_priority(&self, task_id: &str, priority: i32) -> Result<()> {
-        sqlx::query("UPDATE tasks SET priority = ?, last_synced = ? WHERE id = ?")
+        sqlx::query("UPDATE tasks SET priority = ?, WHERE id = ?")
             .bind(priority)
-            .bind(Utc::now())
             .bind(task_id)
             .execute(&self.pool)
             .await?;
@@ -457,8 +448,7 @@ impl LocalStorage {
 
     /// Mark a task as deleted in local storage
     pub async fn delete_task(&self, task_id: &str) -> Result<()> {
-        sqlx::query("UPDATE tasks SET is_deleted = true, last_synced = ? WHERE id = ?")
-            .bind(Utc::now())
+        sqlx::query("UPDATE tasks SET is_deleted = true WHERE id = ?")
             .bind(task_id)
             .execute(&self.pool)
             .await?;
