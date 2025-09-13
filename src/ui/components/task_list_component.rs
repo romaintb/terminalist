@@ -408,15 +408,12 @@ impl TaskListComponent {
         }
     }
 
-    /// Get child task statistics (total count only)
-    fn get_child_task_stats(&self, parent_id: &str) -> (usize, usize) {
-        let total_children = self
-            .tasks
+    /// Get child task count
+    fn get_child_task_count(&self, parent_id: &str) -> usize {
+        self.tasks
             .iter()
             .filter(|task| task.parent_id.as_deref() == Some(parent_id))
-            .count();
-
-        (0, total_children)
+            .count()
     }
 
     /// Calculate the tree depth of a task for indentation (supports n-levels)
@@ -518,8 +515,8 @@ impl TaskListComponent {
         let content_style = Style::default().fg(Color::White);
         line_spans.push(Span::styled(task.content.clone(), content_style));
 
-        // Child task progress indicator (for tasks with children)
-        let (_, total_children) = self.get_child_task_stats(&task.id);
+        // Child task count (for tasks with children)
+        let total_children = self.get_child_task_count(&task.id);
         if total_children > 0 {
             let progress_text = format!(" ({})", total_children);
             let progress_style = Style::default().fg(Color::Gray);
