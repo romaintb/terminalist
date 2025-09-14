@@ -19,12 +19,10 @@ pub fn create_paren_badge(text: &str) -> Span<'static> {
 
 /// Create a label badge with custom color
 #[must_use]
-pub fn create_label_badge(name: &str, color: &str) -> Span<'static> {
-    let bg_color = crate::utils::color::convert_todoist_color(color);
+pub fn create_label_badge(name: &str) -> Span<'static> {
+    let style = Style::default().fg(Color::Green).add_modifier(Modifier::BOLD);
 
-    let style = Style::default().bg(bg_color).fg(Color::White).add_modifier(Modifier::BOLD);
-
-    Span::styled(name.to_string(), style)
+    Span::styled(format!("@{}", name), style)
 }
 
 /// Create task badges optimized for terminal compatibility
@@ -45,9 +43,8 @@ pub fn create_task_badges(
         badges.push(create_paren_badge(duration));
     }
 
-    // Add label badges
     for label in labels {
-        badges.push(create_label_badge(&label.name, &label.color));
+        badges.push(create_label_badge(&label.name));
     }
 
     badges
