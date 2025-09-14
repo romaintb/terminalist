@@ -338,6 +338,7 @@ impl AppComponent {
             Action::SyncFailed(error) => {
                 self.logger.log(format!("Sync: Failed with error: {}", error));
                 self.active_sync_task = None;
+                self.state.loading = false;
                 self.state.error_message = Some(error);
                 Action::ShowDialog(DialogType::Error(self.state.error_message.clone().unwrap_or_default()))
             }
