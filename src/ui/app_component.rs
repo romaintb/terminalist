@@ -129,10 +129,8 @@ impl AppComponent {
         self.logger.log("AppComponent: Starting initial sync".to_string());
         if self.active_sync_task.is_none() {
             self.start_background_sync();
-            // Also try to load any existing data
-            self.schedule_data_fetch();
-            self.logger
-                .log("AppComponent: Initial sync and data fetch scheduled".to_string());
+            // Data fetch will be triggered automatically when sync completes
+            self.logger.log("AppComponent: Initial sync scheduled".to_string());
         }
     }
 

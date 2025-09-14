@@ -52,13 +52,15 @@ impl From<Task> for LocalTask {
 impl LocalStorage {
     async fn get_tasks_with_labels_joined(
         &self,
-        where_and_order_clause: &str,
+        where_clause: &str,
+        order_clause: &str,
         params: &[&str],
     ) -> Result<Vec<TaskDisplay>> {
-        let default_order = if where_and_order_clause.contains("ORDER BY") {
-            ""
-        } else {
+        let where_part = if where_clause.is_empty() { "" } else { where_clause };
+        let order_part = if order_clause.is_empty() {
             "ORDER BY t.priority DESC, t.order_index ASC"
+        } else {
+            order_clause
         };
 
         let query = format!(
@@ -75,7 +77,7 @@ impl LocalStorage {
                      t.due_date, t.due_datetime, t.is_recurring, t.deadline, t.duration, t.description
             {}
             ",
-            where_and_order_clause, default_order
+            where_part, order_part
         );
 
         let mut query_builder = sqlx::query(&query);
@@ -263,12 +265,13 @@ impl LocalStorage {
 
     /// Get tasks for a specific project from local storage
     pub async fn get_tasks_for_project(&self, project_id: &str) -> Result<Vec<TaskDisplay>> {
-        self.get_tasks_with_labels_joined("WHERE t.project_id = ?", &[project_id]).await
+        self.get_tasks_with_labels_joined("WHERE t.project_id = ?", "", &[project_id])
+            .await
     }
 
     /// Get all tasks from local storage
     pub async fn get_all_tasks(&self) -> Result<Vec<TaskDisplay>> {
-        self.get_tasks_with_labels_joined("", &[]).await
+        self.get_tasks_with_labels_joined("", "", &[]).await
     }
 
     /// Get tasks due today and overdue tasks from local storage
@@ -277,8 +280,8 @@ impl LocalStorage {
         let current_date: String = sqlx::query_scalar("SELECT date('now')").fetch_one(&self.pool).await?;
 
         self.get_tasks_with_labels_joined(
-            r"WHERE t.due_date IS NOT NULL AND t.due_date <= ?
-              ORDER BY
+            "WHERE t.due_date IS NOT NULL AND t.due_date <= ?",
+            r"ORDER BY
                 CASE
                   WHEN t.due_date < ? THEN 0  -- Overdue first
                   ELSE 1  -- Today second
@@ -295,15 +298,15 @@ impl LocalStorage {
         // Get tomorrow's date in YYYY-MM-DD format
         let tomorrow_date: String = sqlx::query_scalar("SELECT date('now', '+1 day')").fetch_one(&self.pool).await?;
 
-        self.get_tasks_with_labels_joined("WHERE t.due_date IS NOT NULL AND t.due_date = ?", &[&tomorrow_date])
+        self.get_tasks_with_labels_joined("WHERE t.due_date IS NOT NULL AND t.due_date = ?", "", &[&tomorrow_date])
             .await
     }
 
     /// Get tasks for upcoming from local storage (overdue + next 3 months)
     pub async fn get_tasks_for_upcoming(&self) -> Result<Vec<TaskDisplay>> {
         self.get_tasks_with_labels_joined(
-            r"WHERE t.due_date IS NOT NULL AND t.due_date <= date('now', '+3 months')
-              ORDER BY
+            "WHERE t.due_date IS NOT NULL AND t.due_date <= date('now', '+3 months')",
+            r"ORDER BY
                 CASE
                   WHEN t.due_date < date('now') THEN 0      -- Overdue tasks first
                   WHEN t.due_date = date('now') THEN 1      -- Today's tasks second
@@ -319,7 +322,7 @@ impl LocalStorage {
 
     /// Get a single task by ID from local storage
     pub async fn get_task_by_id(&self, task_id: &str) -> Result<Option<TaskDisplay>> {
-        let tasks = self.get_tasks_with_labels_joined("WHERE t.id = ?", &[task_id]).await?;
+        let tasks = self.get_tasks_with_labels_joined("WHERE t.id = ?", "", &[task_id]).await?;
         Ok(tasks.into_iter().next())
     }
 
