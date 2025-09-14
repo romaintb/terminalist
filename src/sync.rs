@@ -106,22 +106,50 @@ impl SyncService {
         Ok(filtered_tasks)
     }
 
-    /// Get tasks due today and overdue tasks from local storage (fast)
+    /// Get tasks for "Today" view (UI business logic: overdue + today)
     pub async fn get_tasks_for_today(&self) -> Result<Vec<TaskDisplay>> {
         let storage = self.storage.lock().await;
-        storage.get_tasks_for_today().await
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+
+        let overdue_tasks = storage.get_overdue_tasks().await?;
+        let today_tasks = storage.get_tasks_due_on(&today).await?;
+
+        // UI business rule: show overdue first, then today
+        let mut result = overdue_tasks;
+        result.extend(today_tasks);
+        Ok(result)
     }
 
-    /// Get tasks due tomorrow from local storage (fast)
+    /// Get tasks for "Tomorrow" view (pure tomorrow tasks)
     pub async fn get_tasks_for_tomorrow(&self) -> Result<Vec<TaskDisplay>> {
         let storage = self.storage.lock().await;
-        storage.get_tasks_for_tomorrow().await
+        let tomorrow = (chrono::Utc::now() + chrono::Duration::days(1)).format("%Y-%m-%d").to_string();
+
+        storage.get_tasks_due_on(&tomorrow).await
     }
 
-    /// Get tasks for upcoming from local storage (fast)
+    /// Get tasks for "Upcoming" view (UI business logic: overdue + today + next 3 months)
     pub async fn get_tasks_for_upcoming(&self) -> Result<Vec<TaskDisplay>> {
         let storage = self.storage.lock().await;
-        storage.get_tasks_for_upcoming().await
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let three_months_later = (chrono::Utc::now() + chrono::Duration::days(90)).format("%Y-%m-%d").to_string();
+
+        let overdue_tasks = storage.get_overdue_tasks().await?;
+        let today_tasks = storage.get_tasks_due_on(&today).await?;
+        let future_tasks = storage.get_tasks_due_between(&today, &three_months_later).await?;
+
+        // UI business rule: overdue → today → future
+        let mut result = overdue_tasks;
+        result.extend(today_tasks);
+        result.extend(future_tasks.into_iter().filter(|task| {
+            // Remove today tasks from future to avoid duplicates
+            if let Some(due_date) = &task.due {
+                due_date != &today
+            } else {
+                true
+            }
+        }));
+        Ok(result)
     }
 
     /// Get a single task by ID from local storage (fast)
@@ -466,14 +494,7 @@ impl SyncService {
             }
             self.log("✅ Stored projects in database".to_string());
 
-            if let Err(e) = storage.store_tasks(tasks).await {
-                self.log(format!("❌ Failed to store tasks: {e}"));
-                return Ok(SyncStatus::Error {
-                    message: format!("Failed to store tasks: {e}"),
-                });
-            }
-            self.log("✅ Stored tasks in database".to_string());
-
+            // Store labels BEFORE tasks so task-label relationships can be created
             if let Err(e) = storage.store_labels(labels).await {
                 self.log(format!("❌ Failed to store labels: {e}"));
                 return Ok(SyncStatus::Error {
@@ -481,6 +502,14 @@ impl SyncService {
                 });
             }
             self.log("✅ Stored labels in database".to_string());
+
+            if let Err(e) = storage.store_tasks(tasks).await {
+                self.log(format!("❌ Failed to store tasks: {e}"));
+                return Ok(SyncStatus::Error {
+                    message: format!("Failed to store tasks: {e}"),
+                });
+            }
+            self.log("✅ Stored tasks in database".to_string());
 
             if !sections.is_empty() {
                 if let Err(e) = storage.store_sections(sections).await {

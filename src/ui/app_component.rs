@@ -75,11 +75,12 @@ pub struct AppComponent {
 }
 
 impl AppComponent {
-    pub fn new(sync_service: SyncService) -> Self {
+    pub fn new(mut sync_service: SyncService) -> Self {
         let sidebar = SidebarComponent::new();
         let task_list = TaskListComponent::new();
         let (task_manager, background_action_rx) = TaskManager::new();
         let logger = Logger::new();
+        sync_service.set_logger(logger.clone());
 
         let state = AppState {
             loading: true,
@@ -129,10 +130,8 @@ impl AppComponent {
         self.logger.log("AppComponent: Starting initial sync".to_string());
         if self.active_sync_task.is_none() {
             self.start_background_sync();
-            // Also try to load any existing data
-            self.schedule_data_fetch();
-            self.logger
-                .log("AppComponent: Initial sync and data fetch scheduled".to_string());
+            // Data fetch will be triggered automatically when sync completes
+            self.logger.log("AppComponent: Initial sync scheduled".to_string());
         }
     }
 
@@ -339,6 +338,7 @@ impl AppComponent {
             Action::SyncFailed(error) => {
                 self.logger.log(format!("Sync: Failed with error: {}", error));
                 self.active_sync_task = None;
+                self.state.loading = false;
                 self.state.error_message = Some(error);
                 Action::ShowDialog(DialogType::Error(self.state.error_message.clone().unwrap_or_default()))
             }
