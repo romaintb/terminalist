@@ -27,12 +27,8 @@ impl LayoutManager {
     /// Calculate a centered rectangle with percentage width and fixed line height
     #[must_use]
     pub fn centered_rect_lines(percent_x: u16, height_lines: u16, r: Rect) -> Rect {
-        let popup_layout = Layout::vertical([
-            Constraint::Min(0),
-            Constraint::Length(height_lines),
-            Constraint::Min(0),
-        ])
-        .split(r);
+        let popup_layout =
+            Layout::vertical([Constraint::Min(0), Constraint::Length(height_lines), Constraint::Min(0)]).split(r);
 
         Layout::horizontal([
             Constraint::Percentage((100 - percent_x) / 2),

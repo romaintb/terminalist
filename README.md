@@ -53,7 +53,7 @@ Once the application is running, you can use these keyboard shortcuts:
 - **Mouse** Click on sidebar items to navigate
 
 ### **Task Management**
-- **`Space`** or **`Enter`** Toggle task completion (complete ↔ reopen)
+- **`Space`** or **`Enter`** Complete task
 - **`a`** Create new task
 - **`d`** Delete selected task (with confirmation)
 - **`p`** Cycle task priority
@@ -147,7 +147,7 @@ src/
 ├── sync.rs                    # Sync service with API integration
 ├── storage.rs                 # SQLite storage (in-memory)
 ├── icons.rs                   # Icon service for terminal compatibility
-├── debug_logger.rs            # Debug logging system
+├── logger.rs                  # Debug logging system
 ├── utils/                     # Utility modules
 │   ├── mod.rs
 │   └── date.rs                # Date/time utilities

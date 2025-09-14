@@ -28,11 +28,7 @@ pub fn render_task_dialog(
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .title(title)
-        .title_style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
+        .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
         .style(Style::default().fg(Color::Cyan));
 
     // Create layout for content

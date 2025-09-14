@@ -1,5 +1,5 @@
-use crate::debug_logger::DebugLogger;
 use crate::icons::IconService;
+use crate::logger::Logger;
 use crate::ui::layout::LayoutManager;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -110,12 +110,7 @@ pub fn render_info_dialog(
             .viewport_content_length(visible_height)
             .position(clamped_offset);
 
-        let visible_lines: Vec<&str> = lines
-            .iter()
-            .skip(clamped_offset)
-            .take(visible_height)
-            .copied()
-            .collect();
+        let visible_lines: Vec<&str> = lines.iter().skip(clamped_offset).take(visible_height).copied().collect();
         visible_lines.join("\n")
     } else {
         message.to_string()
@@ -193,12 +188,7 @@ pub fn render_error_dialog(
             .viewport_content_length(visible_height)
             .position(clamped_offset);
 
-        let visible_lines: Vec<&str> = lines
-            .iter()
-            .skip(clamped_offset)
-            .take(visible_height)
-            .copied()
-            .collect();
+        let visible_lines: Vec<&str> = lines.iter().skip(clamped_offset).take(visible_height).copied().collect();
         visible_lines.join("\n")
     } else {
         message.to_string()
@@ -324,12 +314,7 @@ Press 'Esc', '?' or 'h' to close this help panel
         .viewport_content_length(visible_height)
         .position(clamped_offset);
 
-    let visible_lines: Vec<&str> = lines
-        .iter()
-        .skip(clamped_offset)
-        .take(visible_height)
-        .copied()
-        .collect();
+    let visible_lines: Vec<&str> = lines.iter().skip(clamped_offset).take(visible_height).copied().collect();
 
     let help_text = visible_lines.join("\n");
 
@@ -361,7 +346,7 @@ Press 'Esc', '?' or 'h' to close this help panel
 pub fn render_logs_dialog(
     f: &mut Frame,
     area: Rect,
-    debug_logger: &Option<DebugLogger>,
+    logger: &Option<Logger>,
     scroll_offset: usize,
     scrollbar_state: &mut ScrollbarState,
 ) {
@@ -377,7 +362,7 @@ pub fn render_logs_dialog(
         logs_area.height.saturating_sub(margin_y * 2),
     );
 
-    let logs = if let Some(ref logger) = debug_logger {
+    let logs = if let Some(ref logger) = logger {
         logger.get_logs()
     } else {
         vec!["No debug logger available".to_string()]
@@ -401,12 +386,7 @@ pub fn render_logs_dialog(
         .viewport_content_length(visible_height)
         .position(clamped_offset);
 
-    let visible_lines: Vec<&str> = lines
-        .iter()
-        .skip(clamped_offset)
-        .take(visible_height)
-        .copied()
-        .collect();
+    let visible_lines: Vec<&str> = lines.iter().skip(clamped_offset).take(visible_height).copied().collect();
 
     let logs_text = visible_lines.join("\n");
 

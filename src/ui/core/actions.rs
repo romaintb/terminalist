@@ -19,7 +19,7 @@ pub enum Action {
     PreviousTask,
 
     // Task operations
-    ToggleTask(String),
+    CompleteTask(String),
     DeleteTask(String),
     CyclePriority(String),
     SetTaskDueToday(String),

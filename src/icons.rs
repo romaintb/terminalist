@@ -2,6 +2,9 @@
 //!
 //! This module provides a centralized way to manage icons throughout the application,
 //! supporting different themes like emoji, Unicode, and ASCII fallbacks.
+//!
+//! This is not really used right now as we were doing more important refactoring, but this is
+//! definitely something we will pick up in the future.
 
 use serde::{Deserialize, Serialize};
 
