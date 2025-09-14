@@ -92,6 +92,7 @@ impl LocalStorage {
             .map(|row| {
                 // Parse the concatenated labels data
                 let labels_data: Option<String> = row.get("labels_data");
+
                 let labels = if let Some(data) = labels_data {
                     if data.is_empty() {
                         Vec::new()
@@ -138,11 +139,12 @@ impl LocalStorage {
 
     /// Store task-label relationships in junction table
     async fn store_task_labels(&self, task_id: &str, label_names: &[String]) -> Result<()> {
-        // First, get label IDs from names
+        // Skip if no labels
         if label_names.is_empty() {
             return Ok(());
         }
 
+        // Get existing label IDs from names
         let placeholders = label_names.iter().map(|_| "?").collect::<Vec<_>>().join(",");
         let query = format!("SELECT id, name FROM labels WHERE name IN ({placeholders})");
 
@@ -153,7 +155,7 @@ impl LocalStorage {
 
         let label_rows = query_builder.fetch_all(&self.pool).await?;
 
-        // Insert task-label relationships
+        // Insert task-label relationships for found labels
         for row in label_rows {
             let label_id: String = row.get("id");
             sqlx::query("INSERT OR IGNORE INTO task_labels (task_id, label_id) VALUES (?, ?)")
@@ -190,7 +192,6 @@ impl LocalStorage {
         for task in tasks {
             let label_names = task.labels.clone();
             let local_task: LocalTask = task.into();
-
             task_labels.push((local_task.id.clone(), label_names));
 
             sqlx::query(
@@ -274,47 +275,41 @@ impl LocalStorage {
         self.get_tasks_with_labels_joined("", "", &[]).await
     }
 
-    /// Get tasks due today and overdue tasks from local storage
-    pub async fn get_tasks_for_today(&self) -> Result<Vec<TaskDisplay>> {
-        // Get current date in YYYY-MM-DD format
-        let current_date: String = sqlx::query_scalar("SELECT date('now')").fetch_one(&self.pool).await?;
-
+    /// Get tasks due on a specific date (pure data access)
+    pub async fn get_tasks_due_on(&self, date: &str) -> Result<Vec<TaskDisplay>> {
         self.get_tasks_with_labels_joined(
-            "WHERE t.due_date IS NOT NULL AND t.due_date <= ?",
-            r"ORDER BY
-                CASE
-                  WHEN t.due_date < ? THEN 0  -- Overdue first
-                  ELSE 1  -- Today second
-                END,
-                t.priority DESC,
-                t.order_index ASC",
-            &[&current_date, &current_date],
+            "WHERE t.due_date IS NOT NULL AND t.due_date = ?",
+            "ORDER BY t.priority DESC, t.order_index ASC",
+            &[date],
         )
         .await
     }
 
-    /// Get tasks due tomorrow from local storage
-    pub async fn get_tasks_for_tomorrow(&self) -> Result<Vec<TaskDisplay>> {
-        // Get tomorrow's date in YYYY-MM-DD format
-        let tomorrow_date: String = sqlx::query_scalar("SELECT date('now', '+1 day')").fetch_one(&self.pool).await?;
-
-        self.get_tasks_with_labels_joined("WHERE t.due_date IS NOT NULL AND t.due_date = ?", "", &[&tomorrow_date])
-            .await
+    /// Get overdue tasks (pure data access)
+    pub async fn get_overdue_tasks(&self) -> Result<Vec<TaskDisplay>> {
+        self.get_tasks_with_labels_joined(
+            "WHERE t.due_date IS NOT NULL AND t.due_date < date('now')",
+            "ORDER BY t.due_date ASC, t.priority DESC, t.order_index ASC",
+            &[],
+        )
+        .await
     }
 
-    /// Get tasks for upcoming from local storage (overdue + next 3 months)
-    pub async fn get_tasks_for_upcoming(&self) -> Result<Vec<TaskDisplay>> {
+    /// Get tasks due between two dates (inclusive)
+    pub async fn get_tasks_due_between(&self, start_date: &str, end_date: &str) -> Result<Vec<TaskDisplay>> {
         self.get_tasks_with_labels_joined(
-            "WHERE t.due_date IS NOT NULL AND t.due_date <= date('now', '+3 months')",
-            r"ORDER BY
-                CASE
-                  WHEN t.due_date < date('now') THEN 0      -- Overdue tasks first
-                  WHEN t.due_date = date('now') THEN 1      -- Today's tasks second
-                  ELSE 2                                    -- Future tasks third
-                END,
-                t.due_date ASC,                            -- Then chronological order
-                t.priority DESC,                           -- Then priority (high to low)
-                t.order_index ASC",
+            "WHERE t.due_date IS NOT NULL AND t.due_date >= ? AND t.due_date <= ?",
+            "ORDER BY t.due_date ASC, t.priority DESC, t.order_index ASC",
+            &[start_date, end_date],
+        )
+        .await
+    }
+
+    /// Get tasks with no due date
+    pub async fn get_tasks_without_due_date(&self) -> Result<Vec<TaskDisplay>> {
+        self.get_tasks_with_labels_joined(
+            "WHERE t.due_date IS NULL",
+            "ORDER BY t.priority DESC, t.order_index ASC",
             &[],
         )
         .await

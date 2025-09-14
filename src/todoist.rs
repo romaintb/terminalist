@@ -79,7 +79,7 @@ impl From<Task> for TaskDisplay {
         });
 
         // Convert label names to LabelDisplay objects (colors will be filled in later)
-        let labels = task
+        let labels: Vec<LabelDisplay> = task
             .labels
             .into_iter()
             .map(|name| LabelDisplay {
