@@ -554,6 +554,42 @@ impl TaskListComponent {
             line_spans.push(badge);
         }
 
+        // Add description excerpt if available and there's space
+        if !task.description.is_empty() {
+            // Calculate used width so far (approximation using string length)
+            let mut used_width = 0;
+            for span in &line_spans {
+                used_width += span.content.len();
+            }
+
+            // Use the max_width parameter, with a fallback
+            let total_width = if _max_width > 0 { _max_width } else { 80 };
+
+            // Reserve some space for padding and ensure we don't overflow
+            if used_width < total_width.saturating_sub(10) {
+                let available_width = total_width - used_width - 3; // Reserve space for " - " prefix
+
+                // Get first line of description and truncate if needed
+                let description_line = task.description.lines().next().unwrap_or("");
+                let description_text = if description_line.len() > available_width {
+                    if available_width > 3 {
+                        format!("{}...", &description_line[..available_width.saturating_sub(3)])
+                    } else {
+                        "...".to_string()
+                    }
+                } else {
+                    description_line.to_string()
+                };
+
+                // Add the description with separator and grey styling
+                line_spans.push(Span::raw(" - "));
+                line_spans.push(Span::styled(
+                    description_text,
+                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+                ));
+            }
+        }
+
         // Create the ListItem - selection highlighting handled by stateful widget
         ListItem::new(Line::from(line_spans))
     }
