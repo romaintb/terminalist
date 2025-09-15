@@ -64,7 +64,7 @@ impl LocalStorage {
                 is_favorite BOOLEAN NOT NULL DEFAULT 0,
                 is_inbox_project BOOLEAN NOT NULL DEFAULT 0,
                 order_index INTEGER NOT NULL DEFAULT 0,
-                parent_id TEXT
+                parent_id TEXT REFERENCES projects(id) ON DELETE CASCADE
             )
             ",
         )
@@ -77,7 +77,7 @@ impl LocalStorage {
             CREATE TABLE IF NOT EXISTS sections (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                project_id TEXT NOT NULL,
+                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
                 order_index INTEGER NOT NULL DEFAULT 0
             )
             ",
