@@ -450,7 +450,10 @@ impl Component for TaskListComponent {
             }
             KeyCode::Delete | KeyCode::Char('d') => {
                 if let Some(task) = self.get_selected_task() {
-                    Action::DeleteTask(task.id.clone())
+                    Action::ShowDialog(DialogType::DeleteConfirmation {
+                        item_type: "task".to_string(),
+                        item_id: task.id.clone(),
+                    })
                 } else {
                     Action::None
                 }
