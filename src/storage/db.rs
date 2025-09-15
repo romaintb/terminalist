@@ -17,8 +17,7 @@ impl LocalStorage {
         let database_url = "sqlite:file:terminalist_memdb?mode=memory&cache=shared".to_string();
 
         // Configure SQLite connection options with foreign keys enabled
-        let connect_options = SqliteConnectOptions::from_str(&database_url)?
-            .foreign_keys(true);
+        let connect_options = SqliteConnectOptions::from_str(&database_url)?.foreign_keys(true);
 
         let pool = SqlitePoolOptions::new()
             .min_connections(1)
@@ -56,10 +55,8 @@ impl LocalStorage {
     /// Initialize database schema
     async fn init_schema(&self) -> Result<()> {
         // Enable foreign key constraints
-        sqlx::query("PRAGMA foreign_keys = ON")
-            .execute(&self.pool)
-            .await?;
-        
+        sqlx::query("PRAGMA foreign_keys = ON").execute(&self.pool).await?;
+
         // Create projects table
         sqlx::query(
             r"
