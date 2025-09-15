@@ -1,0 +1,276 @@
+use crate::icons::IconService;
+use crate::todoist::{ProjectDisplay, TaskDisplay};
+use crate::ui::components::badge::{create_priority_badge, create_task_badges};
+use ratatui::{
+    style::{Color, Modifier, Style},
+    text::{Line, Span},
+    widgets::ListItem as RatatuiListItem,
+};
+
+/// Trait for items that can be displayed in a task list
+pub trait ListItem {
+    /// Render this item as a ratatui ListItem
+    fn render(&self, max_width: usize, selected: bool) -> RatatuiListItem<'static>;
+
+    /// Whether this item can be selected by the user
+    fn is_selectable(&self) -> bool;
+
+    /// Indentation level for hierarchical display (0 = root level)
+    fn indent_level(&self) -> usize;
+}
+
+/// Enum representing different types of items that can appear in the task list
+#[derive(Debug, Clone)]
+pub enum TaskListItemType {
+    Task(TaskItem),
+    Header(HeaderItem),
+    Separator(SeparatorItem),
+}
+
+impl ListItem for TaskListItemType {
+    fn render(&self, max_width: usize, selected: bool) -> RatatuiListItem<'static> {
+        match self {
+            Self::Task(item) => item.render(max_width, selected),
+            Self::Header(item) => item.render(max_width, selected),
+            Self::Separator(item) => item.render(max_width, selected),
+        }
+    }
+
+    fn is_selectable(&self) -> bool {
+        match self {
+            Self::Task(item) => item.is_selectable(),
+            Self::Header(item) => item.is_selectable(),
+            Self::Separator(item) => item.is_selectable(),
+        }
+    }
+
+    fn indent_level(&self) -> usize {
+        match self {
+            Self::Task(item) => item.indent_level(),
+            Self::Header(item) => item.indent_level(),
+            Self::Separator(item) => item.indent_level(),
+        }
+    }
+}
+
+/// A task item component
+#[derive(Debug, Clone)]
+pub struct TaskItem {
+    pub task: TaskDisplay,
+    pub depth: usize,
+    pub child_count: usize,
+    pub icons: IconService,
+    pub projects: Vec<ProjectDisplay>,
+}
+
+impl TaskItem {
+    pub fn new(
+        task: TaskDisplay,
+        depth: usize,
+        child_count: usize,
+        icons: IconService,
+        projects: Vec<ProjectDisplay>,
+    ) -> Self {
+        Self {
+            task,
+            depth,
+            child_count,
+            icons,
+            projects,
+        }
+    }
+
+    fn format_due_date(&self, due_date: &str) -> String {
+        // Simple date formatting - could be enhanced
+        due_date.to_string()
+    }
+}
+
+impl ListItem for TaskItem {
+    fn render(&self, max_width: usize, selected: bool) -> RatatuiListItem<'static> {
+        let status_icon = self.icons.task_pending();
+        let mut line_spans = Vec::new();
+
+        // Add hierarchical indentation for subtasks
+        if self.depth > 0 {
+            let mut indent_str = String::new();
+
+            // Add spaces for each level (4 spaces per level to match original)
+            for _ in 0..(self.depth - 1) {
+                indent_str.push_str("    ");
+            }
+
+            // Add tree connector for the current level
+            indent_str.push_str(" └─ ");
+
+            line_spans.push(Span::styled(indent_str, Style::default().fg(Color::DarkGray)));
+        }
+
+        // Status icon
+        let status_style = if selected {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        line_spans.push(Span::styled(format!("{} ", status_icon), status_style));
+
+        // Priority badge (if any)
+        if let Some(priority_badge) = create_priority_badge(self.task.priority) {
+            line_spans.push(priority_badge);
+            line_spans.push(Span::raw(" "));
+        }
+
+        // Task content with selection styling
+        let content_style = if selected {
+            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        line_spans.push(Span::styled(self.task.content.clone(), content_style));
+
+        // Child task count (for tasks with children)
+        if self.child_count > 0 {
+            let progress_text = format!(" ({})", self.child_count);
+            let progress_style = Style::default().fg(Color::Gray);
+            line_spans.push(Span::styled(progress_text, progress_style));
+        }
+
+        // Project display
+        if let Some(project) = self.projects.iter().find(|p| p.id == self.task.project_id) {
+            line_spans.push(Span::raw(" "));
+            line_spans.push(Span::styled(
+                format!("#{}", project.name),
+                Style::default().fg(Color::Cyan),
+            ));
+        }
+
+        // Due date display
+        if let Some(due_date) = &self.task.due {
+            line_spans.push(Span::raw(" "));
+            line_spans.push(Span::styled(
+                self.format_due_date(due_date),
+                Style::default().fg(Color::Rgb(255, 165, 0)), // Orange color
+            ));
+        }
+
+        // Metadata badges
+        let metadata_badges = create_task_badges(
+            self.task.is_recurring,
+            self.task.due.is_some() || self.task.deadline.is_some(),
+            self.task.duration.as_deref(),
+            self.task.labels.as_slice(),
+        );
+
+        for badge in metadata_badges {
+            line_spans.push(Span::raw(" "));
+            line_spans.push(badge);
+        }
+
+        // Add description excerpt if available and there's space
+        if !self.task.description.is_empty() {
+            // Calculate used width so far (approximation using string length)
+            let mut used_width = 0;
+            for span in &line_spans {
+                used_width += span.content.len();
+            }
+
+            // Reserve some space for padding and ensure we don't overflow
+            if used_width < max_width.saturating_sub(10) {
+                let available_width = max_width - used_width - 3; // Reserve space for " - " prefix
+
+                // Get first line of description and truncate if needed
+                let description_line = self.task.description.lines().next().unwrap_or("");
+                let description_text = if description_line.len() > available_width {
+                    if available_width > 3 {
+                        format!("{}...", &description_line[..available_width.saturating_sub(3)])
+                    } else {
+                        "...".to_string()
+                    }
+                } else {
+                    description_line.to_string()
+                };
+
+                // Add the description with separator and grey styling
+                line_spans.push(Span::raw(" - "));
+                line_spans.push(Span::styled(
+                    description_text,
+                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+                ));
+            }
+        }
+
+        RatatuiListItem::new(Line::from(line_spans))
+    }
+
+    fn is_selectable(&self) -> bool {
+        true
+    }
+
+    fn indent_level(&self) -> usize {
+        self.depth
+    }
+}
+
+/// A header item component (for sections, projects, etc.)
+#[derive(Debug, Clone)]
+pub struct HeaderItem {
+    pub text: String,
+    pub indent: usize,
+}
+
+impl HeaderItem {
+    pub fn new(text: String, indent: usize) -> Self {
+        Self { text, indent }
+    }
+}
+
+impl ListItem for HeaderItem {
+    fn render(&self, _max_width: usize, _selected: bool) -> RatatuiListItem<'static> {
+        let indent_str = " ".repeat(self.indent * 4);
+        RatatuiListItem::new(Line::from(Span::styled(
+            format!("{}{}", indent_str, self.text),
+            Style::default().add_modifier(Modifier::BOLD).fg(Color::Cyan),
+        )))
+    }
+
+    fn is_selectable(&self) -> bool {
+        false
+    }
+
+    fn indent_level(&self) -> usize {
+        self.indent
+    }
+}
+
+/// A separator item component
+#[derive(Debug, Clone)]
+pub struct SeparatorItem {
+    pub indent: usize,
+}
+
+impl SeparatorItem {
+    pub fn new(indent: usize) -> Self {
+        Self { indent }
+    }
+}
+
+impl ListItem for SeparatorItem {
+    fn render(&self, max_width: usize, _selected: bool) -> RatatuiListItem<'static> {
+        let indent_str = " ".repeat(self.indent * 4);
+        let _line_width = max_width.saturating_sub(self.indent * 4);
+        let separator = " ";
+
+        RatatuiListItem::new(Line::from(Span::styled(
+            format!("{}{}", indent_str, separator),
+            Style::default().fg(Color::DarkGray),
+        )))
+    }
+
+    fn is_selectable(&self) -> bool {
+        false
+    }
+
+    fn indent_level(&self) -> usize {
+        self.indent
+    }
+}

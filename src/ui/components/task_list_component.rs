@@ -1,24 +1,21 @@
 use crate::icons::IconService;
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
-use crate::ui::components::badge::{create_priority_badge, create_task_badges};
+use crate::ui::components::task_list_item_component::{ListItem, TaskItem, TaskListItemType};
 use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
     actions::{Action, DialogType},
     Component,
 };
-use chrono;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState},
+    widgets::{Block, Borders, List, ListItem as RatatuiListItem, ListState},
     Frame,
 };
-use std::collections::HashMap;
 
 pub struct TaskListComponent {
-    pub tasks: Vec<TaskDisplay>,
+    pub items: Vec<TaskListItemType>,
     pub selected_index: usize,
     pub list_state: ListState,
     pub sidebar_selection: SidebarSelection,
@@ -26,6 +23,8 @@ pub struct TaskListComponent {
     pub projects: Vec<ProjectDisplay>,
     pub labels: Vec<LabelDisplay>,
     pub icons: IconService,
+    // Keep raw task data for building items
+    pub tasks: Vec<TaskDisplay>,
 }
 
 impl Default for TaskListComponent {
@@ -37,6 +36,7 @@ impl Default for TaskListComponent {
 impl TaskListComponent {
     pub fn new() -> Self {
         Self {
+            items: Vec::new(),
             tasks: Vec::new(),
             selected_index: 0,
             list_state: ListState::default(),
@@ -61,105 +61,60 @@ impl TaskListComponent {
         self.projects = projects;
         self.labels = labels;
         self.sidebar_selection = sidebar_selection;
+
+        // Build the flat list of items from the hierarchical task data
+        self.build_item_list();
         self.update_list_state();
     }
 
-    fn update_list_state(&mut self) {
+    /// Build the flat list of items from task data
+    fn build_item_list(&mut self) {
+        self.items.clear();
+
         if self.tasks.is_empty() {
-            self.selected_index = 0;
-            self.list_state.select(None);
-        } else {
-            if self.selected_index >= self.tasks.len() {
-                self.selected_index = self.tasks.len().saturating_sub(1);
-            }
-
-            // Calculate the rendered index accounting for section headers and separators
-            let rendered_index = self.calculate_rendered_index();
-            self.list_state.select(Some(rendered_index));
+            return;
         }
-    }
 
-    /// Calculate the actual index in the rendered list for the selected task
-    fn calculate_rendered_index(&self) -> usize {
-        // This mirrors the logic in create_task_list_items to count items before the selected task
+        // Handle different sidebar selections with appropriate sectioning
         match &self.sidebar_selection {
-            SidebarSelection::Today => self.calculate_today_rendered_index(),
-            SidebarSelection::Tomorrow => self.calculate_tomorrow_rendered_index(),
-            SidebarSelection::Upcoming => self.calculate_upcoming_rendered_index(),
-            SidebarSelection::Project(project_index) => {
-                if let Some(project) = self.projects.get(*project_index) {
-                    self.calculate_project_rendered_index(&project.id)
-                } else {
-                    self.selected_index // Fallback
-                }
-            }
-            _ => self.selected_index, // Other views have simple 1:1 mapping
-        }
-    }
-
-    fn create_task_list_items(&self, area: Rect) -> Vec<ListItem<'_>> {
-        if self.tasks.is_empty() {
-            return Vec::new();
-        }
-
-        // Handle Today view specially
-        if matches!(self.sidebar_selection, SidebarSelection::Today) {
-            return self.create_today_task_items(area);
-        }
-
-        // Handle Tomorrow view specially
-        if matches!(self.sidebar_selection, SidebarSelection::Tomorrow) {
-            return self.create_tomorrow_task_items(area);
-        }
-
-        // Handle Upcoming view specially
-        if matches!(self.sidebar_selection, SidebarSelection::Upcoming) {
-            return self.create_upcoming_task_items(area);
-        }
-
-        // Handle different selection types
-        match &self.sidebar_selection {
+            SidebarSelection::Today => self.build_today_items(),
+            SidebarSelection::Tomorrow => self.build_tomorrow_items(),
+            SidebarSelection::Upcoming => self.build_upcoming_items(),
             SidebarSelection::Project(index) => {
                 if let Some(project) = self.projects.get(*index) {
-                    self.create_project_task_items(&project.id, area)
+                    let project_id = project.id.clone();
+                    self.build_project_items(&project_id);
                 } else {
-                    self.create_simple_task_items(area)
+                    self.build_simple_items();
                 }
             }
             SidebarSelection::Label(index) => {
                 if let Some(label) = self.labels.get(*index) {
-                    self.create_label_task_items(&label.id, area)
+                    let label_id = label.id.clone();
+                    self.build_label_items(&label_id);
                 } else {
-                    self.create_simple_task_items(area)
+                    self.build_simple_items();
                 }
             }
-            _ => self.create_simple_task_items(area),
         }
     }
 
-    fn create_today_task_items(&self, _area: Rect) -> Vec<ListItem<'_>> {
-        let mut items = Vec::new();
+    /// Build items for Today view (with Overdue and Today sections)
+    fn build_today_items(&mut self) {
+        use crate::ui::components::task_list_item_component::{HeaderItem, SeparatorItem};
 
-        if self.tasks.is_empty() {
-            return items;
-        }
-
-        // Since the database query already filters for today's and overdue tasks,
-        // we just need to separate them for display purposes
         let now = chrono::Utc::now().date_naive();
-
-        // Separate tasks into overdue and today (use hierarchical sorting)
         let mut overdue_tasks = Vec::new();
         let mut today_tasks = Vec::new();
 
-        let sorted_tasks = self.get_sorted_tasks();
-        for task in sorted_tasks {
+        // Separate tasks by date
+        for task in &self.tasks {
             if let Some(due_date_str) = &task.due {
                 if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
                     if due_date < now {
-                        overdue_tasks.push(task);
+                        overdue_tasks.push(task.clone());
                     } else if due_date == now {
-                        today_tasks.push(task);
+                        today_tasks.push(task.clone());
                     }
                 }
             }
@@ -167,481 +122,323 @@ impl TaskListComponent {
 
         // Add overdue section if there are overdue tasks
         if !overdue_tasks.is_empty() {
-            items.push(self.create_section_header("⏰ Overdue"));
+            self.items
+                .push(TaskListItemType::Header(HeaderItem::new("⏰ Overdue".to_string(), 0)));
 
-            for task in &overdue_tasks {
-                let item = self.create_task_item(task, 0);
-                items.push(item);
+            for task in overdue_tasks {
+                self.add_task_and_children_to_items(task, 0);
             }
 
             // Add separator between sections if we have both
             if !today_tasks.is_empty() {
-                items.push(ListItem::new(Line::from(vec![Span::styled("", Style::default())])));
+                self.items.push(TaskListItemType::Separator(SeparatorItem::new(0)));
             }
         }
 
         // Add today section if there are today tasks
         if !today_tasks.is_empty() {
-            items.push(self.create_section_header("📅 Today"));
+            self.items
+                .push(TaskListItemType::Header(HeaderItem::new("📅 Today".to_string(), 0)));
 
-            for task in &today_tasks {
-                let item = self.create_task_item(task, 0);
-                items.push(item);
+            for task in today_tasks {
+                self.add_task_and_children_to_items(task, 0);
             }
         }
-
-        // If no tasks match the date filtering, show all tasks (fallback for debugging)
-        if overdue_tasks.is_empty() && today_tasks.is_empty() && !self.tasks.is_empty() {
-            items.push(self.create_section_header("📋 All Tasks (Debug)"));
-
-            for task in &self.tasks {
-                let item = self.create_task_item(task, 0);
-                items.push(item);
-            }
-        }
-
-        items
     }
 
-    fn create_tomorrow_task_items(&self, _area: Rect) -> Vec<ListItem<'_>> {
-        let mut items = Vec::new();
+    /// Build items for Tomorrow view
+    fn build_tomorrow_items(&mut self) {
+        use crate::ui::components::task_list_item_component::HeaderItem;
 
-        if self.tasks.is_empty() {
-            return items;
-        }
+        self.items
+            .push(TaskListItemType::Header(HeaderItem::new("📅 Tomorrow".to_string(), 0)));
 
-        // Add tomorrow section header
-        items.push(self.create_section_header("📅 Tomorrow"));
-
-        // Add all tasks (they're already filtered for tomorrow by the database query)
-        // For date-filtered views, use simple sorting to avoid hierarchy issues
-        let mut tasks = self.tasks.iter().collect::<Vec<_>>();
+        // Sort tasks by priority
+        let mut tasks = self.tasks.clone();
         tasks.sort_by(|a, b| a.priority.cmp(&b.priority));
 
         for task in tasks {
-            let item = self.create_task_item(task, 0);
-            items.push(item);
+            self.add_task_and_children_to_items(task, 0);
         }
-
-        items
     }
 
-    fn create_upcoming_task_items(&self, _area: Rect) -> Vec<ListItem<'_>> {
+    /// Build items for Upcoming view (with date sections)
+    fn build_upcoming_items(&mut self) {
+        use crate::ui::components::task_list_item_component::{HeaderItem, SeparatorItem};
         use std::collections::BTreeMap;
-        let mut items = Vec::new();
 
-        if self.tasks.is_empty() {
-            return items;
-        }
-
-        // Separate overdue tasks from future tasks (use hierarchical sorting)
-        let mut overdue_tasks = Vec::new();
-        let mut future_tasks_by_date: BTreeMap<chrono::NaiveDate, Vec<&TaskDisplay>> = BTreeMap::new();
         let today = chrono::Utc::now().date_naive();
+        let mut overdue_tasks = Vec::new();
+        let mut future_tasks_by_date: BTreeMap<chrono::NaiveDate, Vec<TaskDisplay>> = BTreeMap::new();
 
-        let sorted_tasks = self.get_sorted_tasks();
-        for task in sorted_tasks {
+        // Group tasks by date
+        for task in &self.tasks {
             if let Some(due_date_str) = &task.due {
                 if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
                     if due_date < today {
-                        // Group all overdue tasks together
-                        overdue_tasks.push(task);
+                        overdue_tasks.push(task.clone());
                     } else {
-                        // Keep future tasks grouped by date
-                        future_tasks_by_date.entry(due_date).or_default().push(task);
+                        future_tasks_by_date.entry(due_date).or_default().push(task.clone());
                     }
                 }
             }
         }
 
-        // Add overdue section first (if any overdue tasks exist)
+        // Add overdue section first
         if !overdue_tasks.is_empty() {
-            items.push(self.create_section_header("⏰ Overdue"));
+            self.items
+                .push(TaskListItemType::Header(HeaderItem::new("⏰ Overdue".to_string(), 0)));
 
-            for task in &overdue_tasks {
-                let item = self.create_task_item(task, 0);
-                items.push(item);
+            for task in overdue_tasks {
+                self.add_task_and_children_to_items(task, 0);
             }
         }
 
-        // Create sections for each future date
+        // Add future date sections
         for (due_date, tasks) in future_tasks_by_date {
-            // Add blank line before section (except if it's the first section)
-            if !overdue_tasks.is_empty() || !items.is_empty() {
-                items.push(ListItem::new(Line::from(vec![Span::styled("", Style::default())])));
+            // Add separator before each new section
+            if !self.items.is_empty() {
+                self.items.push(TaskListItemType::Separator(SeparatorItem::new(0)));
             }
 
-            // Format the date nicely
+            // Format the date header
             let date_header = if due_date == today {
                 "📅 Today".to_string()
             } else if due_date == today + chrono::Duration::days(1) {
                 "📅 Tomorrow".to_string()
-            } else if due_date == today + chrono::Duration::days(2) {
-                "📊 Day After Tomorrow".to_string()
             } else {
                 let weekday = due_date.format("%A").to_string();
                 let formatted_date = due_date.format("%b %d").to_string();
                 format!("📊 {} - {}", weekday, formatted_date)
             };
 
-            items.push(self.create_section_header(&date_header));
+            self.items.push(TaskListItemType::Header(HeaderItem::new(date_header, 0)));
 
-            // Add tasks for this date
             for task in tasks {
-                let item = self.create_task_item(task, 0);
-                items.push(item);
+                self.add_task_and_children_to_items(task, 0);
             }
         }
-
-        // If no upcoming tasks, show a message
-        if items.is_empty() {
-            items.push(ListItem::new(Line::from(Span::styled(
-                "No upcoming tasks scheduled",
-                Style::default().fg(Color::DarkGray),
-            ))));
-        }
-
-        items
     }
 
-    fn create_project_task_items(&self, project_id: &str, area: Rect) -> Vec<ListItem<'_>> {
-        let mut items = Vec::new();
-        let area_width = area.width.saturating_sub(4);
+    /// Build items for Project view (with section headers)
+    fn build_project_items(&mut self, project_id: &str) {
+        use crate::ui::components::task_list_item_component::{HeaderItem, SeparatorItem};
+        use std::collections::HashMap;
 
         // Get sections for the current project
         let project_sections: Vec<_> = self
             .sections
             .iter()
             .filter(|section| section.project_id == *project_id)
+            .cloned()
             .collect();
 
-        // Group tasks by section (use hierarchical sorting)
-        let mut tasks_by_section: HashMap<Option<String>, Vec<&TaskDisplay>> = HashMap::new();
-        let sorted_tasks = self.get_sorted_tasks();
-        for task in sorted_tasks.into_iter().filter(|t| t.project_id == *project_id) {
-            tasks_by_section.entry(task.section_id.clone()).or_default().push(task);
+        // Group tasks by section
+        let mut tasks_by_section: HashMap<Option<String>, Vec<TaskDisplay>> = HashMap::new();
+        for task in &self.tasks {
+            if task.project_id == *project_id {
+                tasks_by_section.entry(task.section_id.clone()).or_default().push(task.clone());
+            }
         }
 
         // Add tasks without sections first
         if let Some(tasks_without_section) = tasks_by_section.get(&None) {
             for task in tasks_without_section {
-                let item = self.create_task_item(task, area_width as usize);
-                items.push(item);
+                self.add_task_and_children_to_items(task.clone(), 0);
             }
         }
 
         // Add sections with their tasks
-        for (section_index, section) in project_sections.iter().enumerate() {
+        for section in project_sections {
             if let Some(section_tasks) = tasks_by_section.get(&Some(section.id.clone())) {
-                // Add blank line before section (except for first section with no tasks before)
-                if !items.is_empty() || section_index > 0 {
-                    items.push(ListItem::new(Line::from("")));
+                // Add separator before section
+                if !self.items.is_empty() {
+                    self.items.push(TaskListItemType::Separator(SeparatorItem::new(0)));
                 }
 
-                // Add section name
-                items.push(ListItem::new(Line::from(Span::styled(
-                    section.name.clone(),
-                    Style::default().add_modifier(Modifier::BOLD),
-                ))));
+                // Add section header
+                self.items
+                    .push(TaskListItemType::Header(HeaderItem::new(section.name.clone(), 0)));
 
-                // Add separator line
-                items.push(ListItem::new(Line::from(Span::styled(
-                    "─".repeat(area_width as usize),
-                    Style::default().fg(Color::Gray),
-                ))));
-
-                // Add tasks in this section
                 for task in section_tasks {
-                    let item = self.create_task_item(task, area_width as usize);
-                    items.push(item);
+                    self.add_task_and_children_to_items(task.clone(), 0);
                 }
             }
         }
-
-        items
     }
 
-    fn create_label_task_items(&self, label_id: &str, area: Rect) -> Vec<ListItem<'_>> {
-        let mut items = Vec::new();
-        let area_width = area.width.saturating_sub(4);
-
-        // Filter tasks that have the specific label and sort hierarchically
-        let sorted_tasks = self.get_sorted_tasks();
-        for task in sorted_tasks {
-            if task.labels.iter().any(|label| label.id == label_id) {
-                let item = self.create_task_item(task, area_width as usize);
-                items.push(item);
-            }
-        }
-
-        items
-    }
-
-    fn create_simple_task_items(&self, area: Rect) -> Vec<ListItem<'_>> {
-        let mut items = Vec::new();
-        let area_width = area.width.saturating_sub(4);
-
-        // Use hierarchical sorting for subtasks
-        let sorted_tasks = self.get_sorted_tasks();
-        for task in sorted_tasks {
-            let item = self.create_task_item(task, area_width as usize);
-            items.push(item);
-        }
-
-        items
-    }
-
-    fn format_due_date(&self, due_date: &str) -> String {
-        if let Ok(task_date) = chrono::NaiveDate::parse_from_str(due_date, "%Y-%m-%d") {
-            let today = chrono::Utc::now().date_naive();
-            let tomorrow = today.succ_opt().unwrap_or(today);
-
-            if task_date == today {
-                "today".to_string()
-            } else if task_date == tomorrow {
-                "tomorrow".to_string()
-            } else {
-                due_date.to_string()
-            }
-        } else {
-            due_date.to_string()
-        }
-    }
-
-    /// Get child task count
-    fn get_child_task_count(&self, parent_id: &str) -> usize {
-        self.tasks
+    /// Build items for Label view
+    fn build_label_items(&mut self, label_id: &str) {
+        // Filter tasks that have the specific label
+        let filtered_tasks: Vec<TaskDisplay> = self
+            .tasks
             .iter()
-            .filter(|task| task.parent_id.as_deref() == Some(parent_id))
-            .count()
-    }
+            .filter(|task| task.labels.iter().any(|label| label.id == *label_id))
+            .cloned()
+            .collect();
 
-    /// Calculate the tree depth of a task for indentation (supports n-levels)
-    fn calculate_task_tree_depth(&self, task: &TaskDisplay) -> usize {
-        let mut depth = 0;
-        let mut current_task = task;
-
-        // Traverse up the parent chain to calculate depth
-        while let Some(parent_id) = &current_task.parent_id {
-            depth += 1;
-
-            // Find the parent task
-            if let Some(parent_task) = self.tasks.iter().find(|t| &t.id == parent_id) {
-                current_task = parent_task;
-            } else {
-                // Parent not found in current task list, stop here
-                break;
-            }
-
-            // Safety check to prevent infinite loops
-            if depth > 10 {
-                break;
-            }
+        for task in filtered_tasks {
+            self.add_task_and_children_to_items(task, 0);
         }
-
-        depth
     }
 
-    /// Get sorted tasks hierarchically: root → subtasks (supports n-levels)
-    fn get_sorted_tasks(&self) -> Vec<&TaskDisplay> {
-        let mut result = Vec::new();
+    /// Build simple items (no sectioning)
+    fn build_simple_items(&mut self) {
+        let mut root_tasks: Vec<TaskDisplay> = self.tasks.iter().filter(|t| t.parent_id.is_none()).cloned().collect();
 
-        // Find root tasks (tasks with no parent)
-        let mut root_tasks: Vec<&TaskDisplay> = self.tasks.iter().filter(|task| task.parent_id.is_none()).collect();
-
-        // Sort root tasks by priority
+        // Sort by priority
         root_tasks.sort_by(|a, b| a.priority.cmp(&b.priority));
 
-        // Recursively add each root task and its descendants
-        for root_task in root_tasks {
-            self.add_task_and_children(&mut result, root_task);
+        // Add each root task and its children recursively
+        for task in root_tasks {
+            self.add_task_and_children_to_items(task, 0);
         }
-
-        result
     }
 
-    /// Recursively add a task and all its children to the result list
-    fn add_task_and_children<'a>(&'a self, result: &mut Vec<&'a TaskDisplay>, task: &'a TaskDisplay) {
-        result.push(task);
+    /// Recursively add a task and its children to the items list
+    fn add_task_and_children_to_items(&mut self, task: TaskDisplay, depth: usize) {
+        // Calculate child count
+        let child_count = self.get_child_task_count(&task.id);
 
-        // Find all direct children of this task
-        let mut children: Vec<&TaskDisplay> =
-            self.tasks.iter().filter(|t| t.parent_id.as_ref() == Some(&task.id)).collect();
+        // Create and add the task item
+        let task_item = TaskItem::new(
+            task.clone(),
+            depth,
+            child_count,
+            self.icons.clone(),
+            self.projects.clone(),
+        );
+        self.items.push(TaskListItemType::Task(task_item));
 
-        // Sort children by priority
+        // Find and add children
+        let task_id = task.id.clone();
+        let mut children: Vec<TaskDisplay> = self
+            .tasks
+            .iter()
+            .filter(|t| t.parent_id.as_ref() == Some(&task_id))
+            .cloned()
+            .collect();
+
         children.sort_by(|a, b| a.priority.cmp(&b.priority));
 
         // Recursively add each child and their descendants
         for child in children {
-            self.add_task_and_children(result, child);
+            self.add_task_and_children_to_items(child, depth + 1);
         }
     }
 
-    fn create_task_item(&self, task: &TaskDisplay, _max_width: usize) -> ListItem<'_> {
-        // Create status indicator
-        let status_icon = self.icons.task_pending();
+    fn update_list_state(&mut self) {
+        // Count only selectable items
+        let selectable_count = self.items.iter().filter(|item| item.is_selectable()).count();
 
-        // Build the line with multiple spans for proper color rendering
-        let mut line_spans = Vec::new();
-
-        // Add hierarchical indentation for subtasks (supports n-levels)
-        let depth = self.calculate_task_tree_depth(task);
-        if depth > 0 {
-            // Create indentation based on depth
-            let mut indent_str = String::new();
-
-            // Add spaces for each level (2 spaces per level)
-            for _ in 0..(depth - 1) {
-                indent_str.push_str("    ");
+        if selectable_count == 0 {
+            self.selected_index = 0;
+            self.list_state.select(None);
+        } else {
+            if self.selected_index >= selectable_count {
+                self.selected_index = selectable_count.saturating_sub(1);
             }
 
-            // Add tree connector for the current level
-            indent_str.push_str(" └─ ");
-
-            line_spans.push(Span::styled(indent_str, Style::default().fg(Color::DarkGray)));
+            // Map logical selection to physical list index
+            let physical_index = self.logical_to_physical_index(self.selected_index);
+            self.list_state.select(physical_index);
         }
+    }
 
-        // Status icon
-        let status_style = Style::default().fg(Color::White);
-        line_spans.push(Span::styled(format!("{} ", status_icon), status_style));
-
-        // Priority badge (if any)
-        if let Some(priority_badge) = create_priority_badge(task.priority) {
-            line_spans.push(priority_badge);
-            line_spans.push(Span::raw(" "));
-        }
-
-        // Task content with appropriate styling
-        let content_style = Style::default().fg(Color::White);
-        line_spans.push(Span::styled(task.content.clone(), content_style));
-
-        // Child task count (for tasks with children)
-        let total_children = self.get_child_task_count(&task.id);
-        if total_children > 0 {
-            let progress_text = format!(" ({})", total_children);
-            let progress_style = Style::default().fg(Color::Gray);
-            line_spans.push(Span::styled(progress_text, progress_style));
-        }
-
-        // Project display
-        if let Some(project) = self.projects.iter().find(|p| p.id == task.project_id) {
-            line_spans.push(Span::raw(" "));
-            line_spans.push(Span::styled(
-                format!("#{}", project.name),
-                Style::default().fg(Color::Cyan),
-            ));
-        }
-
-        // Due date display (after project)
-        if let Some(due_date) = &task.due {
-            line_spans.push(Span::raw(" "));
-            line_spans.push(Span::styled(
-                self.format_due_date(due_date),
-                Style::default().fg(Color::Rgb(255, 165, 0)), // Orange color
-            ));
-        }
-
-        // Metadata badges
-        let metadata_badges = create_task_badges(
-            task.is_recurring,
-            task.due.is_some() || task.deadline.is_some(),
-            task.duration.as_deref(),
-            task.labels.as_slice(),
-        );
-
-        for badge in metadata_badges {
-            line_spans.push(Span::raw(" "));
-            line_spans.push(badge);
-        }
-
-        // Add description excerpt if available and there's space
-        if !task.description.is_empty() {
-            // Calculate used display width (accounts for wide chars)
-            let used_width = Line::from(line_spans.clone()).width();
-
-            // Use the max_width parameter, with a fallback
-            let total_width = if _max_width > 0 { _max_width } else { 80 };
-
-            // Reserve some space for padding and ensure we don't overflow
-            if used_width < total_width.saturating_sub(10) {
-                // Space left for description after " - "
-                let available_width = total_width.saturating_sub(used_width + 3);
-
-                // Get first line of description and truncate if needed
-                let description_line = task.description.lines().next().unwrap_or("");
-                let description_text = if description_line.chars().count() > available_width {
-                    if available_width > 3 {
-                        let truncated: String =
-                            description_line.chars().take(available_width.saturating_sub(3)).collect();
-                        format!("{}...", truncated)
-                    } else {
-                        "...".to_string()
-                    }
-                } else {
-                    description_line.to_string()
-                };
-
-                // Add the description with separator and grey styling
-                line_spans.push(Span::raw(" - "));
-                line_spans.push(Span::styled(
-                    description_text,
-                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
-                ));
+    /// Convert logical selection index (among selectable items) to physical list index
+    fn logical_to_physical_index(&self, logical_index: usize) -> Option<usize> {
+        let mut selectable_count = 0;
+        for (i, item) in self.items.iter().enumerate() {
+            if item.is_selectable() {
+                if selectable_count == logical_index {
+                    return Some(i);
+                }
+                selectable_count += 1;
             }
         }
-
-        // Create the ListItem - selection highlighting handled by stateful widget
-        ListItem::new(Line::from(line_spans))
+        None
     }
 
     pub fn get_selected_task(&self) -> Option<&TaskDisplay> {
-        self.tasks.get(self.selected_index)
+        // Find the currently selected task item
+        if let Some(physical_index) = self.logical_to_physical_index(self.selected_index) {
+            if let Some(TaskListItemType::Task(task_item)) = self.items.get(physical_index) {
+                return Some(&task_item.task);
+            }
+        }
+        None
     }
 
-    /// Create a section header item
-    fn create_section_header(&self, name: &str) -> ListItem<'static> {
-        ListItem::new(Line::from(Span::styled(
-            name.to_string(),
-            Style::default().add_modifier(Modifier::BOLD).fg(Color::Cyan),
-        )))
+    /// Get child task count for a parent task
+    fn get_child_task_count(&self, parent_id: &str) -> usize {
+        self.tasks.iter().filter(|t| t.parent_id.as_deref() == Some(parent_id)).count()
+    }
+
+    /// Create the list items for rendering
+    fn create_list_items(&self, rect: Rect) -> Vec<RatatuiListItem<'static>> {
+        let available_width = rect.width.saturating_sub(2) as usize; // Account for borders
+
+        self.items
+            .iter()
+            .map(|item| {
+                let indent_width = item.indent_level() * 4;
+                let max_width = available_width.saturating_sub(indent_width);
+                item.render(max_width, false) // Selection styling handled by List widget
+            })
+            .collect()
+    }
+
+    /// Navigate to the next selectable item
+    fn next_task(&mut self) {
+        let selectable_count = self.items.iter().filter(|item| item.is_selectable()).count();
+        if selectable_count > 0 {
+            self.selected_index = (self.selected_index + 1) % selectable_count;
+            self.update_list_state();
+        }
+    }
+
+    /// Navigate to the previous selectable item
+    fn previous_task(&mut self) {
+        let selectable_count = self.items.iter().filter(|item| item.is_selectable()).count();
+        if selectable_count > 0 {
+            self.selected_index = if self.selected_index == 0 {
+                selectable_count - 1
+            } else {
+                self.selected_index - 1
+            };
+            self.update_list_state();
+        }
     }
 }
 
 impl Component for TaskListComponent {
     fn handle_key_events(&mut self, key: KeyEvent) -> Action {
         match key.code {
-            KeyCode::Up | KeyCode::Char('k') => Action::PreviousTask,
-            KeyCode::Down | KeyCode::Char('j') => Action::NextTask,
+            KeyCode::Up | KeyCode::Char('k') => {
+                self.previous_task();
+                Action::None
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                self.next_task();
+                Action::None
+            }
             KeyCode::Enter | KeyCode::Char(' ') => {
-                if let Some(task) = self.tasks.get(self.selected_index) {
-                    // Note: Detailed logging done when action is processed by AppComponent
+                if let Some(task) = self.get_selected_task() {
                     Action::CompleteTask(task.id.clone())
                 } else {
                     Action::None
                 }
             }
-            KeyCode::Char('d') => {
-                if let Some(task) = self.tasks.get(self.selected_index) {
-                    // Note: Detailed logging done when action is processed by AppComponent
-                    Action::ShowDialog(DialogType::DeleteConfirmation {
-                        item_type: "task".to_string(),
-                        item_id: task.id.clone(),
-                    })
-                } else {
-                    Action::None
-                }
-            }
-            KeyCode::Char('p') => {
-                if let Some(task) = self.tasks.get(self.selected_index) {
-                    // Note: Detailed logging done when action is processed by AppComponent
-                    Action::CyclePriority(task.id.clone())
-                } else {
-                    Action::None
-                }
+            KeyCode::Char('a') => {
+                // When viewing a specific project, preselect it as the default project
+                let default_project_id = match &self.sidebar_selection {
+                    SidebarSelection::Project(index) => self.projects.get(*index).map(|p| p.id.clone()),
+                    _ => None,
+                };
+                Action::ShowDialog(DialogType::TaskCreation { default_project_id })
             }
             KeyCode::Char('e') => {
-                if let Some(task) = self.tasks.get(self.selected_index) {
-                    // Note: Detailed logging done when action is processed by AppComponent
+                if let Some(task) = self.get_selected_task() {
                     Action::ShowDialog(DialogType::TaskEdit {
                         task_id: task.id.clone(),
                         content: task.content.clone(),
@@ -651,46 +448,9 @@ impl Component for TaskListComponent {
                     Action::None
                 }
             }
-            KeyCode::Char('a') => {
-                // Determine current project for task creation
-                let default_project_id = match &self.sidebar_selection {
-                    SidebarSelection::Project(index) => {
-                        // User is viewing a specific project, create task in that project
-                        self.projects.get(*index).map(|p| p.id.clone())
-                    }
-                    _ => {
-                        // User is in Today/Tomorrow/Label view, create task in inbox (no project)
-                        None
-                    }
-                };
-
-                // Note: Detailed logging done when action is processed by AppComponent
-                Action::ShowDialog(DialogType::TaskCreation { default_project_id })
-            }
-            KeyCode::Char('t') => {
-                if let Some(task) = self.tasks.get(self.selected_index) {
-                    Action::SetTaskDueToday(task.id.clone())
-                } else {
-                    Action::None
-                }
-            }
-            KeyCode::Char('T') => {
-                if let Some(task) = self.tasks.get(self.selected_index) {
-                    Action::SetTaskDueTomorrow(task.id.clone())
-                } else {
-                    Action::None
-                }
-            }
-            KeyCode::Char('w') => {
-                if let Some(task) = self.tasks.get(self.selected_index) {
-                    Action::SetTaskDueNextWeek(task.id.clone())
-                } else {
-                    Action::None
-                }
-            }
-            KeyCode::Char('W') => {
-                if let Some(task) = self.tasks.get(self.selected_index) {
-                    Action::SetTaskDueWeekEnd(task.id.clone())
+            KeyCode::Delete | KeyCode::Char('d') => {
+                if let Some(task) = self.get_selected_task() {
+                    Action::DeleteTask(task.id.clone())
                 } else {
                     Action::None
                 }
@@ -702,25 +462,11 @@ impl Component for TaskListComponent {
     fn update(&mut self, action: Action) -> Action {
         match action {
             Action::NextTask => {
-                if !self.tasks.is_empty() {
-                    let _old_index = self.selected_index;
-                    self.selected_index = (self.selected_index + 1) % self.tasks.len();
-                    self.update_list_state();
-                    // Note: Logging done via app-level logger when action is processed
-                }
+                self.next_task();
                 Action::None
             }
             Action::PreviousTask => {
-                if !self.tasks.is_empty() {
-                    let _old_index = self.selected_index;
-                    self.selected_index = if self.selected_index == 0 {
-                        self.tasks.len() - 1
-                    } else {
-                        self.selected_index - 1
-                    };
-                    self.update_list_state();
-                    // Note: Logging done via app-level logger when action is processed
-                }
+                self.previous_task();
                 Action::None
             }
             _ => action,
@@ -728,227 +474,22 @@ impl Component for TaskListComponent {
     }
 
     fn render(&mut self, f: &mut Frame, rect: Rect) {
-        if self.tasks.is_empty() {
-            // Show empty state message
-            let empty_message = if self.projects.is_empty() {
-                "No projects available. Press 'r' to sync or 'A' to create a project."
-            } else if matches!(self.sidebar_selection, SidebarSelection::Today) {
-                "No tasks due today. Press 'a' to create a task or 'r' to sync."
-            } else if matches!(self.sidebar_selection, SidebarSelection::Tomorrow) {
-                "No tasks due tomorrow. Press 'a' to create a task or 'r' to sync."
-            } else {
-                "No tasks in this project. Press 'a' to create a task."
+        let tasks_list = if self.items.is_empty() {
+            // Show contextual empty state message
+            let empty_message = match &self.sidebar_selection {
+                SidebarSelection::Today => "No tasks due today. Press 'a' to create a task or 'r' to sync.",
+                SidebarSelection::Tomorrow => "No tasks due tomorrow. Press 'a' to create a task or 'r' to sync.",
+                _ if self.projects.is_empty() => "No projects available. Press 'r' to sync or 'A' to create a project.",
+                _ => "No tasks in this view. Press 'a' to create a task.",
             };
 
-            let empty_list = List::new(vec![ListItem::new(empty_message)])
-                .block(Block::default().borders(Borders::ALL).title("Tasks"));
-
-            f.render_stateful_widget(empty_list, rect, &mut self.list_state);
+            List::new(vec![RatatuiListItem::new(empty_message)])
         } else {
-            // Create list items with sections and tasks
-            let items = self.create_task_list_items(rect);
-            let mut list_state = self.list_state.clone();
-
-            let tasks_list = List::new(items)
-                .block(Block::default().borders(Borders::ALL).title("Tasks"))
-                .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD));
-
-            f.render_stateful_widget(tasks_list, rect, &mut list_state);
-            self.list_state = list_state;
+            List::new(self.create_list_items(rect))
+                .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
         }
-    }
-}
+        .block(Block::default().borders(Borders::ALL).title("Tasks"));
 
-impl TaskListComponent {
-    /// Calculate rendered index for Today view (with overdue/today sections)
-    fn calculate_today_rendered_index(&self) -> usize {
-        if self.tasks.is_empty() {
-            return 0;
-        }
-
-        let now = chrono::Utc::now().date_naive();
-        let mut overdue_tasks = Vec::new();
-        let mut today_tasks = Vec::new();
-
-        for task in &self.tasks {
-            if let Some(due_str) = &task.due {
-                if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_str, "%Y-%m-%d") {
-                    if due_date < now {
-                        overdue_tasks.push(task);
-                    } else if due_date == now {
-                        today_tasks.push(task);
-                    }
-                }
-            }
-        }
-
-        let mut rendered_index = 0;
-        let mut task_index = 0;
-
-        // Count overdue section
-        if !overdue_tasks.is_empty() {
-            rendered_index += 1; // Section header
-            for _ in &overdue_tasks {
-                if task_index == self.selected_index {
-                    return rendered_index;
-                }
-                rendered_index += 1;
-                task_index += 1;
-            }
-
-            // Add separator if both sections exist
-            if !today_tasks.is_empty() {
-                rendered_index += 1;
-            }
-        }
-
-        // Count today section
-        if !today_tasks.is_empty() {
-            rendered_index += 1; // Section header
-            for _ in &today_tasks {
-                if task_index == self.selected_index {
-                    return rendered_index;
-                }
-                rendered_index += 1;
-                task_index += 1;
-            }
-        }
-
-        rendered_index
-    }
-
-    /// Calculate rendered index for Tomorrow view (with section header)
-    fn calculate_tomorrow_rendered_index(&self) -> usize {
-        if self.tasks.is_empty() {
-            return 0;
-        }
-
-        // Tomorrow view has one section header followed by tasks
-        // Header: "📅 Tomorrow"
-        // Tasks: all tasks (already filtered by database)
-        1 + self.selected_index // 1 for section header + task index
-    }
-
-    /// Calculate rendered index for Upcoming view (with overdue and date sections)
-    fn calculate_upcoming_rendered_index(&self) -> usize {
-        use std::collections::BTreeMap;
-
-        if self.tasks.is_empty() {
-            return 0;
-        }
-
-        // Separate overdue tasks from future tasks (mirrors create_upcoming_task_items logic)
-        let mut overdue_tasks = Vec::new();
-        let mut future_tasks_by_date: BTreeMap<chrono::NaiveDate, Vec<&TaskDisplay>> = BTreeMap::new();
-        let today = chrono::Utc::now().date_naive();
-
-        for task in &self.tasks {
-            if let Some(due_date_str) = &task.due {
-                if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
-                    if due_date < today {
-                        overdue_tasks.push(task);
-                    } else {
-                        future_tasks_by_date.entry(due_date).or_default().push(task);
-                    }
-                }
-            }
-        }
-
-        let mut rendered_index = 0;
-        let mut task_index = 0;
-
-        // Count overdue section
-        if !overdue_tasks.is_empty() {
-            rendered_index += 1; // Section header "⏰ Overdue"
-            for _ in &overdue_tasks {
-                if task_index == self.selected_index {
-                    return rendered_index;
-                }
-                rendered_index += 1;
-                task_index += 1;
-            }
-        }
-
-        // Count future date sections
-        for (_due_date, tasks) in future_tasks_by_date {
-            // Add blank line before section (except if it's the first section)
-            if !overdue_tasks.is_empty() || rendered_index > 0 {
-                rendered_index += 1; // Blank line
-            }
-
-            rendered_index += 1; // Section header (Today, Tomorrow, etc.)
-            for _ in tasks {
-                if task_index == self.selected_index {
-                    return rendered_index;
-                }
-                rendered_index += 1;
-                task_index += 1;
-            }
-        }
-
-        rendered_index
-    }
-
-    /// Calculate rendered index for Project view (with sections)
-    fn calculate_project_rendered_index(&self, project_id: &str) -> usize {
-        use std::collections::HashMap;
-
-        if self.tasks.is_empty() {
-            return 0;
-        }
-
-        // Get sections for the current project
-        let project_sections: Vec<_> = self
-            .sections
-            .iter()
-            .filter(|section| section.project_id == *project_id)
-            .collect();
-
-        // Group tasks by section
-        let mut tasks_by_section: HashMap<Option<String>, Vec<&TaskDisplay>> = HashMap::new();
-        for task in &self.tasks {
-            tasks_by_section.entry(task.section_id.clone()).or_default().push(task);
-        }
-
-        let mut rendered_index = 0;
-        let mut task_index = 0;
-
-        // Tasks without sections first
-        if let Some(tasks_without_section) = tasks_by_section.get(&None) {
-            for _ in tasks_without_section {
-                if task_index == self.selected_index {
-                    return rendered_index;
-                }
-                rendered_index += 1;
-                task_index += 1;
-            }
-        }
-
-        // Sections with their tasks
-        for (section_index, section) in project_sections.iter().enumerate() {
-            if let Some(section_tasks) = tasks_by_section.get(&Some(section.id.clone())) {
-                // Add blank line before section (except for first section with no tasks before)
-                if rendered_index > 0 || section_index > 0 {
-                    rendered_index += 1;
-                }
-
-                // Add section name
-                rendered_index += 1;
-
-                // Add separator line
-                rendered_index += 1;
-
-                // Add tasks in this section
-                for _ in section_tasks {
-                    if task_index == self.selected_index {
-                        return rendered_index;
-                    }
-                    rendered_index += 1;
-                    task_index += 1;
-                }
-            }
-        }
-
-        rendered_index
+        f.render_stateful_widget(tasks_list, rect, &mut self.list_state);
     }
 }

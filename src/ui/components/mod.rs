@@ -7,6 +7,7 @@ pub mod dialog_component;
 pub mod dialogs;
 pub mod sidebar_component;
 pub mod task_list_component;
+pub mod task_list_item_component;
 
 // Component exports
 pub use dialog_component::DialogComponent;
