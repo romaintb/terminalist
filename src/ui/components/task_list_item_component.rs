@@ -1,6 +1,7 @@
 use crate::icons::IconService;
 use crate::todoist::{ProjectDisplay, TaskDisplay};
 use crate::ui::components::badge::{create_priority_badge, create_task_badges};
+use crate::utils::datetime::{format_human_date, format_human_datetime};
 use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
@@ -81,8 +82,13 @@ impl TaskItem {
     }
 
     fn format_due_date(&self, due_date: &str) -> String {
-        // Simple date formatting - could be enhanced
-        due_date.to_string()
+        // Use human-readable date formatting similar to Todoist
+        format_human_date(due_date)
+    }
+
+    /// Format due datetime with time information if available
+    fn format_due_datetime(&self, due_datetime: &str) -> String {
+        format_human_datetime(due_datetime)
     }
 }
 
@@ -144,11 +150,19 @@ impl ListItem for TaskItem {
             ));
         }
 
-        // Due date display
+        // Due date/datetime display
         if let Some(due_date) = &self.task.due {
             line_spans.push(Span::raw(" "));
+
+            // Use datetime formatting if available, otherwise use date formatting
+            let formatted_date = if let Some(due_datetime) = &self.task.due_datetime {
+                self.format_due_datetime(due_datetime)
+            } else {
+                self.format_due_date(due_date)
+            };
+
             line_spans.push(Span::styled(
-                self.format_due_date(due_date),
+                formatted_date,
                 Style::default().fg(Color::Rgb(255, 165, 0)), // Orange color
             ));
         }
