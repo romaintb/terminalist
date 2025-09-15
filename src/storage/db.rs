@@ -54,9 +54,6 @@ impl LocalStorage {
 
     /// Initialize database schema
     async fn init_schema(&self) -> Result<()> {
-        // Enable foreign key constraints
-        sqlx::query("PRAGMA foreign_keys = ON").execute(&self.pool).await?;
-
         // Create projects table
         sqlx::query(
             r"
