@@ -14,6 +14,7 @@ async fn main() -> Result<()> {
     // Parse command line arguments
     let args: Vec<String> = env::args().collect();
     let show_help = args.iter().any(|arg| arg == "--help" || arg == "-h");
+    let debug_mode = args.iter().any(|arg| arg == "--debug" || arg == "-d");
 
     if show_help {
         println!("Terminalist - A TUI for Todoist");
@@ -23,6 +24,7 @@ async fn main() -> Result<()> {
         println!();
         println!("OPTIONS:");
         println!("    -h, --help    Show this help message");
+        println!("    -d, --debug   Use file-backed SQLite database for debugging");
         println!();
         println!("ENVIRONMENT VARIABLES:");
         println!("    TODOIST_API_TOKEN    Your Todoist API token (required)");
@@ -44,7 +46,12 @@ async fn main() -> Result<()> {
     // Create sync service with timeout
     let api_token = std::env::var("TODOIST_API_TOKEN")?;
 
-    match tokio::time::timeout(tokio::time::Duration::from_secs(10), sync::SyncService::new(api_token)).await {
+    match tokio::time::timeout(
+        tokio::time::Duration::from_secs(10),
+        sync::SyncService::new(api_token, debug_mode),
+    )
+    .await
+    {
         Ok(Ok(sync_service)) => {
             ui::run_app(sync_service).await?;
         }

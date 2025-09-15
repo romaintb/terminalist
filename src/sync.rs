@@ -25,9 +25,9 @@ pub enum SyncStatus {
 
 impl SyncService {
     /// Create a new sync service
-    pub async fn new(api_token: String) -> Result<Self> {
+    pub async fn new(api_token: String, debug_mode: bool) -> Result<Self> {
         let todoist = TodoistWrapper::new(api_token);
-        let storage = Arc::new(Mutex::new(LocalStorage::new().await?));
+        let storage = Arc::new(Mutex::new(LocalStorage::new(debug_mode).await?));
         let sync_in_progress = Arc::new(Mutex::new(false));
 
         Ok(Self {
