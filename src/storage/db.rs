@@ -98,7 +98,9 @@ impl LocalStorage {
                 is_recurring BOOLEAN NOT NULL DEFAULT 0,
                 deadline TEXT,
                 duration TEXT,
-                FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE
+                FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE,
+                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+                FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE SET NULL
             )
             ",
         )
@@ -141,6 +143,19 @@ impl LocalStorage {
             .await?;
 
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_task_labels_label_id ON task_labels(label_id)")
+            .execute(&self.pool)
+            .await?;
+
+        // Create indexes for tasks table
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id)")
+            .execute(&self.pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_section_id ON tasks(section_id)")
+            .execute(&self.pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id)")
             .execute(&self.pool)
             .await?;
 
