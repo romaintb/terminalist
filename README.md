@@ -22,6 +22,30 @@ A terminal application for interacting with Todoist, built in Rust with a modern
 - ✅ **Responsive Layout** - Adapts to terminal size with smart scaling
 - ✅ **Help System** - Built-in help panel with keyboard shortcuts
 
+## Installation
+
+### Option 1: Install from Crates.io (Recommended)
+
+```bash
+cargo install terminalist
+```
+
+### Option 2: Build from Source
+
+```bash
+# Clone the repository
+git clone https://github.com/romaintb/terminalist.git
+cd terminalist
+
+# Build the project
+cargo build --release
+
+# Run the application
+cargo run --release
+```
+
+The binary will be available at `target/release/terminalist` after building.
+
 ## Setup
 
 ### 1. Get your Todoist API Token
