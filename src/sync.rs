@@ -51,6 +51,9 @@ impl SyncService {
     }
 
     /// Get projects from local storage (fast)
+    ///
+    /// Note: As of 2025, Todoist allows free plan users to *create* more than 5 projects via the API,
+    /// but the GET /projects API endpoint will only return the first 5 projects for free users.
     pub async fn get_projects(&self) -> Result<Vec<ProjectDisplay>> {
         let storage = self.storage.lock().await;
         storage.get_projects().await
@@ -164,6 +167,9 @@ impl SyncService {
     }
 
     /// Create a new project
+    ///
+    /// Note: As of 2025, Todoist allows free plan users to *create* more than 5 projects via the API,
+    /// but the GET /projects API endpoint will only return the first 5 projects for free users.
     pub async fn create_project(&self, name: &str, parent_id: Option<&str>) -> Result<()> {
         // Create project via API using the new CreateProjectArgs structure
         let project_args = CreateProjectArgs {
