@@ -308,7 +308,7 @@ impl TaskListComponent {
             self.icons.clone(),
             self.projects.clone(),
         );
-        self.items.push(TaskListItemType::Task(task_item));
+        self.items.push(TaskListItemType::Task(Box::new(task_item)));
 
         // Find and add children
         let task_id = task.id.clone();

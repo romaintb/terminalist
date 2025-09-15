@@ -22,7 +22,7 @@ pub trait ListItem {
 /// Enum representing different types of items that can appear in the task list
 #[derive(Debug, Clone)]
 pub enum TaskListItemType {
-    Task(TaskItem),
+    Task(Box<TaskItem>),
     Header(HeaderItem),
     Separator(SeparatorItem),
 }
