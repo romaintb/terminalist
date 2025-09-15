@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Human-readable date formatting - Task due dates now display in Todoist-style format (e.g., "yesterday", "today", "tomorrow", "next Monday")
+- Datetime support with time - Tasks with specific times show as "tomorrow at 09:00" instead of raw timestamps
+- Comprehensive datetime utilities - New consolidated `datetime.rs` module with robust date parsing and formatting
+
+### Changed
+- Enhanced task display - Task list items now show intuitive date formatting instead of raw YYYY-MM-DD strings
+- Improved code organization - Consolidated date utilities into single module, reducing complexity
+- Better datetime parsing - Support for multiple datetime formats (RFC3339, ISO 8601, space-separated)
+
+### Fixed
+- Missing priority key binding - Added "p" key to cycle through task priorities
+- SQLite foreign key constraints - Properly enabled foreign key constraints for better data integrity
+- Task dialog project selection - Fixed project pre-selection in task creation dialogs
+
 ## [0.2.0] - 2025-09-11
 
 ### Added
@@ -25,8 +42,3 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Removed mentions of the old status bar
 - Cleaned up unused/dead code
 - Removed traces of the old statusbar implementation
-
-## [Unreleased]
-
-### Dependencies
-- Updated various project dependencies to latest versions
