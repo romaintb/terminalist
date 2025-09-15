@@ -1,8 +1,9 @@
 use anyhow::Result;
 use sqlx::{
-    sqlite::{SqliteConnection, SqlitePool, SqlitePoolOptions},
+    sqlite::{SqliteConnectOptions, SqliteConnection, SqlitePool, SqlitePoolOptions},
     Connection,
 };
+use std::str::FromStr;
 
 /// Local storage manager for Todoist data
 pub struct LocalStorage {
@@ -15,16 +16,20 @@ impl LocalStorage {
     pub async fn new() -> Result<Self> {
         let database_url = "sqlite:file:terminalist_memdb?mode=memory&cache=shared".to_string();
 
+        // Configure SQLite connection options with foreign keys enabled
+        let connect_options = SqliteConnectOptions::from_str(&database_url)?
+            .foreign_keys(true);
+
         let pool = SqlitePoolOptions::new()
             .min_connections(1)
             .max_connections(4)
             .idle_timeout(None) // avoid idle reaping
             .max_lifetime(None) // avoid lifetime rotation
-            .connect(&database_url)
+            .connect_with(connect_options.clone())
             .await?;
 
         // Anchor connection outside the pool
-        let anchor = SqliteConnection::connect(&database_url).await?;
+        let anchor = SqliteConnection::connect_with(&connect_options).await?;
 
         let storage = LocalStorage { pool, _anchor: anchor };
         storage.init_schema().await?;
@@ -50,6 +55,11 @@ impl LocalStorage {
 
     /// Initialize database schema
     async fn init_schema(&self) -> Result<()> {
+        // Enable foreign key constraints
+        sqlx::query("PRAGMA foreign_keys = ON")
+            .execute(&self.pool)
+            .await?;
+        
         // Create projects table
         sqlx::query(
             r"
