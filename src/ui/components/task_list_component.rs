@@ -458,6 +458,13 @@ impl Component for TaskListComponent {
                     Action::None
                 }
             }
+            KeyCode::Char('p') => {
+                if let Some(task) = self.get_selected_task() {
+                    Action::CyclePriority(task.id.clone())
+                } else {
+                    Action::None
+                }
+            }
             _ => Action::None,
         }
     }

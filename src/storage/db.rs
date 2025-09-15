@@ -1,8 +1,9 @@
 use anyhow::Result;
 use sqlx::{
-    sqlite::{SqliteConnection, SqlitePool, SqlitePoolOptions},
+    sqlite::{SqliteConnectOptions, SqliteConnection, SqlitePool, SqlitePoolOptions},
     Connection,
 };
+use std::str::FromStr;
 
 /// Local storage manager for Todoist data
 pub struct LocalStorage {
@@ -15,16 +16,19 @@ impl LocalStorage {
     pub async fn new() -> Result<Self> {
         let database_url = "sqlite:file:terminalist_memdb?mode=memory&cache=shared".to_string();
 
+        // Configure SQLite connection options with foreign keys enabled
+        let connect_options = SqliteConnectOptions::from_str(&database_url)?.foreign_keys(true);
+
         let pool = SqlitePoolOptions::new()
             .min_connections(1)
             .max_connections(4)
             .idle_timeout(None) // avoid idle reaping
             .max_lifetime(None) // avoid lifetime rotation
-            .connect(&database_url)
+            .connect_with(connect_options.clone())
             .await?;
 
         // Anchor connection outside the pool
-        let anchor = SqliteConnection::connect(&database_url).await?;
+        let anchor = SqliteConnection::connect_with(&connect_options).await?;
 
         let storage = LocalStorage { pool, _anchor: anchor };
         storage.init_schema().await?;
@@ -60,7 +64,7 @@ impl LocalStorage {
                 is_favorite BOOLEAN NOT NULL DEFAULT 0,
                 is_inbox_project BOOLEAN NOT NULL DEFAULT 0,
                 order_index INTEGER NOT NULL DEFAULT 0,
-                parent_id TEXT
+                parent_id TEXT REFERENCES projects(id) ON DELETE CASCADE
             )
             ",
         )
@@ -73,7 +77,7 @@ impl LocalStorage {
             CREATE TABLE IF NOT EXISTS sections (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
-                project_id TEXT NOT NULL,
+                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
                 order_index INTEGER NOT NULL DEFAULT 0
             )
             ",
