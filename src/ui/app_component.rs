@@ -741,8 +741,8 @@ impl AppComponent {
                         // task_info format: "task_id|next_week"
                         if let Some((task_id, _)) = task_info.split_once('|') {
                             let today = chrono::Utc::now().date_naive();
-                            let next_monday = crate::utils::date::next_weekday(today, chrono::Weekday::Mon);
-                            let next_monday_str = crate::utils::date::format_ymd(next_monday);
+                            let next_monday = crate::utils::datetime::next_weekday(today, chrono::Weekday::Mon);
+                            let next_monday_str = crate::utils::datetime::format_ymd(next_monday);
                             match sync_service.update_task_due_date(task_id, Some(&next_monday_str)).await {
                                 Ok(()) => Ok(format!("✅ Task due date set to next Monday: {}", task_id)),
                                 Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
@@ -755,8 +755,8 @@ impl AppComponent {
                         // task_info format: "task_id|weekend"
                         if let Some((task_id, _)) = task_info.split_once('|') {
                             let today = chrono::Utc::now().date_naive();
-                            let next_saturday = crate::utils::date::next_weekday(today, chrono::Weekday::Sat);
-                            let next_saturday_str = crate::utils::date::format_ymd(next_saturday);
+                            let next_saturday = crate::utils::datetime::next_weekday(today, chrono::Weekday::Sat);
+                            let next_saturday_str = crate::utils::datetime::format_ymd(next_saturday);
                             match sync_service.update_task_due_date(task_id, Some(&next_saturday_str)).await {
                                 Ok(()) => Ok(format!("✅ Task due date set to next Saturday: {}", task_id)),
                                 Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
