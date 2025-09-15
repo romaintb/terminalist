@@ -150,13 +150,13 @@ Terminalist uses a smart sync mechanism for optimal performance:
 
 ## Dependencies
 
-This project uses the following Rust crates:
+This project uses the following Rust crates (see `Cargo.toml` for exact versions):
 
-- `todoist-api = "0.2.0"` - Unofficial Todoist API client
-- `ratatui = "0.24"` - Terminal UI framework
-- `crossterm = "0.27"` - Cross-platform terminal handling
-- `tokio = "1.0"` - Async runtime
-- `sqlx = "0.7"` - Database toolkit with SQLite support
+- `todoist-api = "0.3.0"` - Unofficial Todoist API client
+- `ratatui = "0.29"` - Terminal UI framework
+- `crossterm = "0.29"` - Cross-platform terminal handling
+- `tokio = "1.x"` - Async runtime
+- `sqlx = "0.8"` - Database toolkit with SQLite support
 - `serde` - Serialization/deserialization
 - `chrono = "0.4"` - Date and time handling
 - `anyhow = "1.0"` - Error handling
@@ -169,24 +169,33 @@ src/
 ├── lib.rs                     # Library exports
 ├── todoist.rs                 # Todoist API models & display structs
 ├── sync.rs                    # Sync service with API integration
-├── storage.rs                 # SQLite storage (in-memory)
+├── storage/                   # SQLite storage (in-memory)
+│   ├── db.rs
+│   ├── labels.rs
+│   ├── projects.rs
+│   ├── sections.rs
+│   ├── tasks.rs
+│   └── mod.rs
 ├── icons.rs                   # Icon service for terminal compatibility
 ├── logger.rs                  # Debug logging system
 ├── utils/                     # Utility modules
 │   ├── mod.rs
-│   └── date.rs                # Date/time utilities
+│   └── datetime.rs            # Date/time utilities
 └── ui/                        # Modern Component-Based Architecture
     ├── app_component.rs       # Main application orchestrator
     ├── renderer.rs            # Modern rendering system
     ├── core/                  # Core architecture components
     │   ├── actions.rs         # Action system for component communication
     │   ├── component.rs       # Component trait and lifecycle
+    │   ├── context.rs         # App context
     │   ├── event_handler.rs   # Event processing system
     │   └── task_manager.rs    # Background async task management
     └── components/            # UI Components
+        ├── badge.rs
         ├── dialog_component.rs    # Unified modal dialog system
         ├── sidebar_component.rs   # Project/label navigation
-        └── task_list_component.rs # Task management and display
+        ├── task_list_component.rs # Task management and display
+        └── task_list_item_component.rs
 ```
 
 ## Development Setup
@@ -229,8 +238,12 @@ cargo doc --open --no-deps  # Generate and open documentation
 GitHub Actions workflow is configured in `.github/workflows/ci.yml` with:
 - Format checking with rustfmt
 - Linting with clippy
-- Testing on multiple Rust versions
+- Testing on multiple Rust versions and OSes
+- MSRV 1.70 build job
+- Smoke tests for `--help` and `--version`
 - Security auditing
+
+See the roadmap and product details in `docs/PRD.md`.
 
 ## Contributing
 

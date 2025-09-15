@@ -14,7 +14,13 @@ async fn main() -> Result<()> {
     // Parse command line arguments
     let args: Vec<String> = env::args().collect();
     let show_help = args.iter().any(|arg| arg == "--help" || arg == "-h");
+    let show_version = args.iter().any(|arg| arg == "--version" || arg == "-V");
     let debug_mode = args.iter().any(|arg| arg == "--debug" || arg == "-d");
+
+    if show_version {
+        println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
 
     if show_help {
         println!("Terminalist - A TUI for Todoist");
@@ -24,6 +30,7 @@ async fn main() -> Result<()> {
         println!();
         println!("OPTIONS:");
         println!("    -h, --help    Show this help message");
+        println!("    -V, --version Show version information");
         println!("    -d, --debug   Use file-backed SQLite database for debugging");
         println!();
         println!("ENVIRONMENT VARIABLES:");

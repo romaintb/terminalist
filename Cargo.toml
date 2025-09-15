@@ -2,6 +2,7 @@
 name = "terminalist"
 version = "0.2.0"
 edition = "2021"
+rust-version = "1.70"
 keywords = ["terminal", "tui", "todoist", "productivity", "cli"]
 description = "A terminal-based Todoist client with modern TUI interface"
 authors = ["Romain Bertrand <romain@doxin.net>"]
