@@ -78,19 +78,18 @@ impl DialogComponent {
         match &self.dialog_type {
             Some(DialogType::TaskCreation { default_project_id }) => {
                 if !self.input_buffer.is_empty() {
-                    // Use the default project ID if provided, otherwise use selected task project or None
-                    let project_id = default_project_id.clone().or_else(|| {
-                        if let Some(task_index) = self.selected_task_project_index {
-                            let task_projects = self.get_task_projects();
-                            if task_index < task_projects.len() {
-                                Some(task_projects[task_index].id.clone())
-                            } else {
-                                None
-                            }
+                    // Use the user's selection first, fallback to default project ID if no selection made
+                    let project_id = if let Some(task_index) = self.selected_task_project_index {
+                        let task_projects = self.get_task_projects();
+                        if task_index < task_projects.len() {
+                            Some(task_projects[task_index].id.clone())
                         } else {
                             None // Task goes to inbox (no project)
                         }
-                    });
+                    } else {
+                        // If no user selection, use the default project ID or None
+                        default_project_id.clone()
+                    };
 
                     let action = Action::CreateTask {
                         content: self.input_buffer.clone(),
