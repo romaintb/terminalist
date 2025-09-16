@@ -151,8 +151,13 @@ impl AppComponent {
         );
 
         // Update dialog
-        self.dialog.update_data(self.state.projects.clone(), self.state.labels.clone());
+        self.dialog.update_data_with_tasks(
+            self.state.projects.clone(),
+            self.state.labels.clone(),
+            self.state.tasks.clone(),
+        );
         self.dialog.set_logger(self.logger.clone());
+        self.dialog.set_sync_service(self.sync_service.clone());
     }
 
     /// Handle global keyboard shortcuts that aren't component-specific
@@ -291,6 +296,10 @@ impl AppComponent {
             KeyCode::Char('r') => {
                 self.logger.log("Global key: 'r' - starting manual sync".to_string());
                 Action::StartSync
+            }
+            KeyCode::Char('/') => {
+                self.logger.log("Global key: '/' - opening task search dialog".to_string());
+                Action::ShowDialog(DialogType::TaskSearch)
             }
             KeyCode::Esc => {
                 if self.dialog.is_visible() {
@@ -611,6 +620,22 @@ impl AppComponent {
                 self.state.update_data(projects, labels, sections, tasks);
                 self.sync_component_data();
                 self.logger.log("Data: Updated all component data after data load".to_string());
+                Action::None
+            }
+            Action::SearchTasks(query) => {
+                self.logger.log(format!("Search: Starting database search for '{}'", query));
+                let sync_service = self.sync_service.clone();
+                let _task_id = self.task_manager.spawn_task_search(sync_service, query);
+                Action::None
+            }
+            Action::SearchResultsLoaded { query, results } => {
+                self.logger.log(format!(
+                    "Search: Loaded {} results for query '{}'",
+                    results.len(),
+                    query
+                ));
+                // Update dialog with search results
+                self.dialog.update_search_results(&query, results);
                 Action::None
             }
             Action::NextTask => {

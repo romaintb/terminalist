@@ -1,6 +1,8 @@
 use crate::icons::IconService;
 use crate::logger::Logger;
-use crate::todoist::{LabelDisplay, ProjectDisplay};
+use crate::sync::SyncService;
+use crate::todoist::{LabelDisplay, ProjectDisplay, TaskDisplay};
+use crate::ui::components::task_list_item_component::{ListItem as TaskListItem, TaskItem};
 use crate::ui::core::{
     actions::{Action, DialogType},
     Component,
@@ -16,6 +18,7 @@ pub struct DialogComponent {
     pub cursor_position: usize,
     pub projects: Vec<ProjectDisplay>,
     pub labels: Vec<LabelDisplay>,
+    pub tasks: Vec<TaskDisplay>,
     pub selected_project_index: usize,
     pub selected_parent_project_index: Option<usize>, // For project creation parent selection
     pub selected_task_project_index: Option<usize>,   // For task creation project selection (None = no project/inbox)
@@ -25,6 +28,9 @@ pub struct DialogComponent {
     pub scrollbar_state: ScrollbarState,
     // Debug logger for logs dialog
     pub logger: Option<Logger>,
+    // Task search state
+    pub search_results: Vec<TaskDisplay>,
+    pub sync_service: Option<SyncService>,
 }
 
 impl Default for DialogComponent {
@@ -41,6 +47,7 @@ impl DialogComponent {
             cursor_position: 0,
             projects: Vec::new(),
             labels: Vec::new(),
+            tasks: Vec::new(),
             selected_project_index: 0,
             selected_parent_project_index: None,
             selected_task_project_index: None, // Default to "None" for tasks (no project)
@@ -48,12 +55,29 @@ impl DialogComponent {
             scroll_offset: 0,
             scrollbar_state: ScrollbarState::new(0),
             logger: None,
+            search_results: Vec::new(),
+            sync_service: None,
         }
     }
 
     pub fn update_data(&mut self, projects: Vec<ProjectDisplay>, labels: Vec<LabelDisplay>) {
         self.projects = projects;
         self.labels = labels;
+    }
+
+    pub fn update_data_with_tasks(
+        &mut self,
+        projects: Vec<ProjectDisplay>,
+        labels: Vec<LabelDisplay>,
+        tasks: Vec<TaskDisplay>,
+    ) {
+        self.projects = projects;
+        self.labels = labels;
+        self.tasks = tasks;
+    }
+
+    pub fn set_sync_service(&mut self, sync_service: SyncService) {
+        self.sync_service = Some(sync_service);
     }
 
     /// Get root projects (projects without a parent) for parent selection
@@ -68,6 +92,20 @@ impl DialogComponent {
 
     pub fn set_logger(&mut self, logger: Logger) {
         self.logger = Some(logger);
+    }
+
+    /// Trigger a database search based on current input
+    fn trigger_search(&mut self) -> Action {
+        // Trigger background database search
+        Action::SearchTasks(self.input_buffer.clone())
+    }
+
+    /// Update search results from database query results
+    pub fn update_search_results(&mut self, query: &str, results: Vec<TaskDisplay>) {
+        // Only update if this is for the current query (avoid race conditions)
+        if query == self.input_buffer {
+            self.search_results = results;
+        }
     }
 
     pub fn is_visible(&self) -> bool {
@@ -202,6 +240,7 @@ impl DialogComponent {
         self.selected_task_project_index = None; // Reset to "None" for task creation
         self.scroll_offset = 0;
         self.scrollbar_state = ScrollbarState::new(0);
+        self.search_results.clear();
     }
 
     fn scroll_up(&mut self) {
@@ -314,6 +353,99 @@ impl DialogComponent {
         system_dialogs::render_help_dialog(f, area, self.scroll_offset, &mut self.scrollbar_state);
     }
 
+    fn render_task_search_dialog(&self, f: &mut Frame, area: Rect) {
+        use ratatui::{
+            layout::{Constraint, Layout, Margin},
+            style::{Color, Style},
+            widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
+        };
+
+        // Create a centered popup area
+        let popup_area = {
+            let popup_layout =
+                Layout::vertical([Constraint::Percentage(10), Constraint::Min(20), Constraint::Percentage(10)])
+                    .split(area);
+
+            Layout::horizontal([Constraint::Percentage(10), Constraint::Min(60), Constraint::Percentage(10)])
+                .split(popup_layout[1])[1]
+        };
+
+        // Clear the area
+        f.render_widget(Clear, popup_area);
+
+        // Split into input area and results area
+        let content_area = popup_area.inner(Margin {
+            horizontal: 1,
+            vertical: 1,
+        });
+
+        let layout = Layout::vertical([
+            Constraint::Length(3), // Input area
+            Constraint::Min(0),    // Results area
+        ])
+        .split(content_area);
+
+        // Render the main block
+        let main_block = Block::default()
+            .title(" Search Tasks ")
+            .borders(Borders::ALL)
+            .style(Style::default().fg(Color::Gray));
+        f.render_widget(main_block, popup_area);
+
+        // Render input field
+        let input_paragraph = Paragraph::new(self.input_buffer.as_str()).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Query")
+                .style(Style::default().fg(Color::Gray)),
+        );
+        f.render_widget(input_paragraph, layout[0]);
+
+        // Set cursor position in input field
+        if !self.input_buffer.is_empty() || self.cursor_position == 0 {
+            f.set_cursor_position((layout[0].x + 1 + self.cursor_position as u16, layout[0].y + 1));
+        }
+
+        // Render search results
+        let results_text = if self.search_results.is_empty() {
+            if self.input_buffer.is_empty() {
+                "Start typing to search tasks...".to_string()
+            } else {
+                "No tasks found.".to_string()
+            }
+        } else {
+            format!("{} tasks found", self.search_results.len())
+        };
+
+        let results_list: Vec<ListItem> = self
+            .search_results
+            .iter()
+            .map(|task| {
+                // Create TaskItem with the same formatting as main task list
+                let task_item = TaskItem::new(
+                    task.clone(),
+                    0, // depth: 0 for search results (no indentation)
+                    0, // child_count: 0 for search results
+                    self.icons.clone(),
+                    self.projects.clone(),
+                );
+
+                // Use the same render method as main task list
+                // Calculate available width (subtract some space for dialog borders)
+                let available_width = layout[1].width.saturating_sub(4) as usize;
+                TaskListItem::render(&task_item, available_width, false)
+            })
+            .collect();
+
+        let results_block = Block::default()
+            .borders(Borders::ALL)
+            .title(results_text)
+            .style(Style::default().fg(Color::Gray));
+
+        let results_list_widget = List::new(results_list).block(results_block);
+        f.render_widget(results_list_widget, layout[1]);
+    }
+
     fn render_logs_dialog(&mut self, f: &mut Frame, area: Rect) {
         system_dialogs::render_logs_dialog(f, area, &self.logger, self.scroll_offset, &mut self.scrollbar_state);
     }
@@ -423,6 +555,43 @@ impl Component for DialogComponent {
                 KeyCode::Enter => self.handle_submit(),
                 _ => Action::None,
             },
+            Some(DialogType::TaskSearch) => match key.code {
+                KeyCode::Esc => Action::HideDialog,
+                KeyCode::Enter => Action::HideDialog,
+                KeyCode::Char(c) => {
+                    self.input_buffer.insert(self.cursor_position, c);
+                    self.cursor_position += 1;
+                    self.trigger_search()
+                }
+                KeyCode::Backspace => {
+                    if self.cursor_position > 0 {
+                        self.input_buffer.remove(self.cursor_position - 1);
+                        self.cursor_position -= 1;
+                        return self.trigger_search();
+                    }
+                    Action::None
+                }
+                KeyCode::Delete => {
+                    if self.cursor_position < self.input_buffer.len() {
+                        self.input_buffer.remove(self.cursor_position);
+                        return self.trigger_search();
+                    }
+                    Action::None
+                }
+                KeyCode::Left => {
+                    if self.cursor_position > 0 {
+                        self.cursor_position -= 1;
+                    }
+                    Action::None
+                }
+                KeyCode::Right => {
+                    if self.cursor_position < self.input_buffer.len() {
+                        self.cursor_position += 1;
+                    }
+                    Action::None
+                }
+                _ => Action::None,
+            },
             _ => {
                 // Input dialogs
                 match key.code {
@@ -529,16 +698,27 @@ impl Component for DialogComponent {
                             }
                         }
                     }
+                    DialogType::TaskSearch => {
+                        self.input_buffer.clear();
+                        self.cursor_position = 0;
+                        self.search_results.clear();
+                    }
                     _ => {
                         self.input_buffer.clear();
                         self.cursor_position = 0;
                     }
                 }
-                self.dialog_type = Some(dialog_type);
+                self.dialog_type = Some(dialog_type.clone());
                 // Only reset project index for non-task-creation dialogs
                 if !is_task_creation {
                     self.selected_project_index = 0;
                 }
+
+                // Trigger initial search for TaskSearch dialog
+                if matches!(dialog_type, DialogType::TaskSearch) {
+                    return self.trigger_search();
+                }
+
                 Action::None
             }
             Action::HideDialog => {
@@ -580,6 +760,9 @@ impl Component for DialogComponent {
                 }
                 DialogType::Logs => {
                     self.render_logs_dialog(f, rect);
+                }
+                DialogType::TaskSearch => {
+                    self.render_task_search_dialog(f, rect);
                 }
             }
         }

@@ -65,6 +65,18 @@ impl SyncService {
         storage.get_tasks_for_project(project_id).await
     }
 
+    /// Get ALL tasks from local storage (fast) - for search functionality
+    pub async fn get_all_tasks(&self) -> Result<Vec<TaskDisplay>> {
+        let storage = self.storage.lock().await;
+        storage.get_all_tasks().await
+    }
+
+    /// Search tasks by content using database-level filtering (fast)
+    pub async fn search_tasks(&self, query: &str) -> Result<Vec<TaskDisplay>> {
+        let storage = self.storage.lock().await;
+        storage.search_tasks(query).await
+    }
+
     /// Get all labels from local storage (fast)
     pub async fn get_labels(&self) -> Result<Vec<LabelDisplay>> {
         let storage = self.storage.lock().await;

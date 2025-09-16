@@ -66,6 +66,11 @@ pub enum Action {
         sections: Vec<crate::todoist::SectionDisplay>,
         tasks: Vec<crate::todoist::TaskDisplay>,
     },
+    SearchTasks(String), // Query for task search
+    SearchResultsLoaded {
+        query: String,
+        results: Vec<crate::todoist::TaskDisplay>,
+    },
 
     // Data refresh after task operations
     RefreshData,
@@ -113,4 +118,5 @@ pub enum DialogType {
     Info(String),
     Help,
     Logs,
+    TaskSearch,
 }

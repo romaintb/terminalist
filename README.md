@@ -16,6 +16,7 @@ A terminal application for interacting with Todoist, built in Rust with a modern
 - ✅ **Smart Sync** - Automatic sync on startup and manual refresh with 'r'
 - ✅ **Project Management** - Browse projects with hierarchical display
 - ✅ **Task Management** - View, navigate, complete, and create tasks
+- ✅ **Task Search** - Fast database-powered search across all tasks with '/' shortcut
 - ✅ **Keyboard & Mouse Navigation** - Efficient keyboard operation with mouse support
 - ✅ **Real-time Updates** - Create, complete, and delete tasks/projects
 - ✅ **Label Support** - View task labels with colored badges
@@ -91,12 +92,21 @@ Once the application is running, you can use these keyboard shortcuts:
 - **`D`** Delete selected project (with confirmation)
 
 ### **System**
+- **`/`** Open task search dialog (search across all tasks)
 - **`r`** Force sync with Todoist
 - **`i`** Cycle through icon themes
 - **`?`** Toggle help panel
 - **`q`** Quit the application
 - **`Esc`** Cancel action or close dialogs
 - **`Ctrl+C`** Quit application
+
+### **Task Search**
+- **`/`** Open search dialog
+- **Type** Search across all tasks by content
+- **`Enter`** Close search dialog
+- **`Esc`** Close search dialog
+- **`Backspace/Delete`** Edit search query
+- **`Left/Right`** Move cursor in search box
 
 ### **Help Panel Scrolling**
 - **`↑/↓`** Scroll help content up/down
@@ -145,6 +155,7 @@ Terminalist uses a smart sync mechanism for optimal performance:
 - **Projects**: Hierarchical structure with parent-child relationships
 - **Tasks**: Full task details including labels, priority, and status
 - **Labels**: Colored badges for task categorization
+- **Search**: Fast database-level search across all tasks with live results
 - **Real-time Updates**: Create, modify, and delete tasks/projects immediately
 
 

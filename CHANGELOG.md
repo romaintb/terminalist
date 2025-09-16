@@ -8,11 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Task Search** - Fast database-powered search across all tasks with '/' keyboard shortcut
+- **Search Dialog** - VS Code-style command palette for finding tasks with live search results
+- **Database Search Optimization** - Search queries run at SQLite level for performance
 - Human-readable date formatting - Task due dates now display in Todoist-style format (e.g., "yesterday", "today", "tomorrow", "next Monday")
 - Datetime support with time - Tasks with specific times show as "tomorrow at 09:00" instead of raw timestamps
 - Comprehensive datetime utilities - New consolidated `datetime.rs` module with robust date parsing and formatting
 
 ### Changed
+- **Search UI** - Subtle color scheme for search dialog with gray borders and muted project context
+- **Task Search Architecture** - Moved from in-memory filtering to efficient database-level queries
 - Enhanced task display - Task list items now show intuitive date formatting instead of raw YYYY-MM-DD strings
 - Improved code organization - Consolidated date utilities into single module, reducing complexity
 - Better datetime parsing - Support for multiple datetime formats (RFC3339, ISO 8601, space-separated)

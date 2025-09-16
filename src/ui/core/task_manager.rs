@@ -25,6 +25,10 @@ pub enum TaskResult {
         sections: Vec<crate::todoist::SectionDisplay>,
         tasks: Vec<crate::todoist::TaskDisplay>,
     },
+    SearchCompleted {
+        query: String,
+        results: Vec<crate::todoist::TaskDisplay>,
+    },
     Other(String),
 }
 
@@ -234,6 +238,45 @@ impl TaskManager {
                     let _ = action_sender.send(Action::ShowDialog(crate::ui::core::actions::DialogType::Error(
                         error_msg.clone(),
                     )));
+                    Ok(TaskResult::Other(error_msg))
+                }
+            }
+        });
+
+        let task = BackgroundTask {
+            id: task_id,
+            handle,
+            description,
+            started_at: std::time::Instant::now(),
+        };
+
+        self.tasks.insert(task_id, task);
+        task_id
+    }
+
+    /// Spawn a background task search operation
+    pub fn spawn_task_search(&mut self, sync_service: SyncService, query: String) -> TaskId {
+        let task_id = self.next_task_id;
+        self.next_task_id += 1;
+
+        let action_sender = self.action_sender.clone();
+        let description = format!("Searching tasks: '{}'", query);
+
+        let handle = tokio::spawn(async move {
+            match sync_service.search_tasks(&query).await {
+                Ok(results) => {
+                    let result = TaskResult::SearchCompleted {
+                        query: query.clone(),
+                        results: results.clone(),
+                    };
+
+                    let _ = action_sender.send(Action::SearchResultsLoaded { query, results });
+
+                    Ok(result)
+                }
+                Err(e) => {
+                    let error_msg = format!("Failed to search tasks: {}", e);
+                    // Don't show error dialog for search failures, just log silently
                     Ok(TaskResult::Other(error_msg))
                 }
             }

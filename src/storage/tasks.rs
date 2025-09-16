@@ -275,6 +275,22 @@ impl LocalStorage {
         self.get_tasks_with_labels_joined("", "", &[]).await
     }
 
+    /// Search tasks by content using SQL LIKE (case-insensitive)
+    pub async fn search_tasks(&self, query: &str) -> Result<Vec<TaskDisplay>> {
+        if query.is_empty() {
+            return self.get_all_tasks().await;
+        }
+
+        // Use SQL LIKE with wildcards for efficient database-level search
+        let search_pattern = format!("%{}%", query);
+        self.get_tasks_with_labels_joined(
+            "WHERE LOWER(t.content) LIKE LOWER(?)",
+            "ORDER BY t.priority DESC, t.order_index ASC",
+            &[&search_pattern],
+        )
+        .await
+    }
+
     /// Get tasks due on a specific date (pure data access)
     pub async fn get_tasks_due_on(&self, date: &str) -> Result<Vec<TaskDisplay>> {
         self.get_tasks_with_labels_joined(
