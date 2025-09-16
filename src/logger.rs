@@ -16,19 +16,19 @@ impl Logger {
     /// Create a new logger with file logging enabled
     pub fn new_with_file_logging() -> io::Result<Self> {
         let log_file_path = Self::get_log_file_path()?;
-        
+
         // Ensure the config directory exists
         if let Some(parent) = log_file_path.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        
+
         Ok(Self {
             logs: Arc::new(Mutex::new(Vec::new())),
             log_file: Some(log_file_path),
             enabled: true,
         })
     }
-    
+
     /// Create a new logger without file logging (in-memory only)
     pub fn new() -> Self {
         Self {
@@ -37,12 +37,12 @@ impl Logger {
             enabled: false,
         }
     }
-    
+
     /// Get the standard log file path
     fn get_log_file_path() -> io::Result<PathBuf> {
-        let home_dir = dirs::home_dir()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Home directory not found"))?;
-        
+        let home_dir =
+            dirs::home_dir().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Home directory not found"))?;
+
         Ok(home_dir.join(".config").join("terminalist").join("terminalist.log"))
     }
 
@@ -55,15 +55,11 @@ impl Logger {
         if let Ok(mut logs) = self.logs.lock() {
             logs.push(formatted_message.clone());
         }
-        
+
         // Write to file if file logging is enabled
         if self.enabled {
             if let Some(ref log_file_path) = self.log_file {
-                if let Ok(mut file) = OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(log_file_path)
-                {
+                if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(log_file_path) {
                     let _ = writeln!(file, "{}", formatted_message);
                     let _ = file.flush();
                 }

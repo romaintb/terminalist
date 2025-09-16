@@ -133,10 +133,10 @@ impl AppComponent {
     /// Trigger initial sync on startup
     pub fn trigger_initial_sync(&mut self) {
         self.logger.log("AppComponent: Starting initial sync".to_string());
-        
+
         // Set initial sidebar selection based on config
         self.set_initial_sidebar_selection();
-        
+
         if self.active_sync_task.is_none() {
             self.start_background_sync();
             // Data fetch will be triggered automatically when sync completes
@@ -167,7 +167,7 @@ impl AppComponent {
                 }
             }
         };
-        
+
         self.state.sidebar_selection = selection;
         self.logger.log(format!(
             "AppComponent: Set initial sidebar selection to {:?}",
@@ -192,6 +192,7 @@ impl AppComponent {
         );
 
         // Update dialog
+        self.dialog.update_display_config(self.config.display.clone());
         self.dialog.update_data_with_tasks(
             self.state.projects.clone(),
             self.state.labels.clone(),

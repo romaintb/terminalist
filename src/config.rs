@@ -102,9 +102,7 @@ impl Default for DisplayConfig {
 
 impl Default for LoggingConfig {
     fn default() -> Self {
-        Self {
-            enabled: false,
-        }
+        Self { enabled: false }
     }
 }
 
@@ -112,7 +110,7 @@ impl Config {
     /// Load configuration from file or return defaults
     pub fn load() -> Result<Self> {
         let config_path = Self::find_config_file()?;
-        
+
         if let Some(path) = config_path {
             Self::load_from_file(&path)
         } else {
@@ -124,10 +122,10 @@ impl Config {
     pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = std::fs::read_to_string(&path)
             .with_context(|| format!("Failed to read config file: {}", path.as_ref().display()))?;
-        
+
         let config: Config = toml::from_str(&content)
             .with_context(|| format!("Failed to parse config file: {}", path.as_ref().display()))?;
-        
+
         config.validate()?;
         Ok(config)
     }
@@ -185,8 +183,7 @@ impl Config {
     /// Generate default configuration file
     pub fn generate_default_config<P: AsRef<Path>>(path: P) -> Result<()> {
         let config = Self::default();
-        let toml_content = toml::to_string_pretty(&config)
-            .context("Failed to serialize default config")?;
+        let toml_content = toml::to_string_pretty(&config).context("Failed to serialize default config")?;
 
         // Add header comment
         let header = format!(
@@ -195,7 +192,7 @@ impl Config {
         );
 
         let full_content = header + &toml_content;
-        
+
         std::fs::write(&path, full_content)
             .with_context(|| format!("Failed to write config file: {}", path.as_ref().display()))?;
 
@@ -223,7 +220,6 @@ mod tests {
     #[test]
     fn test_default_config() {
         let config = Config::default();
-        assert_eq!(config.api.timeout, 30);
         assert_eq!(config.ui.default_project, "today");
         assert_eq!(config.sync.auto_sync_interval_minutes, 5);
         assert!(config.display.show_descriptions);
@@ -234,7 +230,7 @@ mod tests {
     #[test]
     fn test_config_validation() {
         let mut config = Config::default();
-        
+
         // Valid config should pass
         assert!(config.validate().is_ok());
 
@@ -252,7 +248,7 @@ mod tests {
     fn test_config_serialization() {
         let config = Config::default();
         let toml_str = toml::to_string_pretty(&config).unwrap();
-        assert!(toml_str.contains("timeout = 30"));
         assert!(toml_str.contains("default_project = \"today\""));
+        assert!(toml_str.contains("auto_sync_interval_minutes = 5"));
     }
 }

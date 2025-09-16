@@ -20,12 +20,12 @@ pub async fn run_app(sync_service: SyncService, config: Config) -> anyhow::Resul
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen)?;
-    
+
     // Enable mouse capture only if configured
     if config.ui.mouse_enabled {
         execute!(stdout, EnableMouseCapture)?;
     }
-    
+
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
@@ -51,12 +51,12 @@ pub async fn run_app(sync_service: SyncService, config: Config) -> anyhow::Resul
     // Restore terminal
     disable_raw_mode()?;
     execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
-    
+
     // Disable mouse capture only if it was enabled
     if config.ui.mouse_enabled {
         execute!(terminal.backend_mut(), DisableMouseCapture)?;
     }
-    
+
     terminal.show_cursor()?;
 
     result

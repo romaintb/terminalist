@@ -151,10 +151,7 @@ impl ListItem for TaskItem {
             } else {
                 Style::default().fg(Color::Cyan)
             };
-            line_spans.push(Span::styled(
-                format!("#{}", project.name),
-                project_style,
-            ));
+            line_spans.push(Span::styled(format!("#{}", project.name), project_style));
         }
 
         // Due date/datetime display
@@ -179,8 +176,16 @@ impl ListItem for TaskItem {
             let metadata_badges = create_task_badges(
                 self.task.is_recurring,
                 self.task.due.is_some() || self.task.deadline.is_some(),
-                if display_config.show_durations { self.task.duration.as_deref() } else { None },
-                if display_config.show_labels { self.task.labels.as_slice() } else { &[] },
+                if display_config.show_durations {
+                    self.task.duration.as_deref()
+                } else {
+                    None
+                },
+                if display_config.show_labels {
+                    self.task.labels.as_slice()
+                } else {
+                    &[]
+                },
             );
 
             for badge in metadata_badges {

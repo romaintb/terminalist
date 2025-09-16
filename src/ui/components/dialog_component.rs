@@ -1,3 +1,4 @@
+use crate::config::DisplayConfig;
 use crate::icons::IconService;
 use crate::logger::Logger;
 use crate::sync::SyncService;
@@ -31,6 +32,7 @@ pub struct DialogComponent {
     // Task search state
     pub search_results: Vec<TaskDisplay>,
     pub sync_service: Option<SyncService>,
+    pub display_config: DisplayConfig,
 }
 
 impl Default for DialogComponent {
@@ -57,7 +59,12 @@ impl DialogComponent {
             logger: None,
             search_results: Vec::new(),
             sync_service: None,
+            display_config: DisplayConfig::default(),
         }
+    }
+
+    pub fn update_display_config(&mut self, display_config: DisplayConfig) {
+        self.display_config = display_config;
     }
 
     pub fn update_data(&mut self, projects: Vec<ProjectDisplay>, labels: Vec<LabelDisplay>) {
@@ -433,7 +440,7 @@ impl DialogComponent {
                 // Use the same render method as main task list
                 // Calculate available width (subtract some space for dialog borders)
                 let available_width = layout[1].width.saturating_sub(4) as usize;
-                TaskListItem::render(&task_item, available_width, false)
+                TaskListItem::render(&task_item, available_width, false, &self.display_config)
             })
             .collect();
 
