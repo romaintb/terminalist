@@ -404,15 +404,11 @@ impl TaskListComponent {
     }
 
     /// Create the list items for rendering
-    fn create_list_items(&self, rect: Rect) -> Vec<RatatuiListItem<'static>> {
-        let available_width = rect.width.saturating_sub(2) as usize; // Account for borders
-
+    fn create_list_items(&self, _rect: Rect) -> Vec<RatatuiListItem<'static>> {
         self.items
             .iter()
             .map(|item| {
-                let indent_width = item.indent_level() * 4;
-                let max_width = available_width.saturating_sub(indent_width);
-                item.render(max_width, false, &self.display_config) // Selection styling handled by List widget
+                item.render(false, &self.display_config) // Selection styling handled by List widget
             })
             .collect()
     }

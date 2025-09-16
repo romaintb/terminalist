@@ -12,7 +12,7 @@ use ratatui::{
 /// Trait for items that can be displayed in a task list
 pub trait ListItem {
     /// Render this item as a ratatui ListItem
-    fn render(&self, max_width: usize, selected: bool, display_config: &DisplayConfig) -> RatatuiListItem<'static>;
+    fn render(&self, selected: bool, display_config: &DisplayConfig) -> RatatuiListItem<'static>;
 
     /// Whether this item can be selected by the user
     fn is_selectable(&self) -> bool;
@@ -30,11 +30,11 @@ pub enum TaskListItemType {
 }
 
 impl ListItem for TaskListItemType {
-    fn render(&self, max_width: usize, selected: bool, display_config: &DisplayConfig) -> RatatuiListItem<'static> {
+    fn render(&self, selected: bool, display_config: &DisplayConfig) -> RatatuiListItem<'static> {
         match self {
-            Self::Task(item) => item.render(max_width, selected, display_config),
-            Self::Header(item) => item.render(max_width, selected, display_config),
-            Self::Separator(item) => item.render(max_width, selected, display_config),
+            Self::Task(item) => item.render(selected, display_config),
+            Self::Header(item) => item.render(selected, display_config),
+            Self::Separator(item) => item.render(selected, display_config),
         }
     }
 
@@ -94,7 +94,7 @@ impl TaskItem {
 }
 
 impl ListItem for TaskItem {
-    fn render(&self, max_width: usize, selected: bool, display_config: &DisplayConfig) -> RatatuiListItem<'static> {
+    fn render(&self, selected: bool, display_config: &DisplayConfig) -> RatatuiListItem<'static> {
         let status_icon = self.icons.task_pending();
         let mut line_spans = Vec::new();
 
@@ -196,35 +196,15 @@ impl ListItem for TaskItem {
 
         // Add description excerpt if available and configured to show
         if display_config.show_descriptions && !self.task.description.is_empty() {
-            // Calculate used width so far (approximation using string length)
-            let mut used_width = 0;
-            for span in &line_spans {
-                used_width += span.content.len();
-            }
+            // Get first line of description
+            let description_line = self.task.description.lines().next().unwrap_or("");
 
-            // Reserve some space for padding and ensure we don't overflow
-            if used_width < max_width.saturating_sub(10) {
-                let available_width = max_width - used_width - 3; // Reserve space for " - " prefix
-
-                // Get first line of description and truncate if needed
-                let description_line = self.task.description.lines().next().unwrap_or("");
-                let description_text = if description_line.len() > available_width {
-                    if available_width > 3 {
-                        format!("{}...", &description_line[..available_width.saturating_sub(3)])
-                    } else {
-                        "...".to_string()
-                    }
-                } else {
-                    description_line.to_string()
-                };
-
-                // Add the description with separator and grey styling
-                line_spans.push(Span::raw(" - "));
-                line_spans.push(Span::styled(
-                    description_text,
-                    Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
-                ));
-            }
+            // Add the description with separator and grey styling
+            line_spans.push(Span::raw(" - "));
+            line_spans.push(Span::styled(
+                description_line.to_string(),
+                Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+            ));
         }
 
         RatatuiListItem::new(Line::from(line_spans))
@@ -253,7 +233,7 @@ impl HeaderItem {
 }
 
 impl ListItem for HeaderItem {
-    fn render(&self, _max_width: usize, _selected: bool, _display_config: &DisplayConfig) -> RatatuiListItem<'static> {
+    fn render(&self, _selected: bool, _display_config: &DisplayConfig) -> RatatuiListItem<'static> {
         let indent_str = " ".repeat(self.indent * 4);
         RatatuiListItem::new(Line::from(Span::styled(
             format!("{}{}", indent_str, self.text),
@@ -283,9 +263,8 @@ impl SeparatorItem {
 }
 
 impl ListItem for SeparatorItem {
-    fn render(&self, max_width: usize, _selected: bool, _display_config: &DisplayConfig) -> RatatuiListItem<'static> {
+    fn render(&self, _selected: bool, _display_config: &DisplayConfig) -> RatatuiListItem<'static> {
         let indent_str = " ".repeat(self.indent * 4);
-        let _line_width = max_width.saturating_sub(self.indent * 4);
         let separator = " ";
 
         RatatuiListItem::new(Line::from(Span::styled(

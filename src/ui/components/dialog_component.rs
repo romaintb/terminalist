@@ -416,7 +416,7 @@ impl DialogComponent {
         // Render search results
         let results_text = if self.search_results.is_empty() {
             if self.input_buffer.is_empty() {
-                "Start typing to search tasks...".to_string()
+                "Start typing to search tasks…".to_string()
             } else {
                 "No tasks found.".to_string()
             }
@@ -438,9 +438,7 @@ impl DialogComponent {
                 );
 
                 // Use the same render method as main task list
-                // Calculate available width (subtract some space for dialog borders)
-                let available_width = layout[1].width.saturating_sub(4) as usize;
-                TaskListItem::render(&task_item, available_width, false, &self.display_config)
+                TaskListItem::render(&task_item, false, &self.display_config)
             })
             .collect();
 
