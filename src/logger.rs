@@ -54,10 +54,10 @@ impl Logger {
 
     /// Get the standard log file path
     pub fn get_log_file_path() -> io::Result<PathBuf> {
-        let home_dir =
-            dirs::home_dir().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Home directory not found"))?;
+        let config_dir =
+            dirs::config_dir().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Config directory not found"))?;
 
-        Ok(home_dir.join(".config").join("terminalist").join("terminalist.log"))
+        Ok(config_dir.join("terminalist").join("terminalist.log"))
     }
 
     /// Add a log entry
