@@ -3,7 +3,7 @@ use terminalist::icons::*;
 #[test]
 fn test_default_theme() {
     let service = IconService::default();
-    assert_eq!(service.theme(), IconTheme::Ascii);
+    assert_eq!(service.theme(), IconTheme::Unicode);
 }
 
 #[test]
@@ -26,8 +26,8 @@ fn test_emoji_icons() {
 #[test]
 fn test_unicode_icons() {
     let service = IconService::new(IconTheme::Unicode);
-    assert_eq!(service.task_pending(), "□");
-    assert_eq!(service.task_completed(), "✓");
+    assert_eq!(service.task_pending(), "☐");
+    assert_eq!(service.task_completed(), "☒");
     assert_eq!(service.task_deleted(), "✗");
 }
 
