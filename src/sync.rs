@@ -32,16 +32,12 @@ impl SyncService {
         let sync_in_progress = Arc::new(Mutex::new(false));
 
         // Initialize logger based on config
-        let logger = if config.logging.enabled {
-            match Logger::new_with_file_logging() {
-                Ok(logger) => Some(logger),
-                Err(e) => {
-                    eprintln!("Warning: Failed to initialize file logging: {}", e);
-                    Some(Logger::new()) // Fallback to in-memory logging
-                }
+        let logger = match Logger::from_config(config.logging.enabled) {
+            Ok(logger) => Some(logger),
+            Err(e) => {
+                eprintln!("Warning: Failed to initialize logging: {}", e);
+                Some(Logger::new()) // Fallback to in-memory logging
             }
-        } else {
-            Some(Logger::new()) // In-memory logging only
         };
 
         Ok(Self {

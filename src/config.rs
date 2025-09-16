@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// Main configuration structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Config {
     pub ui: UiConfig,
     pub sync: SyncConfig,
@@ -52,21 +52,10 @@ pub struct DisplayConfig {
 }
 
 /// Logging configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LoggingConfig {
     /// Enable logging
     pub enabled: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            ui: UiConfig::default(),
-            sync: SyncConfig::default(),
-            display: DisplayConfig::default(),
-            logging: LoggingConfig::default(),
-        }
-    }
 }
 
 impl Default for UiConfig {
@@ -97,12 +86,6 @@ impl Default for DisplayConfig {
             show_labels: true,
             show_project_colors: false,
         }
-    }
-}
-
-impl Default for LoggingConfig {
-    fn default() -> Self {
-        Self { enabled: false }
     }
 }
 

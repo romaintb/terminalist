@@ -13,6 +13,15 @@ pub struct Logger {
 }
 
 impl Logger {
+    /// Create a new logger based on configuration
+    pub fn from_config(logging_enabled: bool) -> io::Result<Self> {
+        if logging_enabled {
+            Self::new_with_file_logging()
+        } else {
+            Ok(Self::new())
+        }
+    }
+
     /// Create a new logger with file logging enabled
     pub fn new_with_file_logging() -> io::Result<Self> {
         let log_file_path = Self::get_log_file_path()?;
@@ -90,5 +99,49 @@ impl Logger {
 impl Default for Logger {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn test_config_based_logging_disabled() {
+        // Test with logging disabled
+        let logger = Logger::from_config(false).unwrap();
+        assert!(!logger.enabled);
+        assert!(logger.log_file.is_none());
+
+        logger.log("Test message".to_string());
+        let logs = logger.get_logs();
+        assert_eq!(logs.len(), 1);
+        assert!(logs[0].contains("Test message"));
+    }
+
+    #[test]
+    fn test_config_based_logging_enabled() {
+        // Test with logging enabled
+        let logger = Logger::from_config(true).unwrap();
+        assert!(logger.enabled);
+        assert!(logger.log_file.is_some());
+
+        logger.log("Test message with file".to_string());
+
+        // Check in-memory logs (for UI display with "G" key)
+        let logs = logger.get_logs();
+        assert_eq!(logs.len(), 1);
+        assert!(logs[0].contains("Test message with file"));
+
+        // Check file was created (basic existence test)
+        if let Some(ref log_path) = logger.log_file {
+            if log_path.exists() {
+                let file_content = fs::read_to_string(log_path).unwrap_or_default();
+                assert!(file_content.contains("Test message with file"));
+                // Clean up test file
+                let _ = fs::remove_file(log_path);
+            }
+        }
     }
 }
