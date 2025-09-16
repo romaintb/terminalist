@@ -22,6 +22,7 @@ A terminal application for interacting with Todoist, built in Rust with a modern
 - ✅ **Label Support** - View task labels with colored badges
 - ✅ **Responsive Layout** - Adapts to terminal size with smart scaling
 - ✅ **Help System** - Built-in help panel with keyboard shortcuts
+- ✅ **Configuration File** - Customizable settings via TOML configuration
 
 ## Installation
 
@@ -61,11 +62,56 @@ The binary will be available at `target/release/terminalist` after building.
 export TODOIST_API_TOKEN=your_token_here
 ```
 
-### 3. Build and Run
+### 3. (Optional) Generate Configuration File
+
+```bash
+# Generate a default config file with all available options
+terminalist --generate-config
+```
+
+This creates a config file at `~/.config/terminalist/config.toml` with customizable settings.
+
+### 4. Build and Run
 
 ```bash
 cargo build
 cargo run
+```
+
+## Configuration
+
+Terminalist supports configuration via TOML files. Configuration files are loaded in the following order of precedence:
+1. `./terminalist.toml` (project-specific config)
+2. `~/.config/terminalist/config.toml` (user config)
+3. Built-in defaults
+
+### Generate Default Configuration
+
+```bash
+terminalist --generate-config
+```
+
+### Example Configuration
+
+```toml
+[ui]
+default_project = "today"         # Options: "inbox", "today", "tomorrow", "upcoming", or project ID
+mouse_enabled = true              # Enable mouse support
+sidebar_width = 25                # Sidebar width percentage (10-40)
+
+[sync]
+auto_sync_interval_minutes = 5    # Auto-sync interval (0 = disabled)
+
+[display]
+date_format = "%Y-%m-%d"          # Date format for task due dates
+time_format = "%H:%M"             # Time format for datetime fields
+show_descriptions = true          # Show task descriptions in list view
+show_durations = true             # Show task durations
+show_labels = true                # Show task labels
+show_project_colors = false       # Show project colors
+
+[logging]
+enabled = false                   # Enable logging to file
 ```
 
 ## TUI Controls
@@ -142,7 +188,7 @@ Terminalist uses a smart sync mechanism for optimal performance:
 
 ### **Local Storage**
 - All data is cached locally in an **in-memory SQLite database**
-- **No persistence between sessions** - data is fresh on each launch
+- **No persistence between sessions** - task data is fresh on each launch
 - Provides instant loading and fast response times
 
 ### **Sync Behavior**
@@ -171,6 +217,8 @@ This project uses the following Rust crates (see `Cargo.toml` for exact versions
 - `serde` - Serialization/deserialization
 - `chrono = "0.4"` - Date and time handling
 - `anyhow = "1.0"` - Error handling
+- `toml = "0.8"` - Configuration file parsing
+- `dirs = "5.0"` - Platform-specific directory paths
 
 ## Project Structure
 
@@ -178,6 +226,7 @@ This project uses the following Rust crates (see `Cargo.toml` for exact versions
 src/
 ├── main.rs                    # Main application entry point
 ├── lib.rs                     # Library exports
+├── config.rs                  # Configuration management
 ├── todoist.rs                 # Todoist API models & display structs
 ├── sync.rs                    # Sync service with API integration
 ├── storage/                   # SQLite storage (in-memory)
@@ -228,7 +277,7 @@ cargo clippy --fix --allow-dirty  # Auto-fix clippy issues
 ### Available Commands
 ```bash
 cargo fmt         # Format code with rustfmt
-cargo clippy      # Run clippy linter  
+cargo clippy      # Run clippy linter
 cargo clippy --fix --allow-dirty  # Auto-fix clippy issues
 cargo check       # Check code without building
 cargo test        # Run tests
@@ -262,7 +311,7 @@ This is a fully-featured TUI application for Todoist. You can extend it by:
 
 - Adding more keyboard shortcuts
 - Implementing additional task filters
-- Adding configuration file support
+- Extending the configuration system
 - Enhancing the badge system
 - Adding more dialog types
 
