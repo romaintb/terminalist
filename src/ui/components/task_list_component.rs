@@ -1,3 +1,4 @@
+use crate::config::DisplayConfig;
 use crate::icons::IconService;
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
 use crate::ui::components::task_list_item_component::{ListItem, TaskItem, TaskListItemType};
@@ -25,6 +26,7 @@ pub struct TaskListComponent {
     pub icons: IconService,
     // Keep raw task data for building items
     pub tasks: Vec<TaskDisplay>,
+    pub display_config: DisplayConfig,
 }
 
 impl Default for TaskListComponent {
@@ -45,7 +47,12 @@ impl TaskListComponent {
             projects: Vec::new(),
             labels: Vec::new(),
             icons: IconService::default(),
+            display_config: DisplayConfig::default(),
         }
+    }
+
+    pub fn update_display_config(&mut self, display_config: DisplayConfig) {
+        self.display_config = display_config;
     }
 
     pub fn update_data(
@@ -383,7 +390,7 @@ impl TaskListComponent {
             .map(|item| {
                 let indent_width = item.indent_level() * 4;
                 let max_width = available_width.saturating_sub(indent_width);
-                item.render(max_width, false) // Selection styling handled by List widget
+                item.render(max_width, false, &self.display_config) // Selection styling handled by List widget
             })
             .collect()
     }

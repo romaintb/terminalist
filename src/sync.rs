@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use crate::config::Config;
 use crate::logger::Logger;
 use crate::storage::LocalStorage;
 use crate::todoist::{CreateProjectArgs, LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay, TodoistWrapper};
@@ -25,16 +26,29 @@ pub enum SyncStatus {
 
 impl SyncService {
     /// Create a new sync service
-    pub async fn new(api_token: String, debug_mode: bool) -> Result<Self> {
+    pub async fn new(api_token: String, debug_mode: bool, config: &Config) -> Result<Self> {
         let todoist = TodoistWrapper::new(api_token);
         let storage = Arc::new(Mutex::new(LocalStorage::new(debug_mode).await?));
         let sync_in_progress = Arc::new(Mutex::new(false));
+
+        // Initialize logger based on config
+        let logger = if config.logging.enabled {
+            match Logger::new_with_file_logging() {
+                Ok(logger) => Some(logger),
+                Err(e) => {
+                    eprintln!("Warning: Failed to initialize file logging: {}", e);
+                    Some(Logger::new()) // Fallback to in-memory logging
+                }
+            }
+        } else {
+            Some(Logger::new()) // In-memory logging only
+        };
 
         Ok(Self {
             todoist,
             storage,
             sync_in_progress,
-            logger: None,
+            logger,
         })
     }
 

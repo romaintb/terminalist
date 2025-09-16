@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::logger::Logger;
 use crate::sync::{SyncService, SyncStatus};
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
@@ -69,13 +70,16 @@ pub struct AppComponent {
     background_action_rx: mpsc::UnboundedReceiver<Action>,
     logger: Logger,
 
+    // Configuration
+    config: Config,
+
     // Simple UI state
     should_quit: bool,
     active_sync_task: Option<TaskId>,
 }
 
 impl AppComponent {
-    pub fn new(mut sync_service: SyncService) -> Self {
+    pub fn new(mut sync_service: SyncService, config: Config) -> Self {
         let sidebar = SidebarComponent::new();
         let task_list = TaskListComponent::new();
         let (task_manager, background_action_rx) = TaskManager::new();
@@ -96,6 +100,7 @@ impl AppComponent {
             task_manager,
             background_action_rx,
             logger,
+            config,
             should_quit: false,
             active_sync_task: None,
         }
@@ -128,11 +133,46 @@ impl AppComponent {
     /// Trigger initial sync on startup
     pub fn trigger_initial_sync(&mut self) {
         self.logger.log("AppComponent: Starting initial sync".to_string());
+        
+        // Set initial sidebar selection based on config
+        self.set_initial_sidebar_selection();
+        
         if self.active_sync_task.is_none() {
             self.start_background_sync();
             // Data fetch will be triggered automatically when sync completes
             self.logger.log("AppComponent: Initial sync scheduled".to_string());
         }
+    }
+
+    /// Set initial sidebar selection based on config
+    fn set_initial_sidebar_selection(&mut self) {
+        let selection = match self.config.ui.default_project.as_str() {
+            "inbox" => {
+                // Find inbox project
+                if let Some(inbox_index) = self.state.projects.iter().position(|p| p.is_inbox_project) {
+                    SidebarSelection::Project(inbox_index)
+                } else {
+                    SidebarSelection::Today
+                }
+            }
+            "today" => SidebarSelection::Today,
+            "tomorrow" => SidebarSelection::Tomorrow,
+            "upcoming" => SidebarSelection::Upcoming,
+            project_id => {
+                // Try to find project by ID
+                if let Some(project_index) = self.state.projects.iter().position(|p| p.id == project_id) {
+                    SidebarSelection::Project(project_index)
+                } else {
+                    SidebarSelection::Today
+                }
+            }
+        };
+        
+        self.state.sidebar_selection = selection;
+        self.logger.log(format!(
+            "AppComponent: Set initial sidebar selection to {:?}",
+            self.state.sidebar_selection
+        ));
     }
 
     /// Update all components with current data
@@ -142,6 +182,7 @@ impl AppComponent {
         self.sidebar.selection = self.state.sidebar_selection.clone();
 
         // Update task list
+        self.task_list.update_display_config(self.config.display.clone());
         self.task_list.update_data(
             self.state.tasks.clone(),
             self.state.sections.clone(),
@@ -1000,8 +1041,8 @@ impl Component for AppComponent {
     }
 
     fn render(&mut self, f: &mut Frame, rect: Rect) {
-        // Create layout: sidebar (1/3 or 30 max) | task list (remainder)
-        let sidebar_width = (rect.width / 3).min(30);
+        // Create layout: sidebar (configurable width) | task list (remainder)
+        let sidebar_width = (rect.width * self.config.ui.sidebar_width / 100).min(rect.width - 20);
         let main_chunks = Layout::horizontal([Constraint::Length(sidebar_width), Constraint::Min(0)]).split(rect);
 
         // Render components

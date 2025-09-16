@@ -32,9 +32,6 @@ A configuration file will provide:
 2. `~/.config/terminalist/config.toml` (user config)
 3. Built-in defaults
 
-### Environment Override:
-- `TERMINALIST_CONFIG_PATH` - Override config file location
-
 ## Configuration File Generation
 
 ### Generating Default Config
