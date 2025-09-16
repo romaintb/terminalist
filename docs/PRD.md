@@ -30,6 +30,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - **Smart Sync**: Automatic sync on startup with manual refresh capability
 - **Project Management**: Hierarchical project browsing and management
 - **Task Management**: Full CRUD operations for tasks
+- **Task Search**: Database-powered search across all tasks with '/' shortcut
 - **Keyboard Navigation**: Efficient keyboard-only operation
 - **Real-time Updates**: Immediate UI updates for all operations
 
@@ -60,7 +61,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - **Today/Tomorrow Views**: No dedicated views for time-based task filtering
 - **Task Editing**: Cannot edit existing task content, only create/delete
 - **Due Date Management**: No due date setting or management
-- **Search/Filtering**: No search or filtering capabilities
+- **Advanced Filtering**: No filtering by priority, labels, or due dates (basic search implemented)
 
 #### User Experience
 - Limited keyboard shortcuts compared to vim/emacs
@@ -128,7 +129,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - **FR-031**: Users can edit existing task content
 - **FR-032**: Users can set and modify task due dates
 - **FR-033**: Users can assign tasks to sections
-- **FR-034**: Users can search tasks by content
+- **FR-034**: ✅ Users can search tasks by content (Implemented)
 - **FR-035**: Users can filter tasks by priority, labels, or due dates
 
 ### 3.2 Non-Functional Requirements
@@ -197,10 +198,15 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - **US-011**: As a CLI user, I want to see "Tomorrow" tasks so I can plan ahead
 - **US-012**: As a CLI user, I want to see upcoming tasks so I can manage my schedule
 
-#### 4.2.4 Data Synchronization
-- **US-013**: As a CLI user, I want my changes to sync automatically so I don't lose work
-- **US-014**: As a CLI user, I want to force sync when needed so I can get latest data
-- **US-015**: As a CLI user, I want to see sync status so I know when data is fresh
+#### 4.2.4 Search and Discovery
+- **US-013**: ✅ As a CLI user, I want to search all my tasks quickly so I can find specific items (Implemented)
+- **US-014**: As a CLI user, I want to filter tasks by different criteria so I can focus on what matters
+- **US-015**: As a CLI user, I want search to be fast and responsive so I don't lose my flow
+
+#### 4.2.5 Data Synchronization
+- **US-016**: As a CLI user, I want my changes to sync automatically so I don't lose work
+- **US-017**: As a CLI user, I want to force sync when needed so I can get latest data
+- **US-018**: As a CLI user, I want to see sync status so I know when data is fresh
 
 ## 5. Technical Architecture
 
@@ -266,7 +272,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
   - Task description editing
 - [ ] **Enhanced Navigation**
   - Quick switching between views
-  - Search functionality
+  - ✅ Search functionality (Implemented)
   - Filter by priority, labels, due dates
 
 ### 6.3 Phase 3: Polish & Performance (6 months)
@@ -400,6 +406,12 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 #### Project Management
 - `A`: Create new project
 - `D`: Delete selected project
+
+#### Search
+- `/`: Open task search dialog
+- Type: Search across all tasks by content
+- `Enter`: Close search dialog
+- `Esc`: Close search dialog
 
 #### System
 - `r`: Force sync with Todoist
