@@ -151,11 +151,14 @@ impl AppComponent {
         );
 
         // Update dialog
-        self.dialog.update_data_with_tasks(self.state.projects.clone(), self.state.labels.clone(), self.state.tasks.clone());
+        self.dialog.update_data_with_tasks(
+            self.state.projects.clone(),
+            self.state.labels.clone(),
+            self.state.tasks.clone(),
+        );
         self.dialog.set_logger(self.logger.clone());
         self.dialog.set_sync_service(self.sync_service.clone());
     }
-
 
     /// Handle global keyboard shortcuts that aren't component-specific
     fn handle_global_key(&mut self, key: KeyEvent) -> Action {

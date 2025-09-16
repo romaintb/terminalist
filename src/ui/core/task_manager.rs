@@ -254,7 +254,6 @@ impl TaskManager {
         task_id
     }
 
-
     /// Spawn a background task search operation
     pub fn spawn_task_search(&mut self, sync_service: SyncService, query: String) -> TaskId {
         let task_id = self.next_task_id;

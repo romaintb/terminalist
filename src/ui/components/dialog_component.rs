@@ -1,8 +1,8 @@
 use crate::icons::IconService;
 use crate::logger::Logger;
-use crate::todoist::{LabelDisplay, ProjectDisplay, TaskDisplay};
 use crate::sync::SyncService;
-use crate::ui::components::task_list_item_component::{TaskItem, ListItem as TaskListItem};
+use crate::todoist::{LabelDisplay, ProjectDisplay, TaskDisplay};
+use crate::ui::components::task_list_item_component::{ListItem as TaskListItem, TaskItem};
 use crate::ui::core::{
     actions::{Action, DialogType},
     Component,
@@ -65,7 +65,12 @@ impl DialogComponent {
         self.labels = labels;
     }
 
-    pub fn update_data_with_tasks(&mut self, projects: Vec<ProjectDisplay>, labels: Vec<LabelDisplay>, tasks: Vec<TaskDisplay>) {
+    pub fn update_data_with_tasks(
+        &mut self,
+        projects: Vec<ProjectDisplay>,
+        labels: Vec<LabelDisplay>,
+        tasks: Vec<TaskDisplay>,
+    ) {
         self.projects = projects;
         self.labels = labels;
         self.tasks = tasks;
@@ -357,19 +362,12 @@ impl DialogComponent {
 
         // Create a centered popup area
         let popup_area = {
-            let popup_layout = Layout::vertical([
-                Constraint::Percentage(10),
-                Constraint::Min(20),
-                Constraint::Percentage(10),
-            ])
-            .split(area);
+            let popup_layout =
+                Layout::vertical([Constraint::Percentage(10), Constraint::Min(20), Constraint::Percentage(10)])
+                    .split(area);
 
-            Layout::horizontal([
-                Constraint::Percentage(10),
-                Constraint::Min(60),
-                Constraint::Percentage(10),
-            ])
-            .split(popup_layout[1])[1]
+            Layout::horizontal([Constraint::Percentage(10), Constraint::Min(60), Constraint::Percentage(10)])
+                .split(popup_layout[1])[1]
         };
 
         // Clear the area
@@ -395,21 +393,17 @@ impl DialogComponent {
         f.render_widget(main_block, popup_area);
 
         // Render input field
-        let input_paragraph = Paragraph::new(self.input_buffer.as_str())
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title("Query")
-                    .style(Style::default().fg(Color::Gray)),
-            );
+        let input_paragraph = Paragraph::new(self.input_buffer.as_str()).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Query")
+                .style(Style::default().fg(Color::Gray)),
+        );
         f.render_widget(input_paragraph, layout[0]);
 
         // Set cursor position in input field
         if !self.input_buffer.is_empty() || self.cursor_position == 0 {
-            f.set_cursor_position((
-                layout[0].x + 1 + self.cursor_position as u16,
-                layout[0].y + 1,
-            ));
+            f.set_cursor_position((layout[0].x + 1 + self.cursor_position as u16, layout[0].y + 1));
         }
 
         // Render search results
@@ -430,8 +424,8 @@ impl DialogComponent {
                 // Create TaskItem with the same formatting as main task list
                 let task_item = TaskItem::new(
                     task.clone(),
-                    0,           // depth: 0 for search results (no indentation)
-                    0,           // child_count: 0 for search results
+                    0, // depth: 0 for search results (no indentation)
+                    0, // child_count: 0 for search results
                     self.icons.clone(),
                     self.projects.clone(),
                 );
@@ -567,7 +561,7 @@ impl Component for DialogComponent {
                 KeyCode::Char(c) => {
                     self.input_buffer.insert(self.cursor_position, c);
                     self.cursor_position += 1;
-                    return self.trigger_search();
+                    self.trigger_search()
                 }
                 KeyCode::Backspace => {
                     if self.cursor_position > 0 {
