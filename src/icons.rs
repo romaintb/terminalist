@@ -21,7 +21,7 @@ pub enum IconTheme {
 
 impl Default for IconTheme {
     fn default() -> Self {
-        Self::Ascii
+        Self::Unicode
     }
 }
 
@@ -159,8 +159,8 @@ impl IconService {
     fn unicode_icons() -> IconSet {
         IconSet {
             task_status: TaskStatusIcons {
-                pending: "□",
-                completed: "✓",
+                pending: "☐",
+                completed: "☒",
                 deleted: "✗",
             },
             ui: UiIcons {
@@ -252,7 +252,7 @@ impl IconService {
     pub fn project_regular(&self) -> &'static str {
         match self.current_theme {
             IconTheme::Emoji => "📁",
-            IconTheme::Unicode => "◆",
+            IconTheme::Unicode => "#",
             IconTheme::Ascii => "#",
         }
     }
