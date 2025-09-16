@@ -1089,7 +1089,7 @@ impl AppComponent {
 
         let spinner = "⟳";
         let content = Paragraph::new(Line::from(Span::styled(
-            format!("{} {}...", spinner, title),
+            format!("{} {}…", spinner, title),
             Style::default().fg(Color::Yellow),
         )))
         .alignment(Alignment::Center)

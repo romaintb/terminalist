@@ -416,7 +416,7 @@ impl DialogComponent {
         // Render search results
         let results_text = if self.search_results.is_empty() {
             if self.input_buffer.is_empty() {
-                "Start typing to search tasks...".to_string()
+                "Start typing to search tasks…".to_string()
             } else {
                 "No tasks found.".to_string()
             }

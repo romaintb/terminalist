@@ -285,7 +285,7 @@ impl Component for SidebarComponent {
     }
 
     fn render(&mut self, f: &mut Frame, rect: Rect) {
-        let max_name_width = rect.width.saturating_sub(4);
+        let max_name_width = rect.width.saturating_sub(1); // Minimal padding
         let mut all_items: Vec<ListItem> = Vec::new();
 
         // Add Today item
@@ -336,8 +336,9 @@ impl Component for SidebarComponent {
                 Style::default().fg(Color::White)
             };
 
-            let truncated_name = if label.name.len() > max_name_width as usize {
-                format!("{}...", &label.name[..max_name_width.saturating_sub(3) as usize])
+            let available_width = max_name_width; // No additional width reduction needed
+            let truncated_name = if label.name.len() > available_width as usize {
+                format!("{}…", &label.name[..available_width as usize])
             } else {
                 label.name.clone()
             };
@@ -376,9 +377,9 @@ impl Component for SidebarComponent {
                 self.icons.project_regular()
             };
 
-            let available_width = max_name_width.saturating_sub(tree_prefix.len() as u16);
+            let available_width = max_name_width.saturating_sub(tree_prefix.len() as u16); // Account for tree prefix only
             let name = if project.name.len() > available_width as usize {
-                format!("{}...", &project.name[..available_width.saturating_sub(3) as usize])
+                format!("{}…", &project.name[..available_width as usize])
             } else {
                 project.name.clone()
             };

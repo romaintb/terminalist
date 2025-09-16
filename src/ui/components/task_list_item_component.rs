@@ -209,10 +209,10 @@ impl ListItem for TaskItem {
                 // Get first line of description and truncate if needed
                 let description_line = self.task.description.lines().next().unwrap_or("");
                 let description_text = if description_line.len() > available_width {
-                    if available_width > 3 {
-                        format!("{}...", &description_line[..available_width.saturating_sub(3)])
+                    if available_width > 1 {
+                        format!("{}…", &description_line[..available_width.saturating_sub(1)])
                     } else {
-                        "...".to_string()
+                        "…".to_string()
                     }
                 } else {
                     description_line.to_string()
