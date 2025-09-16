@@ -67,7 +67,12 @@ impl Logger {
 
         // Always store in memory for UI display
         if let Ok(mut logs) = self.logs.lock() {
+            const MAX_LOGS: usize = 5000;
             logs.push(formatted_message.clone());
+            if logs.len() > MAX_LOGS {
+                let drop_n = logs.len() - MAX_LOGS;
+                logs.drain(0..drop_n);
+            }
         }
 
         // Write to file if file logging is enabled
