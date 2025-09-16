@@ -438,9 +438,7 @@ impl DialogComponent {
                 );
 
                 // Use the same render method as main task list
-                // Calculate available width (subtract some space for dialog borders)
-                let available_width = layout[1].width.saturating_sub(4) as usize;
-                TaskListItem::render(&task_item, available_width, false, &self.display_config)
+                TaskListItem::render(&task_item, false, &self.display_config)
             })
             .collect();
 
