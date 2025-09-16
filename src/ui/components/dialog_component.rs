@@ -2,6 +2,7 @@ use crate::icons::IconService;
 use crate::logger::Logger;
 use crate::todoist::{LabelDisplay, ProjectDisplay, TaskDisplay};
 use crate::sync::SyncService;
+use crate::ui::components::task_list_item_component::{TaskItem, ListItem as TaskListItem};
 use crate::ui::core::{
     actions::{Action, DialogType},
     Component,
@@ -351,7 +352,6 @@ impl DialogComponent {
         use ratatui::{
             layout::{Constraint, Layout, Margin},
             style::{Color, Style},
-            text::{Line, Span},
             widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
         };
 
@@ -427,17 +427,19 @@ impl DialogComponent {
             .search_results
             .iter()
             .map(|task| {
-                // Format task content with project context
-                let project_name = self.projects
-                    .iter()
-                    .find(|p| p.id == task.project_id)
-                    .map(|p| p.name.as_str())
-                    .unwrap_or("Inbox");
+                // Create TaskItem with the same formatting as main task list
+                let task_item = TaskItem::new(
+                    task.clone(),
+                    0,           // depth: 0 for search results (no indentation)
+                    0,           // child_count: 0 for search results
+                    self.icons.clone(),
+                    self.projects.clone(),
+                );
 
-                let task_content = Span::styled(task.content.clone(), Style::default().fg(Color::White));
-                let project_context = Span::styled(format!(" [{}]", project_name), Style::default().fg(Color::DarkGray));
-
-                ListItem::new(Line::from(vec![task_content, project_context]))
+                // Use the same render method as main task list
+                // Calculate available width (subtract some space for dialog borders)
+                let available_width = layout[1].width.saturating_sub(4) as usize;
+                TaskListItem::render(&task_item, available_width, false)
             })
             .collect();
 
