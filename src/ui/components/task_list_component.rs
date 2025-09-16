@@ -7,6 +7,7 @@ use crate::ui::core::{
     actions::{Action, DialogType},
     Component,
 };
+use chrono::{Duration, NaiveDate, Utc};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::Rect,
@@ -160,8 +161,29 @@ impl TaskListComponent {
         self.items
             .push(TaskListItemType::Header(HeaderItem::new("📅 Tomorrow".to_string(), 0)));
 
-        // Sort tasks by priority (only root tasks - subtasks will be added recursively)
-        let mut tasks: Vec<TaskDisplay> = self.tasks.iter().filter(|t| t.parent_id.is_none()).cloned().collect();
+        // Calculate tomorrow's date
+        let today = Utc::now().date_naive();
+        let tomorrow = today + Duration::days(1);
+
+        // Filter for root tasks due tomorrow
+        let mut tasks: Vec<TaskDisplay> = self
+            .tasks
+            .iter()
+            .filter(|t| t.parent_id.is_none())
+            .filter(|t| {
+                if let Some(due_date_str) = &t.due {
+                    if let Ok(due_date) = NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
+                        due_date == tomorrow
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            })
+            .cloned()
+            .collect();
+
         tasks.sort_by(|a, b| b.priority.cmp(&a.priority)); // Sort by priority descending (P1=4, P2=3, P3=2, P4=1)
 
         for task in tasks {
