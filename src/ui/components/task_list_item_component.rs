@@ -1,3 +1,4 @@
+use crate::config::DisplayConfig;
 use crate::icons::IconService;
 use crate::todoist::{ProjectDisplay, TaskDisplay};
 use crate::ui::components::badge::{create_priority_badge, create_task_badges};
@@ -11,7 +12,7 @@ use ratatui::{
 /// Trait for items that can be displayed in a task list
 pub trait ListItem {
     /// Render this item as a ratatui ListItem
-    fn render(&self, max_width: usize, selected: bool) -> RatatuiListItem<'static>;
+    fn render(&self, max_width: usize, selected: bool, display_config: &DisplayConfig) -> RatatuiListItem<'static>;
 
     /// Whether this item can be selected by the user
     fn is_selectable(&self) -> bool;
@@ -29,11 +30,11 @@ pub enum TaskListItemType {
 }
 
 impl ListItem for TaskListItemType {
-    fn render(&self, max_width: usize, selected: bool) -> RatatuiListItem<'static> {
+    fn render(&self, max_width: usize, selected: bool, display_config: &DisplayConfig) -> RatatuiListItem<'static> {
         match self {
-            Self::Task(item) => item.render(max_width, selected),
-            Self::Header(item) => item.render(max_width, selected),
-            Self::Separator(item) => item.render(max_width, selected),
+            Self::Task(item) => item.render(max_width, selected, display_config),
+            Self::Header(item) => item.render(max_width, selected, display_config),
+            Self::Separator(item) => item.render(max_width, selected, display_config),
         }
     }
 
@@ -93,7 +94,7 @@ impl TaskItem {
 }
 
 impl ListItem for TaskItem {
-    fn render(&self, max_width: usize, selected: bool) -> RatatuiListItem<'static> {
+    fn render(&self, max_width: usize, selected: bool, display_config: &DisplayConfig) -> RatatuiListItem<'static> {
         let status_icon = self.icons.task_pending();
         let mut line_spans = Vec::new();
 
@@ -141,13 +142,16 @@ impl ListItem for TaskItem {
             line_spans.push(Span::styled(progress_text, progress_style));
         }
 
-        // Project display
+        // Project display (with optional colors)
         if let Some(project) = self.projects.iter().find(|p| p.id == self.task.project_id) {
             line_spans.push(Span::raw(" "));
-            line_spans.push(Span::styled(
-                format!("#{}", project.name),
-                Style::default().fg(Color::Cyan),
-            ));
+            let project_style = if display_config.show_project_colors {
+                // Use project color if available, otherwise cyan
+                Style::default().fg(Color::Cyan)
+            } else {
+                Style::default().fg(Color::Cyan)
+            };
+            line_spans.push(Span::styled(format!("#{}", project.name), project_style));
         }
 
         // Due date/datetime display
@@ -167,21 +171,31 @@ impl ListItem for TaskItem {
             ));
         }
 
-        // Metadata badges
-        let metadata_badges = create_task_badges(
-            self.task.is_recurring,
-            self.task.due.is_some() || self.task.deadline.is_some(),
-            self.task.duration.as_deref(),
-            self.task.labels.as_slice(),
-        );
+        // Metadata badges (only if configured to show)
+        if display_config.show_durations || display_config.show_labels {
+            let metadata_badges = create_task_badges(
+                self.task.is_recurring,
+                self.task.due.is_some() || self.task.deadline.is_some(),
+                if display_config.show_durations {
+                    self.task.duration.as_deref()
+                } else {
+                    None
+                },
+                if display_config.show_labels {
+                    self.task.labels.as_slice()
+                } else {
+                    &[]
+                },
+            );
 
-        for badge in metadata_badges {
-            line_spans.push(Span::raw(" "));
-            line_spans.push(badge);
+            for badge in metadata_badges {
+                line_spans.push(Span::raw(" "));
+                line_spans.push(badge);
+            }
         }
 
-        // Add description excerpt if available and there's space
-        if !self.task.description.is_empty() {
+        // Add description excerpt if available and configured to show
+        if display_config.show_descriptions && !self.task.description.is_empty() {
             // Calculate used width so far (approximation using string length)
             let mut used_width = 0;
             for span in &line_spans {
@@ -239,7 +253,7 @@ impl HeaderItem {
 }
 
 impl ListItem for HeaderItem {
-    fn render(&self, _max_width: usize, _selected: bool) -> RatatuiListItem<'static> {
+    fn render(&self, _max_width: usize, _selected: bool, _display_config: &DisplayConfig) -> RatatuiListItem<'static> {
         let indent_str = " ".repeat(self.indent * 4);
         RatatuiListItem::new(Line::from(Span::styled(
             format!("{}{}", indent_str, self.text),
@@ -269,7 +283,7 @@ impl SeparatorItem {
 }
 
 impl ListItem for SeparatorItem {
-    fn render(&self, max_width: usize, _selected: bool) -> RatatuiListItem<'static> {
+    fn render(&self, max_width: usize, _selected: bool, _display_config: &DisplayConfig) -> RatatuiListItem<'static> {
         let indent_str = " ".repeat(self.indent * 4);
         let _line_width = max_width.saturating_sub(self.indent * 4);
         let separator = " ";

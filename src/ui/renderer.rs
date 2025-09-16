@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::sync::SyncService;
 use crate::ui::app_component::AppComponent;
 use crate::ui::core::{Component, EventHandler, EventType};
@@ -14,16 +15,22 @@ use std::io;
 use tokio::time::{interval, Duration};
 
 /// Enhanced async event loop with proper background task support
-pub async fn run_app(sync_service: SyncService) -> anyhow::Result<()> {
+pub async fn run_app(sync_service: SyncService, config: Config) -> anyhow::Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+    execute!(stdout, EnterAlternateScreen)?;
+
+    // Enable mouse capture only if configured
+    if config.ui.mouse_enabled {
+        execute!(stdout, EnableMouseCapture)?;
+    }
+
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
     // Initialize application components
-    let mut app = AppComponent::new(sync_service);
+    let mut app = AppComponent::new(sync_service, config.clone());
     let mut event_handler = EventHandler::new();
 
     // Start initial sync automatically
@@ -43,7 +50,13 @@ pub async fn run_app(sync_service: SyncService) -> anyhow::Result<()> {
 
     // Restore terminal
     disable_raw_mode()?;
-    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen)?;
+
+    // Disable mouse capture only if it was enabled
+    if config.ui.mouse_enabled {
+        execute!(terminal.backend_mut(), DisableMouseCapture)?;
+    }
+
     terminal.show_cursor()?;
 
     result

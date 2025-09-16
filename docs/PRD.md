@@ -76,7 +76,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - Limited error recovery options
 
 #### Technical
-- No configuration file support
+- ✅ ~~No configuration file support~~ (Implemented - TOML config with customizable UI, sync, display settings)
 - No automated testing coverage (planned for stable codebase)
 - Limited logging/debugging capabilities
 - No plugin system
@@ -279,7 +279,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - [ ] **Themes & Customization**
   - Multiple color themes
   - Customizable key bindings
-  - Configuration file support
+  - ✅ Configuration file support (Implemented - TOML config with generate option)
 - [ ] **Performance Optimization**
   - Persistent local storage
   - Incremental sync

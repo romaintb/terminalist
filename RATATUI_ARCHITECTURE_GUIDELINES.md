@@ -1142,8 +1142,9 @@ async fn test_app_lifecycle() {
     let backend = TestBackend::new(120, 40);
     let terminal = Terminal::new(backend).unwrap();
     
-    let sync_service = MockSyncService::new();
-    let mut app = AppComponent::new(sync_service);
+    let config = Config::default();
+    let sync_service = MockSyncService::new(&config);
+    let mut app = AppComponent::new(sync_service, config);
     
     // Simulate startup
     app.trigger_initial_sync();
@@ -1222,8 +1223,9 @@ pub async fn run_app() -> Result<(), AppError> {
     
     // Initialize with comprehensive error handling
     let terminal = initialize_terminal()?;
-    let sync_service = SyncService::new().await?;
-    let mut app = AppComponent::new(sync_service)?;
+    let config = Config::load()?;
+    let sync_service = SyncService::new("api_token".to_string(), false, &config).await?;
+    let mut app = AppComponent::new(sync_service, config)?;
     
     // Run with automatic recovery
     let result = run_app_loop(terminal, app).await;

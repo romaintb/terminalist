@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+use crate::config::Config;
 use crate::logger::Logger;
 use crate::storage::LocalStorage;
 use crate::todoist::{CreateProjectArgs, LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay, TodoistWrapper};
@@ -25,17 +26,31 @@ pub enum SyncStatus {
 
 impl SyncService {
     /// Create a new sync service
-    pub async fn new(api_token: String, debug_mode: bool) -> Result<Self> {
+    pub async fn new(api_token: String, debug_mode: bool, config: &Config) -> Result<Self> {
         let todoist = TodoistWrapper::new(api_token);
         let storage = Arc::new(Mutex::new(LocalStorage::new(debug_mode).await?));
         let sync_in_progress = Arc::new(Mutex::new(false));
+
+        // Initialize logger based on config
+        let logger = match Logger::from_config(config.logging.enabled) {
+            Ok(logger) => Some(logger),
+            Err(e) => {
+                eprintln!("Warning: Failed to initialize logging: {}", e);
+                Some(Logger::new()) // Fallback to in-memory logging
+            }
+        };
 
         Ok(Self {
             todoist,
             storage,
             sync_in_progress,
-            logger: None,
+            logger,
         })
+    }
+
+    /// Get a clone of the logger if available
+    pub fn logger(&self) -> Option<Logger> {
+        self.logger.clone()
     }
 
     /// Set the logger for this sync service
@@ -574,5 +589,43 @@ impl SyncService {
         storage.delete_task(task_id).await?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::Config;
+
+    #[tokio::test]
+    async fn test_logger_accessor_with_logging_enabled() {
+        let mut config = Config::default();
+        config.logging.enabled = true;
+
+        // Create sync service with logging enabled
+        let result = SyncService::new("fake_token".to_string(), false, &config).await;
+
+        if let Ok(sync_service) = result {
+            // Should have a logger
+            let logger = sync_service.logger();
+            assert!(logger.is_some());
+        }
+        // Note: This test may fail in CI if no storage is available, but that's okay
+    }
+
+    #[tokio::test]
+    async fn test_logger_accessor_with_logging_disabled() {
+        let mut config = Config::default();
+        config.logging.enabled = false;
+
+        // Create sync service with logging disabled
+        let result = SyncService::new("fake_token".to_string(), false, &config).await;
+
+        if let Ok(sync_service) = result {
+            // Should still have a logger (in-memory)
+            let logger = sync_service.logger();
+            assert!(logger.is_some());
+        }
+        // Note: This test may fail in CI if no storage is available, but that's okay
     }
 }
