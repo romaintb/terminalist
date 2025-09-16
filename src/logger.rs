@@ -1,6 +1,6 @@
 use chrono::Utc;
-use std::fs::OpenOptions;
-use std::io::{self, Write};
+use std::fs::{File, OpenOptions};
+use std::io::{self, BufWriter, Write};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 #[derive(Clone)]
 pub struct Logger {
     logs: Arc<Mutex<Vec<String>>>,
-    log_file: Option<PathBuf>,
+    file_writer: Option<Arc<Mutex<BufWriter<File>>>>,
     enabled: bool,
 }
 
@@ -31,9 +31,14 @@ impl Logger {
             std::fs::create_dir_all(parent)?;
         }
 
+        // Open the file once and create a buffered writer
+        let file = OpenOptions::new().create(true).append(true).open(&log_file_path)?;
+        let buf_writer = BufWriter::new(file);
+        let file_writer = Some(Arc::new(Mutex::new(buf_writer)));
+
         Ok(Self {
             logs: Arc::new(Mutex::new(Vec::new())),
-            log_file: Some(log_file_path),
+            file_writer,
             enabled: true,
         })
     }
@@ -42,13 +47,13 @@ impl Logger {
     pub fn new() -> Self {
         Self {
             logs: Arc::new(Mutex::new(Vec::new())),
-            log_file: None,
+            file_writer: None,
             enabled: false,
         }
     }
 
     /// Get the standard log file path
-    fn get_log_file_path() -> io::Result<PathBuf> {
+    pub fn get_log_file_path() -> io::Result<PathBuf> {
         let home_dir =
             dirs::home_dir().ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "Home directory not found"))?;
 
@@ -67,10 +72,11 @@ impl Logger {
 
         // Write to file if file logging is enabled
         if self.enabled {
-            if let Some(ref log_file_path) = self.log_file {
-                if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(log_file_path) {
-                    let _ = writeln!(file, "{}", formatted_message);
-                    let _ = file.flush();
+            if let Some(ref file_writer) = self.file_writer {
+                if let Ok(mut writer) = file_writer.lock() {
+                    // Write to buffered writer, ignore errors to avoid logging recursion
+                    let _ = writeln!(writer, "{}", formatted_message);
+                    // Let BufWriter handle flushing automatically, don't flush on every entry
                 }
             }
         }
@@ -112,7 +118,7 @@ mod tests {
         // Test with logging disabled
         let logger = Logger::from_config(false).unwrap();
         assert!(!logger.enabled);
-        assert!(logger.log_file.is_none());
+        assert!(logger.file_writer.is_none());
 
         logger.log("Test message".to_string());
         let logs = logger.get_logs();
@@ -125,7 +131,7 @@ mod tests {
         // Test with logging enabled
         let logger = Logger::from_config(true).unwrap();
         assert!(logger.enabled);
-        assert!(logger.log_file.is_some());
+        assert!(logger.file_writer.is_some());
 
         logger.log("Test message with file".to_string());
 
@@ -134,13 +140,20 @@ mod tests {
         assert_eq!(logs.len(), 1);
         assert!(logs[0].contains("Test message with file"));
 
-        // Check file was created (basic existence test)
-        if let Some(ref log_path) = logger.log_file {
+        // Test that the file writer exists and works by forcing a flush and checking the file
+        if let Some(ref writer_arc) = logger.file_writer {
+            // Force flush the buffered writer
+            if let Ok(mut writer) = writer_arc.lock() {
+                let _ = writer.flush();
+            }
+
+            // Check if log file was created at the expected path
+            let log_path = Logger::get_log_file_path().unwrap();
             if log_path.exists() {
-                let file_content = fs::read_to_string(log_path).unwrap_or_default();
+                let file_content = fs::read_to_string(&log_path).unwrap_or_default();
                 assert!(file_content.contains("Test message with file"));
                 // Clean up test file
-                let _ = fs::remove_file(log_path);
+                let _ = fs::remove_file(&log_path);
             }
         }
     }
