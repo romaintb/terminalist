@@ -21,11 +21,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Enhanced task display - Task list items now show intuitive date formatting instead of raw YYYY-MM-DD strings
 - Improved code organization - Consolidated date utilities into single module, reducing complexity
 - Better datetime parsing - Support for multiple datetime formats (RFC3339, ISO 8601, space-separated)
+- **Simplified Text Rendering** - Removed custom ellipsis logic in favor of ratatui's built-in text truncation
+- **Cleaner API** - Removed unused `max_width` parameter from `ListItem` trait and implementations
 
 ### Fixed
 - Missing priority key binding - Added "p" key to cycle through task priorities
 - SQLite foreign key constraints - Properly enabled foreign key constraints for better data integrity
 - Task dialog project selection - Fixed project pre-selection in task creation dialogs
+- **Sidebar Text Truncation** - Fixed premature ellipsis truncation in sidebar project and label names
+- **Duplicate Subtasks** - Fixed issue where subtasks were displayed twice (once at root level, once at correct hierarchical position)
+- **Tomorrow Filter** - Fixed tomorrow's task filtering logic
 
 ## [0.2.0] - 2025-09-11
 
