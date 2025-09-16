@@ -285,7 +285,6 @@ impl Component for SidebarComponent {
     }
 
     fn render(&mut self, f: &mut Frame, rect: Rect) {
-        let max_name_width = rect.width.saturating_sub(1); // Minimal padding
         let mut all_items: Vec<ListItem> = Vec::new();
 
         // Add Today item
@@ -336,16 +335,9 @@ impl Component for SidebarComponent {
                 Style::default().fg(Color::White)
             };
 
-            let available_width = max_name_width; // No additional width reduction needed
-            let truncated_name = if label.name.len() > available_width as usize {
-                format!("{}…", &label.name[..available_width as usize])
-            } else {
-                label.name.clone()
-            };
-
             all_items.push(ListItem::new(Line::from(vec![
                 Span::styled(self.icons.label().to_string(), style),
-                Span::styled(truncated_name.to_string(), style),
+                Span::styled(label.name.clone(), style),
             ])));
         }
 
@@ -377,18 +369,11 @@ impl Component for SidebarComponent {
                 self.icons.project_regular()
             };
 
-            let available_width = max_name_width.saturating_sub(tree_prefix.len() as u16); // Account for tree prefix only
-            let name = if project.name.len() > available_width as usize {
-                format!("{}…", &project.name[..available_width as usize])
-            } else {
-                project.name.clone()
-            };
-
             let mut spans = vec![];
             if !tree_prefix.is_empty() {
                 spans.push(Span::styled(tree_prefix, Style::default().fg(Color::DarkGray)));
             }
-            spans.extend([Span::styled(icon.to_string(), style), Span::styled(name, style)]);
+            spans.extend([Span::styled(icon.to_string(), style), Span::styled(project.name.clone(), style)]);
 
             all_items.push(ListItem::new(Line::from(spans)));
         }
