@@ -7,6 +7,7 @@ use crate::ui::core::{
     actions::{Action, DialogType},
     Component,
 };
+use chrono::{Duration, NaiveDate, Utc};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::Rect,
@@ -114,8 +115,8 @@ impl TaskListComponent {
         let mut overdue_tasks = Vec::new();
         let mut today_tasks = Vec::new();
 
-        // Separate tasks by date
-        for task in &self.tasks {
+        // Separate tasks by date (only root tasks - subtasks will be added recursively)
+        for task in self.tasks.iter().filter(|t| t.parent_id.is_none()) {
             if let Some(due_date_str) = &task.due {
                 if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
                     if due_date < now {
@@ -160,9 +161,30 @@ impl TaskListComponent {
         self.items
             .push(TaskListItemType::Header(HeaderItem::new("📅 Tomorrow".to_string(), 0)));
 
-        // Sort tasks by priority
-        let mut tasks = self.tasks.clone();
-        tasks.sort_by(|a, b| a.priority.cmp(&b.priority));
+        // Calculate tomorrow's date
+        let today = Utc::now().date_naive();
+        let tomorrow = today + Duration::days(1);
+
+        // Filter for root tasks due tomorrow
+        let mut tasks: Vec<TaskDisplay> = self
+            .tasks
+            .iter()
+            .filter(|t| t.parent_id.is_none())
+            .filter(|t| {
+                if let Some(due_date_str) = &t.due {
+                    if let Ok(due_date) = NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
+                        due_date == tomorrow
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                }
+            })
+            .cloned()
+            .collect();
+
+        tasks.sort_by(|a, b| b.priority.cmp(&a.priority)); // Sort by priority descending (P1=4, P2=3, P3=2, P4=1)
 
         for task in tasks {
             self.add_task_and_children_to_items(task, 0);
@@ -178,8 +200,8 @@ impl TaskListComponent {
         let mut overdue_tasks = Vec::new();
         let mut future_tasks_by_date: BTreeMap<chrono::NaiveDate, Vec<TaskDisplay>> = BTreeMap::new();
 
-        // Group tasks by date
-        for task in &self.tasks {
+        // Group tasks by date (only root tasks - subtasks will be added recursively)
+        for task in self.tasks.iter().filter(|t| t.parent_id.is_none()) {
             if let Some(due_date_str) = &task.due {
                 if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
                     if due_date < today {
@@ -240,9 +262,9 @@ impl TaskListComponent {
             .cloned()
             .collect();
 
-        // Group tasks by section
+        // Group tasks by section (only root tasks - subtasks will be added recursively)
         let mut tasks_by_section: HashMap<Option<String>, Vec<TaskDisplay>> = HashMap::new();
-        for task in &self.tasks {
+        for task in self.tasks.iter().filter(|t| t.parent_id.is_none()) {
             if task.project_id == *project_id {
                 tasks_by_section.entry(task.section_id.clone()).or_default().push(task.clone());
             }
@@ -276,11 +298,11 @@ impl TaskListComponent {
 
     /// Build items for Label view
     fn build_label_items(&mut self, label_id: &str) {
-        // Filter tasks that have the specific label
+        // Filter tasks that have the specific label (only root tasks - subtasks will be added recursively)
         let filtered_tasks: Vec<TaskDisplay> = self
             .tasks
             .iter()
-            .filter(|task| task.labels.iter().any(|label| label.id == *label_id))
+            .filter(|task| task.parent_id.is_none() && task.labels.iter().any(|label| label.id == *label_id))
             .cloned()
             .collect();
 
@@ -293,8 +315,8 @@ impl TaskListComponent {
     fn build_simple_items(&mut self) {
         let mut root_tasks: Vec<TaskDisplay> = self.tasks.iter().filter(|t| t.parent_id.is_none()).cloned().collect();
 
-        // Sort by priority
-        root_tasks.sort_by(|a, b| a.priority.cmp(&b.priority));
+        // Sort by priority descending (P1=4, P2=3, P3=2, P4=1)
+        root_tasks.sort_by(|a, b| b.priority.cmp(&a.priority));
 
         // Add each root task and its children recursively
         for task in root_tasks {
@@ -326,7 +348,7 @@ impl TaskListComponent {
             .cloned()
             .collect();
 
-        children.sort_by(|a, b| a.priority.cmp(&b.priority));
+        children.sort_by(|a, b| b.priority.cmp(&a.priority)); // Sort by priority descending (P1=4, P2=3, P3=2, P4=1)
 
         // Recursively add each child and their descendants
         for child in children {
