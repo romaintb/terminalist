@@ -181,6 +181,12 @@ impl Config {
 
         let full_content = header + &toml_content;
 
+        // Ensure the parent directory exists
+        if let Some(parent) = path.as_ref().parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("Failed to create config directory: {}", parent.display()))?;
+        }
+
         std::fs::write(&path, full_content)
             .with_context(|| format!("Failed to write config file: {}", path.as_ref().display()))?;
 
@@ -280,5 +286,37 @@ enabled = true
         );
         assert_eq!(config.logging.enabled, default_config.logging.enabled);
         assert_eq!(config.display.date_format, default_config.display.date_format);
+    }
+
+    #[test]
+    fn test_generate_config_creates_directory() {
+        use std::fs;
+
+        // Create a temporary path that doesn't exist
+        let temp_dir = std::env::temp_dir().join("terminalist_test_config");
+        let config_path = temp_dir.join("nested").join("config.toml");
+
+        // Ensure the directory doesn't exist initially
+        if temp_dir.exists() {
+            let _ = fs::remove_dir_all(&temp_dir);
+        }
+        assert!(!temp_dir.exists());
+
+        // Generate config should create the directory structure
+        let result = Config::generate_default_config(&config_path);
+        assert!(result.is_ok());
+
+        // Verify the directory was created
+        assert!(temp_dir.exists());
+        assert!(config_path.parent().unwrap().exists());
+        assert!(config_path.exists());
+
+        // Verify the file contains expected content
+        let content = fs::read_to_string(&config_path).unwrap();
+        assert!(content.contains("# Terminalist Configuration File"));
+        assert!(content.contains("default_project = \"today\""));
+
+        // Clean up
+        let _ = fs::remove_dir_all(&temp_dir);
     }
 }
