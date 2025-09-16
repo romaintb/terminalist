@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 /// Main configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct Config {
     pub ui: UiConfig,
     pub sync: SyncConfig,
@@ -17,6 +18,7 @@ pub struct Config {
 
 /// UI configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct UiConfig {
     /// Default project to open on startup
     /// Options: "inbox", "today", "tomorrow", "upcoming", or project ID
@@ -29,6 +31,7 @@ pub struct UiConfig {
 
 /// Sync configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct SyncConfig {
     /// Auto-sync interval in minutes (0 = disabled, manual sync only)
     pub auto_sync_interval_minutes: u64,
@@ -36,6 +39,7 @@ pub struct SyncConfig {
 
 /// Display configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct DisplayConfig {
     /// Date format for task due dates
     pub date_format: String,
@@ -53,6 +57,7 @@ pub struct DisplayConfig {
 
 /// Logging configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct LoggingConfig {
     /// Enable logging
     pub enabled: bool,
@@ -233,5 +238,47 @@ mod tests {
         let toml_str = toml::to_string_pretty(&config).unwrap();
         assert!(toml_str.contains("default_project = \"today\""));
         assert!(toml_str.contains("auto_sync_interval_minutes = 5"));
+    }
+
+    #[test]
+    fn test_partial_config_deserialization() {
+        // Test that partial TOML configs merge with defaults
+        let partial_toml = r#"
+[ui]
+sidebar_width = 30
+
+[logging]
+enabled = true
+"#;
+
+        let config: Config = toml::from_str(partial_toml).unwrap();
+
+        // Check that specified values are used
+        assert_eq!(config.ui.sidebar_width, 30);
+        assert!(config.logging.enabled);
+
+        // Check that unspecified values use defaults
+        assert_eq!(config.ui.default_project, "today"); // default value
+        assert!(config.ui.mouse_enabled); // default value
+        assert_eq!(config.sync.auto_sync_interval_minutes, 5); // default value
+        assert_eq!(config.display.date_format, "%Y-%m-%d"); // default value
+        assert!(config.display.show_descriptions); // default value
+        assert!(!config.display.show_project_colors); // default value
+    }
+
+    #[test]
+    fn test_empty_config_deserialization() {
+        // Test that empty TOML uses all defaults
+        let empty_toml = "";
+        let config: Config = toml::from_str(empty_toml).unwrap();
+        let default_config = Config::default();
+
+        assert_eq!(config.ui.default_project, default_config.ui.default_project);
+        assert_eq!(
+            config.sync.auto_sync_interval_minutes,
+            default_config.sync.auto_sync_interval_minutes
+        );
+        assert_eq!(config.logging.enabled, default_config.logging.enabled);
+        assert_eq!(config.display.date_format, default_config.display.date_format);
     }
 }
