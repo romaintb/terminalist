@@ -79,12 +79,11 @@ pub struct AppComponent {
 }
 
 impl AppComponent {
-    pub fn new(mut sync_service: SyncService, config: Config) -> Self {
+    pub fn new(sync_service: SyncService, config: Config) -> Self {
         let sidebar = SidebarComponent::new();
         let task_list = TaskListComponent::new();
         let (task_manager, background_action_rx) = TaskManager::new();
-        let logger = Logger::from_config(config.logging.enabled).unwrap_or_else(|_| Logger::new());
-        sync_service.set_logger(logger.clone());
+        let logger = sync_service.logger().unwrap_or_default();
 
         let state = AppState {
             loading: true,
