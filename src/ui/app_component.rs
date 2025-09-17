@@ -10,6 +10,7 @@ use crate::ui::core::{
     task_manager::{TaskId, TaskManager},
     Component,
 };
+use crate::utils::datetime;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
@@ -781,7 +782,7 @@ impl AppComponent {
                     "Set task due today" => {
                         // task_info format: "task_id|today"
                         if let Some((task_id, _)) = task_info.split_once('|') {
-                            let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+                            let today = datetime::format_today();
                             match sync_service.update_task_due_date(task_id, Some(&today)).await {
                                 Ok(()) => Ok(format!("✅ Task due date set to today: {}", task_id)),
                                 Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
@@ -793,9 +794,7 @@ impl AppComponent {
                     "Set task due tomorrow" => {
                         // task_info format: "task_id|tomorrow"
                         if let Some((task_id, _)) = task_info.split_once('|') {
-                            let tomorrow = (chrono::Local::now() + chrono::Duration::days(1))
-                                .format("%Y-%m-%d")
-                                .to_string();
+                            let tomorrow = datetime::format_date_with_offset(1);
                             match sync_service.update_task_due_date(task_id, Some(&tomorrow)).await {
                                 Ok(()) => Ok(format!("✅ Task due date set to tomorrow: {}", task_id)),
                                 Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),

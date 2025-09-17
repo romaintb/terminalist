@@ -5,6 +5,7 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use crate::utils::datetime;
 
 /// Main configuration structure
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -84,7 +85,7 @@ impl Default for SyncConfig {
 impl Default for DisplayConfig {
     fn default() -> Self {
         Self {
-            date_format: "%Y-%m-%d".to_string(),
+            date_format: datetime::TODOIST_DATE_FORMAT.to_string(),
             time_format: "%H:%M".to_string(),
             show_descriptions: true,
             show_durations: true,
@@ -176,7 +177,7 @@ impl Config {
         // Add header comment
         let header = format!(
             "# Terminalist Configuration File\n# Generated on {}\n\n",
-            chrono::Local::now().format("%Y-%m-%d")
+            chrono::Local::now().format(datetime::TODOIST_DATE_FORMAT)
         );
 
         let full_content = header + &toml_content;

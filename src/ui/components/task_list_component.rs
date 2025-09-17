@@ -7,7 +7,8 @@ use crate::ui::core::{
     actions::{Action, DialogType},
     Component,
 };
-use chrono::{Duration, NaiveDate, Utc};
+use crate::utils::datetime;
+use chrono::{Duration, Utc};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::Rect,
@@ -118,7 +119,7 @@ impl TaskListComponent {
         // Separate tasks by date (only root tasks - subtasks will be added recursively)
         for task in self.tasks.iter().filter(|t| t.parent_id.is_none()) {
             if let Some(due_date_str) = &task.due {
-                if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
+                if let Ok(due_date) = datetime::parse_date(due_date_str) {
                     if due_date < now {
                         overdue_tasks.push(task.clone());
                     } else if due_date == now {
@@ -172,7 +173,7 @@ impl TaskListComponent {
             .filter(|t| t.parent_id.is_none())
             .filter(|t| {
                 if let Some(due_date_str) = &t.due {
-                    if let Ok(due_date) = NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
+                    if let Ok(due_date) = datetime::parse_date(due_date_str) {
                         due_date == tomorrow
                     } else {
                         false
@@ -203,7 +204,7 @@ impl TaskListComponent {
         // Group tasks by date (only root tasks - subtasks will be added recursively)
         for task in self.tasks.iter().filter(|t| t.parent_id.is_none()) {
             if let Some(due_date_str) = &task.due {
-                if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
+                if let Ok(due_date) = datetime::parse_date(due_date_str) {
                     if due_date < today {
                         overdue_tasks.push(task.clone());
                     } else {

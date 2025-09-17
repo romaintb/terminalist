@@ -1,4 +1,5 @@
 use terminalist::config::Config;
+use terminalist::utils::datetime;
 
 #[test]
 fn test_default_config() {
@@ -56,7 +57,7 @@ enabled = true
     assert_eq!(config.ui.default_project, "today"); // default value
     assert!(config.ui.mouse_enabled); // default value
     assert_eq!(config.sync.auto_sync_interval_minutes, 5); // default value
-    assert_eq!(config.display.date_format, "%Y-%m-%d"); // default value
+    assert_eq!(config.display.date_format, datetime::TODOIST_DATE_FORMAT); // default value
     assert!(config.display.show_descriptions); // default value
     assert!(!config.display.show_project_colors); // default value
 }
