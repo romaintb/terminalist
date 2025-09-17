@@ -350,6 +350,54 @@ impl AppComponent {
                 self.logger.log("Global key: '/' - opening task search dialog".to_string());
                 Action::ShowDialog(DialogType::TaskSearch)
             }
+            KeyCode::Char('t') => {
+                // Set task due date to today
+                if let Some(task) = self.task_list.get_selected_task() {
+                    self.logger
+                        .log(format!("Global key: 't' - setting task '{}' due today", task.content));
+                    Action::SetTaskDueToday(task.id.clone())
+                } else {
+                    self.logger.log("Global key: 't' - no task selected".to_string());
+                    Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
+                }
+            }
+            KeyCode::Char('T') => {
+                // Set task due date to tomorrow
+                if let Some(task) = self.task_list.get_selected_task() {
+                    self.logger.log(format!(
+                        "Global key: 'T' - setting task '{}' due tomorrow",
+                        task.content
+                    ));
+                    Action::SetTaskDueTomorrow(task.id.clone())
+                } else {
+                    self.logger.log("Global key: 'T' - no task selected".to_string());
+                    Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
+                }
+            }
+            KeyCode::Char('w') => {
+                // Set task due date to next week (Monday)
+                if let Some(task) = self.task_list.get_selected_task() {
+                    self.logger.log(format!(
+                        "Global key: 'w' - setting task '{}' due next week",
+                        task.content
+                    ));
+                    Action::SetTaskDueNextWeek(task.id.clone())
+                } else {
+                    self.logger.log("Global key: 'w' - no task selected".to_string());
+                    Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
+                }
+            }
+            KeyCode::Char('W') => {
+                // Set task due date to weekend (Saturday)
+                if let Some(task) = self.task_list.get_selected_task() {
+                    self.logger
+                        .log(format!("Global key: 'W' - setting task '{}' due weekend", task.content));
+                    Action::SetTaskDueWeekEnd(task.id.clone())
+                } else {
+                    self.logger.log("Global key: 'W' - no task selected".to_string());
+                    Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
+                }
+            }
             KeyCode::Esc => {
                 if self.dialog.is_visible() {
                     self.logger.log("Global key: Esc - closing dialog".to_string());
