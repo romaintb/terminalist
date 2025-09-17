@@ -76,6 +76,10 @@ pub struct AppComponent {
     // Simple UI state
     should_quit: bool,
     active_sync_task: Option<TaskId>,
+
+    // Layout state
+    sidebar_width: u16,
+    screen_height: u16,
 }
 
 impl AppComponent {
@@ -102,6 +106,8 @@ impl AppComponent {
             config,
             should_quit: false,
             active_sync_task: None,
+            sidebar_width: 30, // Default width
+            screen_height: 50, // Default height
         }
     }
 
@@ -964,9 +970,9 @@ impl AppComponent {
     pub async fn handle_event(&mut self, event_type: EventType) -> anyhow::Result<()> {
         let action = match event_type {
             EventType::Mouse(mouse) => {
-                // Handle mouse events - assume sidebar is left 30 columns
-                if !self.dialog.is_visible() && mouse.column < 30 {
-                    let sidebar_area = Rect::new(0, 0, 30, 50); // Approximate sidebar area
+                // Handle mouse events using actual sidebar dimensions
+                if !self.dialog.is_visible() && mouse.column < self.sidebar_width {
+                    let sidebar_area = Rect::new(0, 0, self.sidebar_width, self.screen_height);
                     self.sidebar.handle_mouse(mouse, sidebar_area)
                 } else {
                     Action::None
@@ -996,8 +1002,10 @@ impl AppComponent {
                     }
                 }
             }
-            EventType::Resize(_, _) => {
-                // Handle terminal resize
+            EventType::Resize(width, height) => {
+                // Handle terminal resize - update cached dimensions
+                self.sidebar_width = (width * self.config.ui.sidebar_width / 100).min(width - 20);
+                self.screen_height = height;
                 Action::None
             }
             EventType::Tick => {
@@ -1044,6 +1052,11 @@ impl Component for AppComponent {
     fn render(&mut self, f: &mut Frame, rect: Rect) {
         // Create layout: sidebar (configurable width) | task list (remainder)
         let sidebar_width = (rect.width * self.config.ui.sidebar_width / 100).min(rect.width - 20);
+
+        // Update cached dimensions for mouse event handling
+        self.sidebar_width = sidebar_width;
+        self.screen_height = rect.height;
+
         let main_chunks = Layout::horizontal([Constraint::Length(sidebar_width), Constraint::Min(0)]).split(rect);
 
         // Render components
