@@ -102,13 +102,13 @@ impl ListItem for TaskItem {
         if self.depth > 0 {
             let mut indent_str = String::new();
 
-            // Add spaces for each level (4 spaces per level to match original)
+            // Add spaces for each level (2 spaces per level)
             for _ in 0..(self.depth - 1) {
-                indent_str.push_str("    ");
+                indent_str.push_str("  ");
             }
 
             // Add tree connector for the current level
-            indent_str.push_str(" └─ ");
+            indent_str.push_str("└─");
 
             line_spans.push(Span::styled(indent_str, Style::default().fg(Color::DarkGray)));
         }
@@ -234,7 +234,7 @@ impl HeaderItem {
 
 impl ListItem for HeaderItem {
     fn render(&self, _selected: bool, _display_config: &DisplayConfig) -> RatatuiListItem<'static> {
-        let indent_str = " ".repeat(self.indent * 4);
+        let indent_str = " ".repeat(self.indent * 2);
         RatatuiListItem::new(Line::from(Span::styled(
             format!("{}{}", indent_str, self.text),
             Style::default().add_modifier(Modifier::BOLD).fg(Color::Cyan),
@@ -264,7 +264,7 @@ impl SeparatorItem {
 
 impl ListItem for SeparatorItem {
     fn render(&self, _selected: bool, _display_config: &DisplayConfig) -> RatatuiListItem<'static> {
-        let indent_str = " ".repeat(self.indent * 4);
+        let indent_str = " ".repeat(self.indent * 2);
         let separator = " ";
 
         RatatuiListItem::new(Line::from(Span::styled(
