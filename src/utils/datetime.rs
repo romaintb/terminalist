@@ -122,7 +122,9 @@ pub fn format_human_datetime(datetime_str: &str) -> String {
     let parsed_dt = if let Ok(dt) = DateTime::parse_from_rfc3339(datetime_str) {
         // RFC3339 with timezone (e.g., "2025-01-15T14:30:00Z")
         Some(dt.with_timezone(&Local))
-    } else if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(datetime_str, &format!("{}T%H:%M:%S", TODOIST_DATE_FORMAT)) {
+    } else if let Ok(dt) =
+        chrono::NaiveDateTime::parse_from_str(datetime_str, &format!("{}T%H:%M:%S", TODOIST_DATE_FORMAT))
+    {
         // ISO 8601 without timezone (e.g., "2025-01-15T14:30:00")
         Some(
             Local
@@ -130,7 +132,9 @@ pub fn format_human_datetime(datetime_str: &str) -> String {
                 .single()
                 .unwrap_or_else(|| Local.from_utc_datetime(&dt)),
         )
-    } else if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(datetime_str, &format!("{} %H:%M:%S", TODOIST_DATE_FORMAT)) {
+    } else if let Ok(dt) =
+        chrono::NaiveDateTime::parse_from_str(datetime_str, &format!("{} %H:%M:%S", TODOIST_DATE_FORMAT))
+    {
         // Space-separated format (e.g., "2025-01-15 14:30:00")
         Some(
             Local

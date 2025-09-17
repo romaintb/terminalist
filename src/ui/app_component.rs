@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::constants::*;
 use crate::logger::Logger;
 use crate::sync::{SyncService, SyncStatus};
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
@@ -757,12 +758,12 @@ impl AppComponent {
             move || async move {
                 let result = match op_name.as_str() {
                     "Complete task" => match sync_service.complete_task(&task_info).await {
-                        Ok(()) => Ok(format!("✅ Task completed: {}", task_info)),
-                        Err(e) => Err(format!("❌ Failed to complete task: {}", e)),
+                        Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_COMPLETED, task_info)),
+                        Err(e) => Err(format!("{}: {}", ERROR_TASK_COMPLETION_FAILED, e)),
                     },
                     "Delete task" => match sync_service.delete_task(&task_info).await {
-                        Ok(()) => Ok(format!("✅ Task deleted: {}", task_info)),
-                        Err(e) => Err(format!("❌ Failed to delete task: {}", e)),
+                        Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_DELETED, task_info)),
+                        Err(e) => Err(format!("{}: {}", ERROR_TASK_DELETE_FAILED, e)),
                     },
                     "Cycle priority" => {
                         // task_info format: "task_id|new_priority"
@@ -770,13 +771,13 @@ impl AppComponent {
                             if let Ok(priority) = priority_str.parse::<i32>() {
                                 match sync_service.update_task_priority(task_id, priority).await {
                                     Ok(()) => Ok(format!("✅ Task priority updated to P{}: {}", priority, task_id)),
-                                    Err(e) => Err(format!("❌ Failed to update task priority: {}", e)),
+                                    Err(e) => Err(format!("{}: {}", ERROR_TASK_PRIORITY_FAILED, e)),
                                 }
                             } else {
-                                Err("❌ Invalid priority value format".to_string())
+                                Err(ERROR_INVALID_PRIORITY_FORMAT.to_string())
                             }
                         } else {
-                            Err("❌ Invalid task priority info format".to_string())
+                            Err(ERROR_INVALID_PRIORITY_INFO.to_string())
                         }
                     }
                     "Set task due today" => {
@@ -784,11 +785,11 @@ impl AppComponent {
                         if let Some((task_id, _)) = task_info.split_once('|') {
                             let today = datetime::format_today();
                             match sync_service.update_task_due_date(task_id, Some(&today)).await {
-                                Ok(()) => Ok(format!("✅ Task due date set to today: {}", task_id)),
-                                Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_DUE_TODAY, task_id)),
+                                Err(e) => Err(format!("{}: {}", ERROR_TASK_DUE_DATE_FAILED, e)),
                             }
                         } else {
-                            Err("❌ Invalid task info format for setting due date".to_string())
+                            Err(ERROR_INVALID_DATE_FORMAT.to_string())
                         }
                     }
                     "Set task due tomorrow" => {
@@ -796,11 +797,11 @@ impl AppComponent {
                         if let Some((task_id, _)) = task_info.split_once('|') {
                             let tomorrow = datetime::format_date_with_offset(1);
                             match sync_service.update_task_due_date(task_id, Some(&tomorrow)).await {
-                                Ok(()) => Ok(format!("✅ Task due date set to tomorrow: {}", task_id)),
-                                Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_DUE_TOMORROW, task_id)),
+                                Err(e) => Err(format!("{}: {}", ERROR_TASK_DUE_DATE_FAILED, e)),
                             }
                         } else {
-                            Err("❌ Invalid task info format for setting due date".to_string())
+                            Err(ERROR_INVALID_DATE_FORMAT.to_string())
                         }
                     }
                     "Set task due next week" => {
@@ -810,11 +811,11 @@ impl AppComponent {
                             let next_monday = crate::utils::datetime::next_weekday(today, chrono::Weekday::Mon);
                             let next_monday_str = crate::utils::datetime::format_ymd(next_monday);
                             match sync_service.update_task_due_date(task_id, Some(&next_monday_str)).await {
-                                Ok(()) => Ok(format!("✅ Task due date set to next Monday: {}", task_id)),
-                                Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_DUE_MONDAY, task_id)),
+                                Err(e) => Err(format!("{}: {}", ERROR_TASK_DUE_DATE_FAILED, e)),
                             }
                         } else {
-                            Err("❌ Invalid task info format for setting due date".to_string())
+                            Err(ERROR_INVALID_DATE_FORMAT.to_string())
                         }
                     }
                     "Set task due weekend" => {
@@ -824,11 +825,11 @@ impl AppComponent {
                             let next_saturday = crate::utils::datetime::next_weekday(today, chrono::Weekday::Sat);
                             let next_saturday_str = crate::utils::datetime::format_ymd(next_saturday);
                             match sync_service.update_task_due_date(task_id, Some(&next_saturday_str)).await {
-                                Ok(()) => Ok(format!("✅ Task due date set to next Saturday: {}", task_id)),
-                                Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_DUE_SATURDAY, task_id)),
+                                Err(e) => Err(format!("{}: {}", ERROR_TASK_DUE_DATE_FAILED, e)),
                             }
                         } else {
-                            Err("❌ Invalid task info format for setting due date".to_string())
+                            Err(ERROR_INVALID_DATE_FORMAT.to_string())
                         }
                     }
                     "Create task" => {
@@ -836,14 +837,14 @@ impl AppComponent {
                         if let Some((content, project_id)) = task_info.split_once('|') {
                             // Task has a specific project
                             match sync_service.create_task(content, Some(project_id)).await {
-                                Ok(()) => Ok(format!("✅ Task created in project: {}", content)),
-                                Err(e) => Err(format!("❌ Failed to create task: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_CREATED_PROJECT, content)),
+                                Err(e) => Err(format!("{}: {}", ERROR_TASK_CREATE_FAILED, e)),
                             }
                         } else {
                             // Task goes to inbox (no project_id)
                             match sync_service.create_task(&task_info, None).await {
-                                Ok(()) => Ok(format!("✅ Task created in inbox: {}", task_info)),
-                                Err(e) => Err(format!("❌ Failed to create task: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_CREATED_INBOX, task_info)),
+                                Err(e) => Err(format!("{}: {}", ERROR_TASK_CREATE_FAILED, e)),
                             }
                         }
                     }
@@ -851,8 +852,8 @@ impl AppComponent {
                         // task_info format: "task_id: new_content"
                         if let Some((task_id, content)) = task_info.split_once(": ") {
                             match sync_service.update_task_content(task_id, content).await {
-                                Ok(()) => Ok(format!("✅ Task updated: {}", task_id)),
-                                Err(e) => Err(format!("❌ Failed to update task: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_UPDATED, task_id)),
+                                Err(e) => Err(format!("{}: {}", ERROR_TASK_UPDATE_FAILED, e)),
                             }
                         } else {
                             Err("❌ Invalid task edit format".to_string())
@@ -911,7 +912,7 @@ impl AppComponent {
                     _ => Err(format!("❌ Unknown operation: {}", op_name)),
                 };
 
-                result.map_err(|e| anyhow::anyhow!(e))
+                result.map_err(|e: String| anyhow::anyhow!(e))
             },
             description,
         );
