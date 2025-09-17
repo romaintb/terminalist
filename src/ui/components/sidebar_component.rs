@@ -7,7 +7,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, List, ListItem, ListState},
+    widgets::{block::BorderType, Block, Borders, List, ListItem, ListState},
     Frame,
 };
 
@@ -382,8 +382,10 @@ impl Component for SidebarComponent {
             .block(
                 Block::default()
                     .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
                     .title("Navigation")
-                    .border_style(Style::default().fg(Color::White)),
+                    .title_style(Style::default().fg(Color::White))
+                    .border_style(Style::default().fg(Color::DarkGray)),
             )
             .style(Style::default().fg(Color::White));
 
