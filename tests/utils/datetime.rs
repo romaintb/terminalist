@@ -1,4 +1,4 @@
-use chrono::{Duration, Local, NaiveDate, Weekday};
+use chrono::{NaiveDate, Weekday};
 use terminalist::utils::datetime::*;
 
 #[test]
@@ -32,19 +32,19 @@ fn test_next_weekday_same_day() {
 
 #[test]
 fn test_format_human_date_today() {
-    let today = Local::now().format("%Y-%m-%d").to_string();
+    let today = format_today();
     assert_eq!(format_human_date(&today), "today");
 }
 
 #[test]
 fn test_format_human_date_tomorrow() {
-    let tomorrow = (Local::now() + Duration::days(1)).format("%Y-%m-%d").to_string();
+    let tomorrow = format_date_with_offset(1);
     assert_eq!(format_human_date(&tomorrow), "tomorrow");
 }
 
 #[test]
 fn test_format_human_date_yesterday() {
-    let yesterday = (Local::now() - Duration::days(1)).format("%Y-%m-%d").to_string();
+    let yesterday = format_date_with_offset(-1);
     assert_eq!(format_human_date(&yesterday), "yesterday");
 }
 

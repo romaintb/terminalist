@@ -2,6 +2,8 @@
 //!
 //! This module handles loading, parsing, and validation of configuration files.
 
+use crate::constants::CONFIG_GENERATED;
+use crate::utils::datetime;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -84,7 +86,7 @@ impl Default for SyncConfig {
 impl Default for DisplayConfig {
     fn default() -> Self {
         Self {
-            date_format: "%Y-%m-%d".to_string(),
+            date_format: datetime::TODOIST_DATE_FORMAT.to_string(),
             time_format: "%H:%M".to_string(),
             show_descriptions: true,
             show_durations: true,
@@ -176,7 +178,7 @@ impl Config {
         // Add header comment
         let header = format!(
             "# Terminalist Configuration File\n# Generated on {}\n\n",
-            chrono::Local::now().format("%Y-%m-%d")
+            chrono::Local::now().format(datetime::TODOIST_DATE_FORMAT)
         );
 
         let full_content = header + &toml_content;
@@ -190,7 +192,7 @@ impl Config {
         std::fs::write(&path, full_content)
             .with_context(|| format!("Failed to write config file: {}", path.as_ref().display()))?;
 
-        println!("✅ Generated default configuration file: {}", path.as_ref().display());
+        println!("{}: {}", CONFIG_GENERATED, path.as_ref().display());
         Ok(())
     }
 

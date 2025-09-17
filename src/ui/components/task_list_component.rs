@@ -1,4 +1,5 @@
 use crate::config::DisplayConfig;
+use crate::constants::{HEADER_OVERDUE, HEADER_TODAY, HEADER_TOMORROW};
 use crate::icons::IconService;
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
 use crate::ui::components::task_list_item_component::{ListItem, TaskItem, TaskListItemType};
@@ -7,7 +8,8 @@ use crate::ui::core::{
     actions::{Action, DialogType},
     Component,
 };
-use chrono::{Duration, NaiveDate, Utc};
+use crate::utils::datetime;
+use chrono::{Duration, Utc};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::Rect,
@@ -118,7 +120,7 @@ impl TaskListComponent {
         // Separate tasks by date (only root tasks - subtasks will be added recursively)
         for task in self.tasks.iter().filter(|t| t.parent_id.is_none()) {
             if let Some(due_date_str) = &task.due {
-                if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
+                if let Ok(due_date) = datetime::parse_date(due_date_str) {
                     if due_date < now {
                         overdue_tasks.push(task.clone());
                     } else if due_date == now {
@@ -131,7 +133,7 @@ impl TaskListComponent {
         // Add overdue section if there are overdue tasks
         if !overdue_tasks.is_empty() {
             self.items
-                .push(TaskListItemType::Header(HeaderItem::new("⏰ Overdue".to_string(), 0)));
+                .push(TaskListItemType::Header(HeaderItem::new(HEADER_OVERDUE.to_string(), 0)));
 
             for task in overdue_tasks {
                 self.add_task_and_children_to_items(task, 0);
@@ -146,7 +148,7 @@ impl TaskListComponent {
         // Add today section if there are today tasks
         if !today_tasks.is_empty() {
             self.items
-                .push(TaskListItemType::Header(HeaderItem::new("📅 Today".to_string(), 0)));
+                .push(TaskListItemType::Header(HeaderItem::new(HEADER_TODAY.to_string(), 0)));
 
             for task in today_tasks {
                 self.add_task_and_children_to_items(task, 0);
@@ -158,8 +160,10 @@ impl TaskListComponent {
     fn build_tomorrow_items(&mut self) {
         use crate::ui::components::task_list_item_component::HeaderItem;
 
-        self.items
-            .push(TaskListItemType::Header(HeaderItem::new("📅 Tomorrow".to_string(), 0)));
+        self.items.push(TaskListItemType::Header(HeaderItem::new(
+            HEADER_TOMORROW.to_string(),
+            0,
+        )));
 
         // Calculate tomorrow's date
         let today = Utc::now().date_naive();
@@ -172,7 +176,7 @@ impl TaskListComponent {
             .filter(|t| t.parent_id.is_none())
             .filter(|t| {
                 if let Some(due_date_str) = &t.due {
-                    if let Ok(due_date) = NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
+                    if let Ok(due_date) = datetime::parse_date(due_date_str) {
                         due_date == tomorrow
                     } else {
                         false
@@ -203,7 +207,7 @@ impl TaskListComponent {
         // Group tasks by date (only root tasks - subtasks will be added recursively)
         for task in self.tasks.iter().filter(|t| t.parent_id.is_none()) {
             if let Some(due_date_str) = &task.due {
-                if let Ok(due_date) = chrono::NaiveDate::parse_from_str(due_date_str, "%Y-%m-%d") {
+                if let Ok(due_date) = datetime::parse_date(due_date_str) {
                     if due_date < today {
                         overdue_tasks.push(task.clone());
                     } else {
@@ -216,7 +220,7 @@ impl TaskListComponent {
         // Add overdue section first
         if !overdue_tasks.is_empty() {
             self.items
-                .push(TaskListItemType::Header(HeaderItem::new("⏰ Overdue".to_string(), 0)));
+                .push(TaskListItemType::Header(HeaderItem::new(HEADER_OVERDUE.to_string(), 0)));
 
             for task in overdue_tasks {
                 self.add_task_and_children_to_items(task, 0);
@@ -232,9 +236,9 @@ impl TaskListComponent {
 
             // Format the date header
             let date_header = if due_date == today {
-                "📅 Today".to_string()
+                HEADER_TODAY.to_string()
             } else if due_date == today + chrono::Duration::days(1) {
-                "📅 Tomorrow".to_string()
+                HEADER_TOMORROW.to_string()
             } else {
                 let weekday = due_date.format("%A").to_string();
                 let formatted_date = due_date.format("%b %d").to_string();

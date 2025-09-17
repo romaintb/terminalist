@@ -5,9 +5,40 @@
 
 use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Weekday};
 
+/// Standard date format used throughout the application for Todoist API compatibility
+pub const TODOIST_DATE_FORMAT: &str = "%Y-%m-%d";
+
+/// Parse a date string in YYYY-MM-DD format to NaiveDate
+///
+/// # Arguments
+/// * `date_str` - Date string in YYYY-MM-DD format
+///
+/// # Returns
+/// * `Result<NaiveDate, chrono::ParseError>` - Parsed date or parse error
+pub fn parse_date(date_str: &str) -> Result<NaiveDate, chrono::ParseError> {
+    NaiveDate::parse_from_str(date_str, TODOIST_DATE_FORMAT)
+}
+
 /// Format a NaiveDate to YYYY-MM-DD string
 pub fn format_ymd(d: NaiveDate) -> String {
-    d.format("%Y-%m-%d").to_string()
+    d.format(TODOIST_DATE_FORMAT).to_string()
+}
+
+/// Format current local date to YYYY-MM-DD string
+pub fn format_today() -> String {
+    format_ymd(Local::now().date_naive())
+}
+
+/// Format date with offset from today to YYYY-MM-DD string
+///
+/// # Arguments
+/// * `days_offset` - Number of days to add/subtract from today
+///
+/// # Returns
+/// * `String` - Date string in YYYY-MM-DD format
+pub fn format_date_with_offset(days_offset: i64) -> String {
+    let target_date = Local::now().date_naive() + Duration::days(days_offset);
+    format_ymd(target_date)
 }
 
 /// Calculate the next occurrence of a target weekday from a given date
@@ -30,7 +61,7 @@ pub fn next_weekday(from: NaiveDate, target: Weekday) -> NaiveDate {
 /// * `String` - Human-readable date format
 pub fn format_human_date(date_str: &str) -> String {
     // Parse the input date string
-    let input_date = match NaiveDate::parse_from_str(date_str, "%Y-%m-%d") {
+    let input_date = match parse_date(date_str) {
         Ok(date) => date,
         Err(_) => return date_str.to_string(), // Return original if parsing fails
     };
@@ -91,7 +122,9 @@ pub fn format_human_datetime(datetime_str: &str) -> String {
     let parsed_dt = if let Ok(dt) = DateTime::parse_from_rfc3339(datetime_str) {
         // RFC3339 with timezone (e.g., "2025-01-15T14:30:00Z")
         Some(dt.with_timezone(&Local))
-    } else if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(datetime_str, "%Y-%m-%dT%H:%M:%S") {
+    } else if let Ok(dt) =
+        chrono::NaiveDateTime::parse_from_str(datetime_str, &format!("{}T%H:%M:%S", TODOIST_DATE_FORMAT))
+    {
         // ISO 8601 without timezone (e.g., "2025-01-15T14:30:00")
         Some(
             Local
@@ -99,7 +132,9 @@ pub fn format_human_datetime(datetime_str: &str) -> String {
                 .single()
                 .unwrap_or_else(|| Local.from_utc_datetime(&dt)),
         )
-    } else if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(datetime_str, "%Y-%m-%d %H:%M:%S") {
+    } else if let Ok(dt) =
+        chrono::NaiveDateTime::parse_from_str(datetime_str, &format!("{} %H:%M:%S", TODOIST_DATE_FORMAT))
+    {
         // Space-separated format (e.g., "2025-01-15 14:30:00")
         Some(
             Local
@@ -112,7 +147,7 @@ pub fn format_human_datetime(datetime_str: &str) -> String {
     };
 
     if let Some(local_dt) = parsed_dt {
-        let date_str = local_dt.format("%Y-%m-%d").to_string();
+        let date_str = local_dt.format(TODOIST_DATE_FORMAT).to_string();
         let time_str = local_dt.format("%H:%M").to_string();
 
         let human_date = format_human_date(&date_str);

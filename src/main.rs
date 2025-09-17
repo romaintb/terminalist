@@ -1,4 +1,5 @@
 pub mod config;
+pub mod constants;
 pub mod icons;
 pub mod logger;
 pub mod storage;
