@@ -9,7 +9,7 @@ use crate::ui::core::{
     Component,
 };
 use crate::utils::datetime;
-use chrono::{Duration, Utc};
+use chrono::{Duration, Local};
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::Rect,
@@ -166,7 +166,7 @@ impl TaskListComponent {
         )));
 
         // Calculate tomorrow's date
-        let today = Utc::now().date_naive();
+        let today = Local::now().date_naive();
         let tomorrow = today + Duration::days(1);
 
         // Filter for root tasks due tomorrow
