@@ -1,6 +1,6 @@
-use terminalist::logger::Logger;
 use std::fs;
 use std::io::Write;
+use terminalist::logger::Logger;
 
 #[test]
 fn test_config_based_logging_disabled() {

@@ -137,4 +137,3 @@ fn weekday_name(weekday: Weekday) -> &'static str {
         Weekday::Sun => "Sunday",
     }
 }
-

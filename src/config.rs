@@ -206,4 +206,3 @@ impl Config {
         Ok(Self::get_xdg_config_dir()?.join("config.toml"))
     }
 }
-

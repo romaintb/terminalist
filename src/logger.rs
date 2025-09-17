@@ -127,4 +127,3 @@ impl Default for Logger {
         Self::new()
     }
 }
-

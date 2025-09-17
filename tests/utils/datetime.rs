@@ -1,5 +1,5 @@
-use terminalist::utils::datetime::*;
 use chrono::{Duration, Local, NaiveDate, Weekday};
+use terminalist::utils::datetime::*;
 
 #[test]
 fn test_format_ymd() {

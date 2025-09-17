@@ -1,5 +1,5 @@
 #[test]
 fn test_system_dialogs_module_exists() {
-    // Test that the system dialogs module is accessible
-    assert!(true, "System dialogs module should be accessible");
+    // Test that the system dialogs module compiles and is accessible
+    // If this test runs, the module is accessible
 }
