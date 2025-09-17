@@ -175,7 +175,7 @@ The interface consists of:
 
 ### **Task Display Features**
 Tasks are displayed with:
-- **Status Icons**: 🔳 (pending), ✅ (completed), ❌ (deleted)
+- **Status Icons**: ☐ (pending), ☒ (completed), ✗ (deleted)
 - **Priority Badges**: [P0] (urgent), [P1] (high), [P2] (medium), [P3] (low), no badge (normal)
 - **Label Badges**: Colored badges showing task labels
 - **Task Content**: Truncated to fit the display width

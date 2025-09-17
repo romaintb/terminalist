@@ -9,6 +9,9 @@ use ratatui::{
     widgets::ListItem as RatatuiListItem,
 };
 
+/// Width of indentation per depth level in characters
+const INDENT_WIDTH: usize = 2;
+
 /// Trait for items that can be displayed in a task list
 pub trait ListItem {
     /// Render this item as a ratatui ListItem
@@ -102,13 +105,12 @@ impl ListItem for TaskItem {
         if self.depth > 0 {
             let mut indent_str = String::new();
 
-            // Add spaces for each level (4 spaces per level to match original)
-            for _ in 0..(self.depth - 1) {
-                indent_str.push_str("    ");
-            }
+            // Add spaces for each level
+            let total_indent = (self.depth - 1) * INDENT_WIDTH;
+            indent_str.push_str(&" ".repeat(total_indent));
 
             // Add tree connector for the current level
-            indent_str.push_str(" └─ ");
+            indent_str.push_str("└─");
 
             line_spans.push(Span::styled(indent_str, Style::default().fg(Color::DarkGray)));
         }
@@ -234,7 +236,7 @@ impl HeaderItem {
 
 impl ListItem for HeaderItem {
     fn render(&self, _selected: bool, _display_config: &DisplayConfig) -> RatatuiListItem<'static> {
-        let indent_str = " ".repeat(self.indent * 4);
+        let indent_str = " ".repeat(self.indent * INDENT_WIDTH);
         RatatuiListItem::new(Line::from(Span::styled(
             format!("{}{}", indent_str, self.text),
             Style::default().add_modifier(Modifier::BOLD).fg(Color::Cyan),
@@ -264,7 +266,7 @@ impl SeparatorItem {
 
 impl ListItem for SeparatorItem {
     fn render(&self, _selected: bool, _display_config: &DisplayConfig) -> RatatuiListItem<'static> {
-        let indent_str = " ".repeat(self.indent * 4);
+        let indent_str = " ".repeat(self.indent * INDENT_WIDTH);
         let separator = " ";
 
         RatatuiListItem::new(Line::from(Span::styled(
