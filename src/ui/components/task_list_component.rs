@@ -14,7 +14,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, List, ListItem as RatatuiListItem, ListState},
+    widgets::{block::BorderType, Block, Borders, List, ListItem as RatatuiListItem, ListState},
     Frame,
 };
 
@@ -527,7 +527,14 @@ impl Component for TaskListComponent {
             List::new(self.create_list_items(rect))
                 .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
         }
-        .block(Block::default().borders(Borders::ALL).title("Tasks"));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title("Tasks")
+                .title_style(Style::default().fg(Color::White))
+                .border_style(Style::default().fg(Color::DarkGray)),
+        );
 
         f.render_stateful_widget(tasks_list, rect, &mut self.list_state);
     }
