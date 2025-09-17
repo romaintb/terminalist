@@ -139,7 +139,7 @@ impl SyncService {
     /// Get tasks for "Today" view (UI business logic: overdue + today)
     pub async fn get_tasks_for_today(&self) -> Result<Vec<TaskDisplay>> {
         let storage = self.storage.lock().await;
-        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
 
         let overdue_tasks = storage.get_overdue_tasks().await?;
         let today_tasks = storage.get_tasks_due_on(&today).await?;
@@ -153,7 +153,9 @@ impl SyncService {
     /// Get tasks for "Tomorrow" view (pure tomorrow tasks)
     pub async fn get_tasks_for_tomorrow(&self) -> Result<Vec<TaskDisplay>> {
         let storage = self.storage.lock().await;
-        let tomorrow = (chrono::Utc::now() + chrono::Duration::days(1)).format("%Y-%m-%d").to_string();
+        let tomorrow = (chrono::Local::now() + chrono::Duration::days(1))
+            .format("%Y-%m-%d")
+            .to_string();
 
         storage.get_tasks_due_on(&tomorrow).await
     }
@@ -161,8 +163,10 @@ impl SyncService {
     /// Get tasks for "Upcoming" view (UI business logic: overdue + today + next 3 months)
     pub async fn get_tasks_for_upcoming(&self) -> Result<Vec<TaskDisplay>> {
         let storage = self.storage.lock().await;
-        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
-        let three_months_later = (chrono::Utc::now() + chrono::Duration::days(90)).format("%Y-%m-%d").to_string();
+        let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+        let three_months_later = (chrono::Local::now() + chrono::Duration::days(90))
+            .format("%Y-%m-%d")
+            .to_string();
 
         let overdue_tasks = storage.get_overdue_tasks().await?;
         let today_tasks = storage.get_tasks_due_on(&today).await?;

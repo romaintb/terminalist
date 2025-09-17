@@ -111,7 +111,7 @@ impl TaskListComponent {
     fn build_today_items(&mut self) {
         use crate::ui::components::task_list_item_component::{HeaderItem, SeparatorItem};
 
-        let now = chrono::Utc::now().date_naive();
+        let now = chrono::Local::now().date_naive();
         let mut overdue_tasks = Vec::new();
         let mut today_tasks = Vec::new();
 
@@ -196,7 +196,7 @@ impl TaskListComponent {
         use crate::ui::components::task_list_item_component::{HeaderItem, SeparatorItem};
         use std::collections::BTreeMap;
 
-        let today = chrono::Utc::now().date_naive();
+        let today = chrono::Local::now().date_naive();
         let mut overdue_tasks = Vec::new();
         let mut future_tasks_by_date: BTreeMap<chrono::NaiveDate, Vec<TaskDisplay>> = BTreeMap::new();
 

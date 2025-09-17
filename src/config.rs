@@ -176,7 +176,7 @@ impl Config {
         // Add header comment
         let header = format!(
             "# Terminalist Configuration File\n# Generated on {}\n\n",
-            chrono::Utc::now().format("%Y-%m-%d")
+            chrono::Local::now().format("%Y-%m-%d")
         );
 
         let full_content = header + &toml_content;

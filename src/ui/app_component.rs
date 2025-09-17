@@ -781,7 +781,7 @@ impl AppComponent {
                     "Set task due today" => {
                         // task_info format: "task_id|today"
                         if let Some((task_id, _)) = task_info.split_once('|') {
-                            let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+                            let today = chrono::Local::now().format("%Y-%m-%d").to_string();
                             match sync_service.update_task_due_date(task_id, Some(&today)).await {
                                 Ok(()) => Ok(format!("✅ Task due date set to today: {}", task_id)),
                                 Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
@@ -793,8 +793,9 @@ impl AppComponent {
                     "Set task due tomorrow" => {
                         // task_info format: "task_id|tomorrow"
                         if let Some((task_id, _)) = task_info.split_once('|') {
-                            let tomorrow =
-                                (chrono::Utc::now() + chrono::Duration::days(1)).format("%Y-%m-%d").to_string();
+                            let tomorrow = (chrono::Local::now() + chrono::Duration::days(1))
+                                .format("%Y-%m-%d")
+                                .to_string();
                             match sync_service.update_task_due_date(task_id, Some(&tomorrow)).await {
                                 Ok(()) => Ok(format!("✅ Task due date set to tomorrow: {}", task_id)),
                                 Err(e) => Err(format!("❌ Failed to set task due date: {}", e)),
@@ -806,7 +807,7 @@ impl AppComponent {
                     "Set task due next week" => {
                         // task_info format: "task_id|next_week"
                         if let Some((task_id, _)) = task_info.split_once('|') {
-                            let today = chrono::Utc::now().date_naive();
+                            let today = chrono::Local::now().date_naive();
                             let next_monday = crate::utils::datetime::next_weekday(today, chrono::Weekday::Mon);
                             let next_monday_str = crate::utils::datetime::format_ymd(next_monday);
                             match sync_service.update_task_due_date(task_id, Some(&next_monday_str)).await {
@@ -820,7 +821,7 @@ impl AppComponent {
                     "Set task due weekend" => {
                         // task_info format: "task_id|weekend"
                         if let Some((task_id, _)) = task_info.split_once('|') {
-                            let today = chrono::Utc::now().date_naive();
+                            let today = chrono::Local::now().date_naive();
                             let next_saturday = crate::utils::datetime::next_weekday(today, chrono::Weekday::Sat);
                             let next_saturday_str = crate::utils::datetime::format_ymd(next_saturday);
                             match sync_service.update_task_due_date(task_id, Some(&next_saturday_str)).await {
