@@ -1,3 +1,9 @@
+//! Modal dialog component for various user interactions.
+//!
+//! This component provides a flexible modal dialog system that handles different
+//! types of user interactions including task creation/editing, project management,
+//! label management, and system functions like search and debugging.
+
 use crate::config::DisplayConfig;
 use crate::icons::IconService;
 use crate::logger::Logger;
@@ -13,6 +19,27 @@ use ratatui::{layout::Rect, widgets::ScrollbarState, Frame};
 
 use crate::ui::components::dialogs::{label_dialogs, project_dialogs, scroll_behavior, system_dialogs, task_dialogs};
 
+/// Modal dialog component that handles various user interactions.
+///
+/// This component serves as a container for different types of dialogs:
+///
+/// # Dialog Types
+/// - **Task dialogs** - Create, edit, and manage tasks
+/// - **Project dialogs** - Create and manage projects
+/// - **Label dialogs** - Create and manage labels
+/// - **System dialogs** - Search, logs, help, and confirmation dialogs
+///
+/// # Features
+/// - Input handling with cursor management
+/// - Scrolling support for long content
+/// - Project/label selection interfaces
+/// - Search functionality with live results
+/// - Integration with sync service for immediate updates
+/// - Configurable display options
+///
+/// The component delegates specific dialog rendering and logic to specialized
+/// dialog modules while providing common infrastructure like input handling
+/// and state management.
 pub struct DialogComponent {
     pub dialog_type: Option<DialogType>,
     pub input_buffer: String,

@@ -1,3 +1,15 @@
+//! Synchronization service module for the terminalist application.
+//!
+//! This module provides the [`SyncService`] struct which handles data synchronization
+//! between the Todoist API and local storage. It manages tasks, projects, labels, and sections,
+//! providing both read and write operations with proper error handling and logging.
+//!
+//! The sync service acts as the main data layer for the application, offering:
+//! - Fast local data access for UI operations
+//! - Background synchronization with Todoist API
+//! - CRUD operations for tasks, projects, and labels
+//! - Business logic for special views (Today, Tomorrow, Upcoming)
+
 use anyhow::Result;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -8,7 +20,37 @@ use crate::storage::LocalStorage;
 use crate::todoist::{CreateProjectArgs, LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay, TodoistWrapper};
 use crate::utils::datetime;
 
-/// Sync service that manages data synchronization between API and local storage
+/// Service that manages data synchronization between the Todoist API and local storage.
+///
+/// The `SyncService` acts as the primary data access layer for the application,
+/// providing both fast local data retrieval and background synchronization with
+/// the Todoist API. It handles all CRUD operations for tasks, projects, labels,
+/// and sections while maintaining data consistency between local and remote storage.
+///
+/// # Features
+/// - Thread-safe operations using Arc<Mutex<>>
+/// - Prevents concurrent sync operations
+/// - Provides immediate UI updates after create/update operations
+/// - Handles business logic for special views (Today, Tomorrow, Upcoming)
+/// - Optional logging support for debugging and monitoring
+///
+/// # Example
+/// ```rust,no_run
+/// use terminalist::sync::SyncService;
+/// use terminalist::config::Config;
+///
+/// # async fn example() -> anyhow::Result<()> {
+/// let config = Config::default();
+/// let sync_service = SyncService::new("api_token".to_string(), false, &config).await?;
+///
+/// // Sync data from Todoist API
+/// sync_service.sync().await?;
+///
+/// // Get projects from local storage (fast)
+/// let projects = sync_service.get_projects().await?;
+/// # Ok(())
+/// # }
+/// ```
 #[derive(Clone)]
 pub struct SyncService {
     todoist: TodoistWrapper,
@@ -17,16 +59,42 @@ pub struct SyncService {
     logger: Option<Logger>,
 }
 
+/// Represents the current status of a synchronization operation.
+///
+/// This enum is used to communicate the state of sync operations to the UI,
+/// allowing for proper status indicators and error handling.
 #[derive(Debug, Clone)]
 pub enum SyncStatus {
+    /// Sync service is not currently performing any operations
     Idle,
+    /// A sync operation is currently in progress
     InProgress,
+    /// The last sync operation completed successfully
     Success,
-    Error { message: String },
+    /// The last sync operation failed with an error
+    Error {
+        /// Human-readable error message describing what went wrong
+        message: String,
+    },
 }
 
 impl SyncService {
-    /// Create a new sync service
+    /// Creates a new `SyncService` instance with the provided configuration.
+    ///
+    /// This initializes the Todoist API wrapper, local storage, and optional logging
+    /// based on the provided configuration. The service is ready to perform sync
+    /// operations immediately after creation.
+    ///
+    /// # Arguments
+    /// * `api_token` - The Todoist API token for authentication
+    /// * `debug_mode` - Whether to enable debug mode for local storage
+    /// * `config` - Application configuration including logging settings
+    ///
+    /// # Returns
+    /// A new `SyncService` instance ready for use
+    ///
+    /// # Errors
+    /// Returns an error if local storage initialization fails
     pub async fn new(api_token: String, debug_mode: bool, config: &Config) -> Result<Self> {
         let todoist = TodoistWrapper::new(api_token);
         let storage = Arc::new(Mutex::new(LocalStorage::new(debug_mode).await?));
@@ -49,12 +117,17 @@ impl SyncService {
         })
     }
 
-    /// Get a clone of the logger if available
+    /// Returns a clone of the logger if one is available.
+    ///
+    /// This method provides access to the service's logger for external logging needs.
     pub fn logger(&self) -> Option<Logger> {
         self.logger.clone()
     }
 
-    /// Set the logger for this sync service
+    /// Sets or replaces the logger for this sync service.
+    ///
+    /// # Arguments
+    /// * `logger` - The new logger instance to use
     pub fn set_logger(&mut self, logger: Logger) {
         self.logger = Some(logger);
     }
@@ -66,28 +139,68 @@ impl SyncService {
         }
     }
 
-    /// Get projects from local storage (fast)
+    /// Retrieves all projects from local storage.
     ///
-    /// Note: As of 2025, Todoist allows free plan users to *create* more than 5 projects via the API,
+    /// This method provides fast access to cached project data without making API calls.
+    /// Projects are sorted and ready for display in the UI.
+    ///
+    /// # Returns
+    /// A vector of `ProjectDisplay` objects representing all available projects
+    ///
+    /// # Note
+    /// As of 2025, Todoist allows free plan users to create more than 5 projects via the API,
     /// but the GET /projects API endpoint will only return the first 5 projects for free users.
+    ///
+    /// # Errors
+    /// Returns an error if local storage access fails
     pub async fn get_projects(&self) -> Result<Vec<ProjectDisplay>> {
         let storage = self.storage.lock().await;
         storage.get_projects().await
     }
 
-    /// Get tasks for a project from local storage (fast)
+    /// Retrieves all tasks for a specific project from local storage.
+    ///
+    /// # Arguments
+    /// * `project_id` - The unique identifier of the project
+    ///
+    /// # Returns
+    /// A vector of `TaskDisplay` objects for the specified project
+    ///
+    /// # Errors
+    /// Returns an error if local storage access fails
     pub async fn get_tasks_for_project(&self, project_id: &str) -> Result<Vec<TaskDisplay>> {
         let storage = self.storage.lock().await;
         storage.get_tasks_for_project(project_id).await
     }
 
-    /// Get ALL tasks from local storage (fast) - for search functionality
+    /// Retrieves all tasks from local storage across all projects.
+    ///
+    /// This method is primarily used for search functionality and global task operations.
+    /// It provides fast access to the complete task dataset.
+    ///
+    /// # Returns
+    /// A vector of all `TaskDisplay` objects in the local database
+    ///
+    /// # Errors
+    /// Returns an error if local storage access fails
     pub async fn get_all_tasks(&self) -> Result<Vec<TaskDisplay>> {
         let storage = self.storage.lock().await;
         storage.get_all_tasks().await
     }
 
-    /// Search tasks by content using database-level filtering (fast)
+    /// Searches for tasks by content using database-level filtering.
+    ///
+    /// This method performs fast text search across task content using SQL LIKE queries.
+    /// The search is case-insensitive and matches partial content.
+    ///
+    /// # Arguments
+    /// * `query` - The search term to look for in task content
+    ///
+    /// # Returns
+    /// A vector of `TaskDisplay` objects matching the search criteria
+    ///
+    /// # Errors
+    /// Returns an error if local storage access fails
     pub async fn search_tasks(&self, query: &str) -> Result<Vec<TaskDisplay>> {
         let storage = self.storage.lock().await;
         storage.search_tasks(query).await
@@ -137,7 +250,17 @@ impl SyncService {
         Ok(filtered_tasks)
     }
 
-    /// Get tasks for "Today" view (UI business logic: overdue + today)
+    /// Retrieves tasks for the "Today" view with business logic.
+    ///
+    /// This method implements the UI business logic for the Today view by combining
+    /// overdue tasks with tasks due today. Overdue tasks are shown first, followed
+    /// by today's tasks.
+    ///
+    /// # Returns
+    /// A vector of `TaskDisplay` objects for the Today view, with overdue tasks first
+    ///
+    /// # Errors
+    /// Returns an error if local storage access fails
     pub async fn get_tasks_for_today(&self) -> Result<Vec<TaskDisplay>> {
         let storage = self.storage.lock().await;
         let today = datetime::format_today();
@@ -151,7 +274,16 @@ impl SyncService {
         Ok(result)
     }
 
-    /// Get tasks for "Tomorrow" view (pure tomorrow tasks)
+    /// Retrieves tasks scheduled for tomorrow.
+    ///
+    /// This method returns only tasks that are specifically due tomorrow,
+    /// without any additional business logic.
+    ///
+    /// # Returns
+    /// A vector of `TaskDisplay` objects due tomorrow
+    ///
+    /// # Errors
+    /// Returns an error if local storage access fails
     pub async fn get_tasks_for_tomorrow(&self) -> Result<Vec<TaskDisplay>> {
         let storage = self.storage.lock().await;
         let tomorrow = datetime::format_date_with_offset(1);
@@ -159,7 +291,17 @@ impl SyncService {
         storage.get_tasks_due_on(&tomorrow).await
     }
 
-    /// Get tasks for "Upcoming" view (UI business logic: overdue + today + next 3 months)
+    /// Retrieves tasks for the "Upcoming" view with business logic.
+    ///
+    /// This method implements the UI business logic for the Upcoming view by combining
+    /// overdue tasks, today's tasks, and tasks due within the next 3 months.
+    /// Tasks are ordered as: overdue → today → future (next 3 months).
+    ///
+    /// # Returns
+    /// A vector of `TaskDisplay` objects for the Upcoming view, properly ordered
+    ///
+    /// # Errors
+    /// Returns an error if local storage access fails
     pub async fn get_tasks_for_upcoming(&self) -> Result<Vec<TaskDisplay>> {
         let storage = self.storage.lock().await;
         let today = datetime::format_today();
@@ -189,15 +331,33 @@ impl SyncService {
         storage.get_task_by_id(task_id).await
     }
 
-    /// Check if sync is currently in progress
+    /// Checks if a synchronization operation is currently in progress.
+    ///
+    /// This method is useful for UI components to show loading indicators
+    /// and prevent concurrent sync operations.
+    ///
+    /// # Returns
+    /// `true` if sync is in progress, `false` otherwise
     pub async fn is_syncing(&self) -> bool {
         *self.sync_in_progress.lock().await
     }
 
-    /// Create a new project
+    /// Creates a new project via the Todoist API and stores it locally.
     ///
-    /// Note: As of 2025, Todoist allows free plan users to *create* more than 5 projects via the API,
+    /// This method creates a project remotely and immediately stores it in local storage
+    /// for instant UI updates. The project will be available in the UI without requiring
+    /// a full sync operation.
+    ///
+    /// # Arguments
+    /// * `name` - The name of the new project
+    /// * `parent_id` - Optional parent project ID for creating sub-projects
+    ///
+    /// # Note
+    /// As of 2025, Todoist allows free plan users to create more than 5 projects via the API,
     /// but the GET /projects API endpoint will only return the first 5 projects for free users.
+    ///
+    /// # Errors
+    /// Returns an error if the API call fails or local storage update fails
     pub async fn create_project(&self, name: &str, parent_id: Option<&str>) -> Result<()> {
         // Create project via API using the new CreateProjectArgs structure
         let project_args = CreateProjectArgs {
@@ -216,7 +376,18 @@ impl SyncService {
         Ok(())
     }
 
-    /// Create a new task
+    /// Creates a new task via the Todoist API and stores it locally.
+    ///
+    /// This method creates a task remotely and immediately stores it in local storage
+    /// for instant UI updates. The task will be available in the UI without requiring
+    /// a full sync operation.
+    ///
+    /// # Arguments
+    /// * `content` - The content/description of the new task
+    /// * `project_id` - Optional project ID to assign the task to a specific project
+    ///
+    /// # Errors
+    /// Returns an error if the API call fails or local storage update fails
     pub async fn create_task(&self, content: &str, project_id: Option<&str>) -> Result<()> {
         // Create task via API using the new CreateTaskArgs structure
         let task_args = todoist_api::CreateTaskArgs {
@@ -247,7 +418,18 @@ impl SyncService {
         Ok(())
     }
 
-    /// Create a new label
+    /// Creates a new label via the Todoist API and stores it locally.
+    ///
+    /// This method creates a label remotely and immediately stores it in local storage
+    /// for instant UI updates. The label will be available in the UI without requiring
+    /// a full sync operation.
+    ///
+    /// # Arguments
+    /// * `name` - The name of the new label
+    /// * `color` - Optional color for the label (hex code or predefined color name)
+    ///
+    /// # Errors
+    /// Returns an error if the API call fails or local storage update fails
     pub async fn create_label(&self, name: &str, color: Option<&str>) -> Result<()> {
         self.log(format!("API: Creating label '{}' with color {:?}", name, color));
 
@@ -432,7 +614,23 @@ impl SyncService {
         Ok(())
     }
 
-    /// Perform full sync with Todoist API
+    /// Performs a full synchronization with the Todoist API.
+    ///
+    /// This method fetches all projects, tasks, labels, and sections from the Todoist API
+    /// and stores them in local storage. It ensures that only one sync operation can run
+    /// at a time to prevent data corruption and resource conflicts.
+    ///
+    /// The sync process includes:
+    /// 1. Fetching projects, tasks, labels, and sections from the API
+    /// 2. Storing all data in local storage with proper ordering
+    /// 3. Handling API errors gracefully with detailed error messages
+    /// 4. Providing progress logging if a logger is configured
+    ///
+    /// # Returns
+    /// A `SyncStatus` indicating the result of the sync operation
+    ///
+    /// # Errors
+    /// Returns `SyncStatus::Error` if any part of the sync process fails
     pub async fn sync(&self) -> Result<SyncStatus> {
         // Check if sync is already in progress and acquire lock
         let mut sync_guard = self.sync_in_progress.lock().await;
@@ -566,7 +764,17 @@ impl SyncService {
         self.sync().await
     }
 
-    /// Complete a task (mark as done)
+    /// Marks a task as completed via the Todoist API and removes it from local storage.
+    ///
+    /// This method completes the task remotely (which automatically handles subtasks)
+    /// and removes it from local storage since completed tasks are not displayed in the UI.
+    /// Subtasks are automatically deleted via database CASCADE constraints.
+    ///
+    /// # Arguments
+    /// * `task_id` - The unique identifier of the task to complete
+    ///
+    /// # Errors
+    /// Returns an error if the API call fails or local storage update fails
     pub async fn complete_task(&self, task_id: &str) -> Result<()> {
         // First, complete the task via API (this handles subtasks automatically)
         self.todoist.complete_task(task_id).await?;
@@ -580,7 +788,16 @@ impl SyncService {
         Ok(())
     }
 
-    /// Delete a task permanently
+    /// Permanently deletes a task via the Todoist API and removes it from local storage.
+    ///
+    /// This method performs a hard delete of the task both remotely and locally.
+    /// The task will be permanently removed and cannot be recovered.
+    ///
+    /// # Arguments
+    /// * `task_id` - The unique identifier of the task to delete
+    ///
+    /// # Errors
+    /// Returns an error if the API call fails or local storage update fails
     pub async fn delete_task(&self, task_id: &str) -> Result<()> {
         // First, delete the task via API
         self.todoist.delete_task(task_id).await?;

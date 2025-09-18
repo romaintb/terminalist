@@ -1,3 +1,20 @@
+//! Terminalist - A Terminal User Interface (TUI) for Todoist
+//!
+//! This is the main entry point for the Terminalist application.
+//! It handles command-line arguments, configuration loading, and
+//! initializes the synchronization service before launching the UI.
+//!
+//! # Command Line Options
+//!
+//! * `-h, --help` - Show help message
+//! * `-V, --version` - Show version information
+//! * `-d, --debug` - Use file-backed SQLite database for debugging
+//! * `--generate-config` - Generate a default configuration file
+//!
+//! # Environment Variables
+//!
+//! * `TODOIST_API_TOKEN` - Your Todoist API token (required)
+
 pub mod config;
 pub mod constants;
 pub mod icons;
@@ -11,6 +28,22 @@ pub mod utils;
 use anyhow::{Context, Result};
 use std::env;
 
+/// Main entry point for the Terminalist application.
+///
+/// This function:
+/// 1. Parses command-line arguments
+/// 2. Loads configuration
+/// 3. Validates the Todoist API token
+/// 4. Initializes the sync service
+/// 5. Launches the TUI application
+///
+/// # Errors
+///
+/// Returns an error if:
+/// * Configuration cannot be loaded
+/// * API token is not set
+/// * Sync service fails to initialize
+/// * UI fails to run
 #[tokio::main]
 async fn main() -> Result<()> {
     // Parse command line arguments
