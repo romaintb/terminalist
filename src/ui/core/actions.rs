@@ -58,6 +58,7 @@ pub enum Action {
 
     // Sync operations
     StartSync,
+    RefreshLocalData, // Debug mode: refresh from local DB without API sync
     SyncCompleted(SyncStatus),
     SyncFailed(String),
     DataLoaded {

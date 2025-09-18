@@ -57,6 +57,7 @@ pub struct SyncService {
     storage: Arc<Mutex<LocalStorage>>,
     sync_in_progress: Arc<Mutex<bool>>,
     logger: Option<Logger>,
+    debug_mode: bool,
 }
 
 /// Represents the current status of a synchronization operation.
@@ -114,6 +115,7 @@ impl SyncService {
             storage,
             sync_in_progress,
             logger,
+            debug_mode,
         })
     }
 
@@ -122,6 +124,13 @@ impl SyncService {
     /// This method provides access to the service's logger for external logging needs.
     pub fn logger(&self) -> Option<Logger> {
         self.logger.clone()
+    }
+
+    /// Returns whether debug mode is enabled.
+    ///
+    /// This is used to enable debug-only features like local data refresh.
+    pub fn is_debug_mode(&self) -> bool {
+        self.debug_mode
     }
 
     /// Sets or replaces the logger for this sync service.
