@@ -1,4 +1,5 @@
 use crate::config::Config;
+use crate::constants::MAIN_AREA_MIN_WIDTH;
 use crate::constants::*;
 use crate::logger::Logger;
 use crate::sync::{SyncService, SyncStatus};
@@ -1086,8 +1087,7 @@ impl AppComponent {
     /// Calculate sidebar width based on configured columns
     fn calculate_sidebar_width(&self, screen_width: u16) -> u16 {
         let sidebar_columns = self.config.ui.sidebar_width;
-        let min_main_area = 20u16;
-        let max_sidebar_width = screen_width.saturating_sub(min_main_area);
+        let max_sidebar_width = screen_width.saturating_sub(MAIN_AREA_MIN_WIDTH);
         sidebar_columns.min(max_sidebar_width)
     }
 }

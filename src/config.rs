@@ -2,7 +2,7 @@
 //!
 //! This module handles loading, parsing, and validation of configuration files.
 
-use crate::constants::CONFIG_GENERATED;
+use crate::constants::{CONFIG_GENERATED, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH};
 use crate::utils::datetime;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -27,7 +27,7 @@ pub struct UiConfig {
     pub default_project: String,
     /// Enable mouse support
     pub mouse_enabled: bool,
-    /// Sidebar width in columns (15-50)
+    /// Sidebar width in columns
     pub sidebar_width: u16,
 }
 
@@ -70,7 +70,7 @@ impl Default for UiConfig {
         Self {
             default_project: "today".to_string(),
             mouse_enabled: true,
-            sidebar_width: 30,
+            sidebar_width: SIDEBAR_DEFAULT_WIDTH,
         }
     }
 }
@@ -142,9 +142,11 @@ impl Config {
     /// Validate configuration values
     pub fn validate(&self) -> Result<()> {
         // Validate UI settings
-        if self.ui.sidebar_width < 15 || self.ui.sidebar_width > 50 {
+        if self.ui.sidebar_width < SIDEBAR_MIN_WIDTH || self.ui.sidebar_width > SIDEBAR_MAX_WIDTH {
             anyhow::bail!(
-                "sidebar_width must be between 15 and 50 columns, got {}",
+                "sidebar_width must be between {} and {} columns, got {}",
+                SIDEBAR_MIN_WIDTH,
+                SIDEBAR_MAX_WIDTH,
                 self.ui.sidebar_width
             );
         }
