@@ -1,3 +1,9 @@
+//! Sidebar navigation component for the Terminalist application.
+//!
+//! This component provides the main navigation interface, allowing users to switch
+//! between different views (Today, Tomorrow, Upcoming) and browse projects and labels.
+//! It handles keyboard and mouse navigation with proper visual feedback.
+
 use crate::icons::IconService;
 use crate::todoist::{LabelDisplay, ProjectDisplay};
 use crate::ui::core::SidebarSelection;
@@ -11,6 +17,19 @@ use ratatui::{
     Frame,
 };
 
+/// Navigation sidebar component for switching between views, projects, and labels.
+///
+/// The sidebar provides a hierarchical navigation structure:
+/// - Special views (Today, Tomorrow, Upcoming)
+/// - Projects (user-created project list)
+/// - Labels (for filtering tasks by label)
+///
+/// Features:
+/// - Keyboard navigation (Up/Down arrows, Enter to select)
+/// - Mouse support (click to select)
+/// - Visual indicators for the current selection
+/// - Dynamic updates when projects/labels change
+/// - Icon support for better visual organization
 pub struct SidebarComponent {
     pub selection: SidebarSelection,
     pub projects: Vec<ProjectDisplay>,

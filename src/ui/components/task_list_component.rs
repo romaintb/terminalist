@@ -1,3 +1,9 @@
+//! Task list component for displaying and managing tasks in the UI.
+//!
+//! This component provides the main interface for viewing and interacting with tasks.
+//! It supports multiple view modes (Today, Tomorrow, Upcoming, Projects, Labels) and
+//! handles task selection, keyboard navigation, and user interactions.
+
 use crate::config::DisplayConfig;
 use crate::constants::{HEADER_OVERDUE, HEADER_TODAY, HEADER_TOMORROW};
 use crate::icons::IconService;
@@ -18,6 +24,17 @@ use ratatui::{
     Frame,
 };
 
+/// Main task list component that displays tasks in various view modes.
+///
+/// This component handles:
+/// - Task display with proper formatting and icons
+/// - Keyboard navigation and selection
+/// - Context-sensitive headers and grouping
+/// - Integration with different view modes (Today, Projects, Labels, etc.)
+/// - Task interaction events (complete, edit, delete)
+///
+/// The component automatically groups tasks based on the current view mode and
+/// provides appropriate headers and visual indicators.
 pub struct TaskListComponent {
     pub items: Vec<TaskListItemType>,
     pub selected_index: usize,
