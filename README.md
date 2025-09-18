@@ -7,7 +7,7 @@
 [![Terminal](https://img.shields.io/badge/terminal-TUI-brightgreen.svg)](https://github.com/romaintb/terminalist)
 [![Todoist](https://img.shields.io/badge/Todoist-API-red.svg)](https://developer.todoist.com)
 
-**📖 Documentation:** [Configuration](docs/CONFIGURATION.md) | [Keyboard Shortcuts](docs/KEYBOARD_SHORTCUTS.md) | [Development](docs/DEVELOPMENT.md) | [Architecture](docs/ARCHITECTURE.md) | [Product Requirements](docs/PRD.md)
+**📖 Documentation:** [Configuration](docs/CONFIGURATION.md) | [Keyboard Shortcuts](docs/KEYBOARD_SHORTCUTS.md) | [Development](docs/DEVELOPMENT.md) | [Architecture](docs/ARCHITECTURE.md)
 
 A terminal application for interacting with Todoist, built in Rust with a modern TUI interface.
 

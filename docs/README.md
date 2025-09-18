@@ -11,7 +11,6 @@ This directory contains all documentation for Terminalist.
 
 - **[Development Guide](DEVELOPMENT.md)** - Setup instructions and development workflow
 - **[Architecture Overview](ARCHITECTURE.md)** - Technical architecture and project structure
-- **[Product Requirements](PRD.md)** - Product requirements document and roadmap
 
 ## Additional Documentation
 
