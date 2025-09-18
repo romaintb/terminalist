@@ -19,11 +19,11 @@ fn test_config_validation() {
     assert!(config.validate().is_ok());
 
     // Invalid sidebar width should fail
-    config.ui.sidebar_width = 5;
+    config.ui.sidebar_width = 10;
     assert!(config.validate().is_err());
 
     // Reset and test invalid sync interval
-    config.ui.sidebar_width = 25;
+    config.ui.sidebar_width = 35;
     config.sync.auto_sync_interval_minutes = 2000;
     assert!(config.validate().is_err());
 }
@@ -41,7 +41,7 @@ fn test_partial_config_deserialization() {
     // Test that partial TOML configs merge with defaults
     let partial_toml = r#"
 [ui]
-sidebar_width = 30
+sidebar_width = 35
 
 [logging]
 enabled = true
@@ -50,7 +50,7 @@ enabled = true
     let config: Config = toml::from_str(partial_toml).unwrap();
 
     // Check that specified values are used
-    assert_eq!(config.ui.sidebar_width, 30);
+    assert_eq!(config.ui.sidebar_width, 35);
     assert!(config.logging.enabled);
 
     // Check that unspecified values use defaults
