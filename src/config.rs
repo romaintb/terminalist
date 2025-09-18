@@ -27,7 +27,7 @@ pub struct UiConfig {
     pub default_project: String,
     /// Enable mouse support
     pub mouse_enabled: bool,
-    /// Sidebar width percentage (10-40)
+    /// Sidebar width in columns (15-50)
     pub sidebar_width: u16,
 }
 
@@ -70,7 +70,7 @@ impl Default for UiConfig {
         Self {
             default_project: "today".to_string(),
             mouse_enabled: true,
-            sidebar_width: 25,
+            sidebar_width: 30,
         }
     }
 }
@@ -142,8 +142,11 @@ impl Config {
     /// Validate configuration values
     pub fn validate(&self) -> Result<()> {
         // Validate UI settings
-        if self.ui.sidebar_width < 10 || self.ui.sidebar_width > 40 {
-            anyhow::bail!("sidebar_width must be between 10 and 40, got {}", self.ui.sidebar_width);
+        if self.ui.sidebar_width < 15 || self.ui.sidebar_width > 50 {
+            anyhow::bail!(
+                "sidebar_width must be between 15 and 50 columns, got {}",
+                self.ui.sidebar_width
+            );
         }
 
         // Validate default project

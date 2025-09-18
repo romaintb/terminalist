@@ -1083,13 +1083,12 @@ impl AppComponent {
 }
 
 impl AppComponent {
-    /// Calculate sidebar width based on percentage of screen width
+    /// Calculate sidebar width based on configured columns
     fn calculate_sidebar_width(&self, screen_width: u16) -> u16 {
-        let sidebar_percentage = self.config.ui.sidebar_width.min(100); // Cap at 100%
-        let sidebar_width_calc = ((screen_width as u32).saturating_mul(sidebar_percentage as u32) / 100) as u16;
+        let sidebar_columns = self.config.ui.sidebar_width;
         let min_main_area = 20u16;
         let max_sidebar_width = screen_width.saturating_sub(min_main_area);
-        sidebar_width_calc.min(max_sidebar_width)
+        sidebar_columns.min(max_sidebar_width)
     }
 }
 
