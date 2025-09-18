@@ -347,6 +347,15 @@ impl AppComponent {
                 self.logger.log("Global key: 'r' - starting manual sync".to_string());
                 Action::StartSync
             }
+            KeyCode::Char('R') => {
+                if self.sync_service.is_debug_mode() {
+                    self.logger
+                        .log("Global key: 'R' - refreshing local data (debug mode)".to_string());
+                    Action::RefreshLocalData
+                } else {
+                    Action::None
+                }
+            }
             KeyCode::Char('/') => {
                 self.logger.log("Global key: '/' - opening task search dialog".to_string());
                 Action::ShowDialog(DialogType::TaskSearch)
@@ -427,6 +436,12 @@ impl AppComponent {
                 } else {
                     self.logger.log("Sync already in progress, ignoring".to_string());
                 }
+                Action::None
+            }
+            Action::RefreshLocalData => {
+                self.logger.log("Refreshing local data from database (debug mode)".to_string());
+                // Schedule a data fetch directly from local storage without API sync
+                self.schedule_data_fetch();
                 Action::None
             }
             Action::SyncCompleted(status) => {
