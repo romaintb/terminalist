@@ -1052,7 +1052,7 @@ impl AppComponent {
             }
             EventType::Resize(width, height) => {
                 // Handle terminal resize - update cached dimensions
-                self.sidebar_width = (width * self.config.ui.sidebar_width / 100).min(width - 20);
+                self.sidebar_width = self.calculate_sidebar_width(width);
                 self.screen_height = height;
                 Action::None
             }
@@ -1082,6 +1082,17 @@ impl AppComponent {
     }
 }
 
+impl AppComponent {
+    /// Calculate sidebar width based on percentage of screen width
+    fn calculate_sidebar_width(&self, screen_width: u16) -> u16 {
+        let sidebar_percentage = self.config.ui.sidebar_width.min(100); // Cap at 100%
+        let sidebar_width_calc = ((screen_width as u32).saturating_mul(sidebar_percentage as u32) / 100) as u16;
+        let min_main_area = 20u16;
+        let max_sidebar_width = screen_width.saturating_sub(min_main_area);
+        sidebar_width_calc.min(max_sidebar_width)
+    }
+}
+
 impl Component for AppComponent {
     fn handle_key_events(&mut self, key: KeyEvent) -> Action {
         // This shouldn't be called directly - use handle_event instead
@@ -1099,7 +1110,7 @@ impl Component for AppComponent {
 
     fn render(&mut self, f: &mut Frame, rect: Rect) {
         // Create layout: sidebar (configurable width) | task list (remainder)
-        let sidebar_width = (rect.width * self.config.ui.sidebar_width / 100).min(rect.width - 20);
+        let sidebar_width = self.calculate_sidebar_width(rect.width);
 
         // Update cached dimensions for mouse event handling
         self.sidebar_width = sidebar_width;
