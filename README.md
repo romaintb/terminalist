@@ -7,6 +7,8 @@
 [![Terminal](https://img.shields.io/badge/terminal-TUI-brightgreen.svg)](https://github.com/romaintb/terminalist)
 [![Todoist](https://img.shields.io/badge/Todoist-API-red.svg)](https://developer.todoist.com)
 
+**📖 Documentation:** [Configuration](docs/CONFIGURATION.md) | [Keyboard Shortcuts](docs/KEYBOARD_SHORTCUTS.md) | [Development](docs/DEVELOPMENT.md) | [Architecture](docs/ARCHITECTURE.md) | [Product Requirements](docs/PRD.md)
+
 A terminal application for interacting with Todoist, built in Rust with a modern TUI interface.
 
 ## Features
@@ -71,257 +73,55 @@ terminalist --generate-config
 
 This creates a config file at `~/.config/terminalist/config.toml` with customizable settings.
 
-### 4. Build and Run
+### 4. Run the Application
 
 ```bash
-cargo build
-cargo run
+terminalist
 ```
 
 ## Configuration
 
-Terminalist supports configuration via TOML files. Configuration files are loaded in the following order of precedence:
-1. `./terminalist.toml` (project-specific config)
-2. `~/.config/terminalist/config.toml` (user config)
-3. Built-in defaults
-
-### Generate Default Configuration
+Terminalist supports customization via TOML configuration files.
 
 ```bash
+# Generate a default config file with all available options
 terminalist --generate-config
 ```
 
-### Example Configuration
+This creates a config file at `~/.config/terminalist/config.toml`.
 
-```toml
-[ui]
-default_project = "today"         # Options: "inbox", "today", "tomorrow", "upcoming", or project ID
-mouse_enabled = true              # Enable mouse support
-sidebar_width = 25                # Sidebar width percentage (10-40)
+📖 **See [Configuration Guide](docs/CONFIGURATION.md) for detailed configuration options.**
 
-[sync]
-auto_sync_interval_minutes = 5    # Auto-sync interval (0 = disabled)
+## Quick Start Controls
 
-[display]
-date_format = "%Y-%m-%d"          # Date format for task due dates
-time_format = "%H:%M"             # Time format for datetime fields
-show_descriptions = true          # Show task descriptions in list view
-show_durations = true             # Show task durations
-show_labels = true                # Show task labels
-show_project_colors = false       # Show project colors
+Essential keyboard shortcuts to get started:
 
-[logging]
-enabled = false                   # Enable logging to file
-```
+| Key | Action |
+|-----|--------|
+| `j/k` | Navigate tasks up/down |
+| `J/K` | Navigate projects up/down |
+| `Space` | Complete task |
+| `a` | Create new task |
+| `/` | Search tasks |
+| `r` | Sync with Todoist |
+| `?` | Show help panel |
+| `q` | Quit |
 
-## TUI Controls
+📖 **See [Complete Keyboard Shortcuts](docs/KEYBOARD_SHORTCUTS.md) for all available controls and interface details.**
 
-Once the application is running, you can use these keyboard shortcuts:
+## How It Works
 
-### **Navigation**
-- **`j/k`** Navigate between tasks (down/up)
-- **`J/K`** Navigate between projects (down/up)
-- **Mouse** Click on sidebar items to navigate
-
-### **Task Management**
-- **`Space`** or **`Enter`** Complete task
-- **`a`** Create new task
-- **`d`** Delete selected task (with confirmation)
-- **`p`** Cycle task priority
-- **`t`** Set task due date to today
-- **`T`** Set task due date to tomorrow
-- **`w`** Set task due date to next week (Monday)
-- **`W`** Set task due date to next week end (Saturday)
-
-### **Project Management**
-- **`A`** Create new project
-- **`D`** Delete selected project (with confirmation)
-
-### **System**
-- **`/`** Open task search dialog (search across all tasks)
-- **`r`** Force sync with Todoist
-- **`i`** Cycle through icon themes
-- **`?`** Toggle help panel
-- **`q`** Quit the application
-- **`Esc`** Cancel action or close dialogs
-- **`Ctrl+C`** Quit application
-
-### **Task Search**
-- **`/`** Open search dialog
-- **Type** Search across all tasks by content
-- **`Enter`** Close search dialog
-- **`Esc`** Close search dialog
-- **`Backspace/Delete`** Edit search query
-- **`Left/Right`** Move cursor in search box
-
-### **Help Panel Scrolling**
-- **`↑/↓`** Scroll help content up/down
-- **`Home/End`** Jump to top/bottom of help
-
-The interface consists of:
-
-### **Layout Structure**
-- **Main Area**: Projects list (1/3 width) | Tasks list (2/3 width) - side by side
-
-### **Components**
-- **Projects List (Left)**: Hierarchical display of all Todoist projects
-  - Responsive width: 1/3 of screen with a maximum of 30 characters
-  - Long project names are automatically truncated with ellipsis (…)
-  - Parent-child relationships clearly shown
-- **Tasks List (Right)**: Shows tasks for the currently selected project
-  - Takes remaining width after projects list
-  - Displays task content, priority, labels, and status
-- **Help Panel**: Modal overlay accessible with `?` key
-
-### **Task Display Features**
-Tasks are displayed with:
-- **Status Icons**: ☐ (pending), ☒ (completed), ✗ (deleted)
-- **Priority Badges**: [P0] (urgent), [P1] (high), [P2] (medium), [P3] (low), no badge (normal)
-- **Label Badges**: Colored badges showing task labels
-- **Task Content**: Truncated to fit the display width
-- **Completion Visual**: Completed tasks appear dimmed
-- **Interactive**: Press Space or Enter to toggle completion
-
-## Sync Mechanism
-
-Terminalist uses a smart sync mechanism for optimal performance:
-
-### **Local Storage**
-- All data is cached locally in an **in-memory SQLite database**
-- **No persistence between sessions** - task data is fresh on each launch
-- Provides instant loading and fast response times
-
-### **Sync Behavior**
-- **First Run**: Automatically syncs all data from Todoist
-- **Startup**: Loads local data instantly, then syncs in background if data is older than 5 minutes
-- **Manual Sync**: Press `r` to force refresh from Todoist API
-- **Sync Indicators**: Sync progress is shown during operations
-
-### **Data Management**
-- **Projects**: Hierarchical structure with parent-child relationships
-- **Tasks**: Full task details including labels, priority, and status
-- **Labels**: Colored badges for task categorization
-- **Search**: Fast database-level search across all tasks with live results
+Terminalist uses a smart sync mechanism:
+- **Fast Startup**: In-memory SQLite database for instant loading
+- **Auto Sync**: Syncs with Todoist on startup and every 5 minutes
+- **Manual Sync**: Press `r` to force refresh from Todoist
 - **Real-time Updates**: Create, modify, and delete tasks/projects immediately
 
-
-## Dependencies
-
-This project uses the following Rust crates (see `Cargo.toml` for exact versions):
-
-- `todoist-api = "0.3.0"` - Unofficial Todoist API client
-- `ratatui = "0.29"` - Terminal UI framework
-- `crossterm = "0.29"` - Cross-platform terminal handling
-- `tokio = "1.x"` - Async runtime
-- `sqlx = "0.8"` - Database toolkit with SQLite support
-- `serde` - Serialization/deserialization
-- `chrono = "0.4"` - Date and time handling
-- `anyhow = "1.0"` - Error handling
-- `toml = "0.8"` - Configuration file parsing
-- `dirs = "5.0"` - Platform-specific directory paths
-
-## Project Structure
-
-```
-src/
-├── main.rs                    # Main application entry point
-├── lib.rs                     # Library exports
-├── config.rs                  # Configuration management
-├── todoist.rs                 # Todoist API models & display structs
-├── sync.rs                    # Sync service with API integration
-├── storage/                   # SQLite storage (in-memory)
-│   ├── db.rs
-│   ├── labels.rs
-│   ├── projects.rs
-│   ├── sections.rs
-│   ├── tasks.rs
-│   └── mod.rs
-├── icons.rs                   # Icon service for terminal compatibility
-├── logger.rs                  # Debug logging system
-├── utils/                     # Utility modules
-│   ├── mod.rs
-│   └── datetime.rs            # Date/time utilities
-└── ui/                        # Modern Component-Based Architecture
-    ├── app_component.rs       # Main application orchestrator
-    ├── renderer.rs            # Modern rendering system
-    ├── core/                  # Core architecture components
-    │   ├── actions.rs         # Action system for component communication
-    │   ├── component.rs       # Component trait and lifecycle
-    │   ├── context.rs         # App context
-    │   ├── event_handler.rs   # Event processing system
-    │   └── task_manager.rs    # Background async task management
-    └── components/            # UI Components
-        ├── badge.rs
-        ├── dialog_component.rs    # Unified modal dialog system
-        ├── sidebar_component.rs   # Project/label navigation
-        ├── task_list_component.rs # Task management and display
-        └── task_list_item_component.rs
-```
-
-## Development Setup
-
-This project is set up with modern Rust development tooling:
-
-### Quick Start
-```bash
-# Install Rust components
-rustup component add rustfmt clippy
-
-# Development workflow
-cargo fmt && cargo clippy --fix --allow-dirty && cargo check  # Format + lint + check
-cargo fmt         # Format code with rustfmt
-cargo clippy      # Run clippy linter
-cargo clippy --fix --allow-dirty  # Auto-fix clippy issues
-```
-
-### Available Commands
-```bash
-cargo fmt         # Format code with rustfmt
-cargo clippy      # Run clippy linter
-cargo clippy --fix --allow-dirty  # Auto-fix clippy issues
-cargo check       # Check code without building
-cargo test        # Run tests
-cargo build       # Build the project
-cargo run         # Run the main application
-cargo clean       # Clean build artifacts
-cargo clippy -- -W clippy::all -W clippy::pedantic  # Run all clippy lints (strict)
-cargo doc --open --no-deps  # Generate and open documentation
-```
-
-### Configuration Files
-
-- `rustfmt.toml` - Code formatting rules
-- `clippy.toml` - Linting rules
-
-### CI/CD
-
-GitHub Actions workflow is configured in `.github/workflows/ci.yml` with:
-- Format checking with rustfmt
-- Linting with clippy
-- Testing on multiple Rust versions and OSes
-- MSRV 1.78 build job
-- Smoke tests for `--help` and `--version`
-- Security auditing
-
-See the roadmap and product details in `docs/PRD.md`.
+📖 **See [Architecture Guide](docs/ARCHITECTURE.md) for technical details.**
 
 ## Contributing
 
-This is a fully-featured TUI application for Todoist. You can extend it by:
-
-- Adding more keyboard shortcuts
-- Implementing additional task filters
-- Extending the configuration system
-- Enhancing the badge system
-- Adding more dialog types
-
-### Development Workflow
-
-1. `cargo fmt` - Format your code
-2. `cargo clippy --fix --allow-dirty` - Auto-fix linting issues
-3. `cargo test` - Run tests
-4. `cargo check` - Quick compile check
-5. `git commit` - Commit your changes
+Contributions are welcome! See [Development Guide](docs/DEVELOPMENT.md) for setup instructions and coding standards.
 
 ## License
 
