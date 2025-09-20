@@ -20,3 +20,10 @@ Thumbs.db
 
 # Debug database
 terminalist_debug.db
+
+# AUR build artifacts
+src/
+pkg/
+*.tar.gz
+*.pkg.tar.zst
+.SRCINFO
