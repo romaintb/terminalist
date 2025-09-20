@@ -30,13 +30,7 @@ A terminal application for interacting with Todoist, built in Rust with a modern
 
 ## Installation
 
-### Option 1: Install from Crates.io (Recommended)
-
-```bash
-cargo install terminalist
-```
-
-### Option 2: Install from AUR (Arch Linux)
+### Option 1: Install from AUR (Arch Linux)
 
 ```bash
 # Using yay
@@ -46,6 +40,12 @@ yay -S terminalist
 paru -S terminalist
 
 # Or any other AUR helper
+```
+
+### Option 2: Install from Crates.io
+
+```bash
+cargo install terminalist
 ```
 
 ### Option 3: Build from Source
@@ -63,6 +63,10 @@ cargo run --release
 ```
 
 The binary will be available at `target/release/terminalist` after building.
+
+### Help Wanted: Package Maintainers
+
+We're looking for help packaging Terminalist for other Linux distributions (Debian/Ubuntu, Fedora, NixOS, etc.). If you're interested in maintaining a package, please open an issue or submit a PR!
 
 ## Setup
 
