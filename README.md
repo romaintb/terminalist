@@ -36,7 +36,19 @@ A terminal application for interacting with Todoist, built in Rust with a modern
 cargo install terminalist
 ```
 
-### Option 2: Build from Source
+### Option 2: Install from AUR (Arch Linux)
+
+```bash
+# Using yay
+yay -S terminalist
+
+# Using paru
+paru -S terminalist
+
+# Or any other AUR helper
+```
+
+### Option 3: Build from Source
 
 ```bash
 # Clone the repository
