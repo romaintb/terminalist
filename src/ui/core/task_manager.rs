@@ -115,8 +115,6 @@ impl TaskManager {
                         let _ = action_sender.send(Action::NavigateToSidebar(SidebarSelection::Today));
                     }
 
-                    // Show success message
-                    let _ = action_sender.send(Action::ShowDialog(crate::ui::core::actions::DialogType::Info(message)));
                     Ok(result)
                 }
                 Err(e) => {
