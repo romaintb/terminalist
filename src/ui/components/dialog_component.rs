@@ -6,7 +6,6 @@
 
 use crate::config::DisplayConfig;
 use crate::icons::IconService;
-use crate::logger::Logger;
 use crate::sync::SyncService;
 use crate::todoist::{LabelDisplay, ProjectDisplay, TaskDisplay};
 use crate::ui::components::task_list_item_component::{ListItem as TaskListItem, TaskItem};
@@ -54,8 +53,6 @@ pub struct DialogComponent {
     // Scrolling support for long content dialogs
     pub scroll_offset: usize,
     pub scrollbar_state: ScrollbarState,
-    // Debug logger for logs dialog
-    pub logger: Option<Logger>,
     // Task search state
     pub search_results: Vec<TaskDisplay>,
     pub sync_service: Option<SyncService>,
@@ -83,7 +80,6 @@ impl DialogComponent {
             icons: IconService::default(),
             scroll_offset: 0,
             scrollbar_state: ScrollbarState::new(0),
-            logger: None,
             search_results: Vec::new(),
             sync_service: None,
             display_config: DisplayConfig::default(),
@@ -122,10 +118,6 @@ impl DialogComponent {
     /// Get all non-inbox projects for task creation (excludes inbox project)
     pub fn get_task_projects(&self) -> Vec<&ProjectDisplay> {
         self.projects.iter().filter(|project| !project.is_inbox_project).collect()
-    }
-
-    pub fn set_logger(&mut self, logger: Logger) {
-        self.logger = Some(logger);
     }
 
     /// Trigger a database search based on current input
@@ -479,7 +471,7 @@ impl DialogComponent {
     }
 
     fn render_logs_dialog(&mut self, f: &mut Frame, area: Rect) {
-        system_dialogs::render_logs_dialog(f, area, &self.logger, self.scroll_offset, &mut self.scrollbar_state);
+        system_dialogs::render_logs_dialog(f, area, self.scroll_offset, &mut self.scrollbar_state);
     }
 }
 

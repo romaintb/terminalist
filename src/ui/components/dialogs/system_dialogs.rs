@@ -1,5 +1,5 @@
 use crate::icons::IconService;
-use crate::logger::Logger;
+use crate::logger;
 use crate::ui::layout::LayoutManager;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -343,13 +343,7 @@ Press 'Esc', '?' or 'h' to close this help panel
     }
 }
 
-pub fn render_logs_dialog(
-    f: &mut Frame,
-    area: Rect,
-    logger: &Option<Logger>,
-    scroll_offset: usize,
-    scrollbar_state: &mut ScrollbarState,
-) {
+pub fn render_logs_dialog(f: &mut Frame, area: Rect, scroll_offset: usize, scrollbar_state: &mut ScrollbarState) {
     let logs_area = LayoutManager::centered_rect(90, 90, area);
     f.render_widget(Clear, logs_area);
 
@@ -362,11 +356,7 @@ pub fn render_logs_dialog(
         logs_area.height.saturating_sub(margin_y * 2),
     );
 
-    let logs = if let Some(ref logger) = logger {
-        logger.get_logs()
-    } else {
-        vec!["No debug logger available".to_string()]
-    };
+    let logs = logger::get_memory_logs();
 
     let logs_content = if logs.is_empty() {
         "No debug logs available".to_string()

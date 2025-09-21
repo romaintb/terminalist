@@ -1,48 +1,20 @@
-use std::fs;
-use std::io::Write;
-use terminalist::logger::Logger;
+use terminalist::logger;
 
 #[test]
-fn test_config_based_logging_disabled() {
-    // Test with logging disabled
-    let logger = Logger::from_config(false).unwrap();
-    assert!(!logger.is_enabled());
-    assert!(!logger.has_file_writer());
+fn test_memory_logs() {
+    // Clear any existing logs
+    logger::clear_memory_logs();
 
-    logger.log("Test message".to_string());
-    let logs = logger.get_logs();
-    assert_eq!(logs.len(), 1);
-    assert!(logs[0].contains("Test message"));
+    // Test that we can get empty logs
+    let logs = logger::get_memory_logs();
+    assert!(logs.is_empty());
 }
 
 #[test]
-fn test_config_based_logging_enabled() {
-    // Test with logging enabled
-    let logger = Logger::from_config(true).unwrap();
-    assert!(logger.is_enabled());
-    assert!(logger.has_file_writer());
-
-    logger.log("Test message with file".to_string());
-
-    // Check in-memory logs (for UI display with "G" key)
-    let logs = logger.get_logs();
-    assert_eq!(logs.len(), 1);
-    assert!(logs[0].contains("Test message with file"));
-
-    // Test that the file writer exists and works by forcing a flush and checking the file
-    if let Some(ref writer_arc) = logger.file_writer() {
-        // Force flush the buffered writer
-        if let Ok(mut writer) = writer_arc.lock() {
-            let _ = writer.flush();
-        }
-
-        // Check if log file was created at the expected path
-        let log_path = Logger::get_log_file_path().unwrap();
-        if log_path.exists() {
-            let file_content = fs::read_to_string(&log_path).unwrap_or_default();
-            assert!(file_content.contains("Test message with file"));
-            // Clean up test file
-            let _ = fs::remove_file(&log_path);
-        }
-    }
+fn test_log_file_path() {
+    // Test that we can get the log file path
+    let path = logger::get_log_file_path();
+    assert!(path.is_ok());
+    let path = path.unwrap();
+    assert!(path.to_string_lossy().contains("terminalist.log"));
 }

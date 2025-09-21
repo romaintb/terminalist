@@ -37,3 +37,6 @@ chrono = { version = "0.4", features = ["serde"] }
 todoist-api = "0.3.0"
 toml = "0.8"
 dirs = "5.0"
+log = "0.4"
+fern = "0.6"
+once_cell = "1.19"
