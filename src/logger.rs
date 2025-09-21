@@ -85,7 +85,7 @@ impl log::Log for MemoryLogger {
             if let Ok(mut logs) = MEMORY_LOGS.lock() {
                 logs.push_back(formatted);
                 // Keep only last 5000 entries
-                while logs.len() > 5000 {
+                while logs.len() > MEMORY_LOGS_LIMIT {
                     logs.pop_front();
                 }
             }

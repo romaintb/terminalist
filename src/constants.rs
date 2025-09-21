@@ -84,3 +84,5 @@ pub const SIDEBAR_MAX_WIDTH: u16 = 50;
 pub const SIDEBAR_DEFAULT_WIDTH: u16 = 30;
 /// Minimum main area width to preserve usability
 pub const MAIN_AREA_MIN_WIDTH: u16 = 20;
+
+pub const MEMORY_LOGS_LIMIT: usize = 5000;
