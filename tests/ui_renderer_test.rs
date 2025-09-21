@@ -4,7 +4,7 @@ use terminalist::ui::core::EventHandler;
 async fn test_app_creation() {
     // This would require a mock sync service and config
     // let config = Config::default();
-    // let sync_service = SyncService::new("dummy_token".to_string(), false, &config).await.unwrap();
+    // let sync_service = SyncService::new("dummy_token".to_string(), false).await.unwrap();
     // let app = AppComponent::new(sync_service, config);
     // assert!(!app.should_quit());
 }

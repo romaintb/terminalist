@@ -22,7 +22,6 @@ Thumbs.db
 terminalist_debug.db
 
 # AUR build artifacts
-src/
 pkg/
 *.tar.gz
 *.pkg.tar.zst

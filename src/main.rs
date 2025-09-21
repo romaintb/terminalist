@@ -94,6 +94,9 @@ async fn main() -> Result<()> {
     // Load configuration
     let config = config::Config::load()?;
 
+    // Initialize logger
+    logger::init_logger(config.logging.enabled)?;
+
     // Check if API token is set
     if std::env::var("TODOIST_API_TOKEN").is_err() {
         eprintln!("❌ Error: TODOIST_API_TOKEN environment variable not set");
@@ -110,7 +113,7 @@ async fn main() -> Result<()> {
 
     match tokio::time::timeout(
         tokio::time::Duration::from_secs(10),
-        sync::SyncService::new(api_token, debug_mode, &config),
+        sync::SyncService::new(api_token, debug_mode),
     )
     .await
     {

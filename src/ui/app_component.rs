@@ -1,7 +1,6 @@
 use crate::config::Config;
 use crate::constants::MAIN_AREA_MIN_WIDTH;
 use crate::constants::*;
-use crate::logger::Logger;
 use crate::sync::{SyncService, SyncStatus};
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
 use crate::ui::components::{DialogComponent, SidebarComponent, TaskListComponent};
@@ -14,6 +13,7 @@ use crate::ui::core::{
 };
 use crate::utils::datetime;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use log::info;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     Frame,
@@ -71,7 +71,6 @@ pub struct AppComponent {
     sync_service: SyncService,
     task_manager: TaskManager,
     background_action_rx: mpsc::UnboundedReceiver<Action>,
-    logger: Logger,
 
     // Configuration
     config: Config,
@@ -90,7 +89,6 @@ impl AppComponent {
         let sidebar = SidebarComponent::new();
         let task_list = TaskListComponent::new();
         let (task_manager, background_action_rx) = TaskManager::new();
-        let logger = sync_service.logger().unwrap_or_default();
 
         let state = AppState {
             loading: true,
@@ -105,7 +103,6 @@ impl AppComponent {
             sync_service,
             task_manager,
             background_action_rx,
-            logger,
             config,
             should_quit: false,
             active_sync_task: None,
@@ -140,7 +137,7 @@ impl AppComponent {
 
     /// Trigger initial sync on startup
     pub fn trigger_initial_sync(&mut self) {
-        self.logger.log("AppComponent: Starting initial sync".to_string());
+        info!("AppComponent: Starting initial sync");
 
         // Set initial sidebar selection based on config
         self.set_initial_sidebar_selection();
@@ -148,7 +145,7 @@ impl AppComponent {
         if self.active_sync_task.is_none() {
             self.start_background_sync();
             // Data fetch will be triggered automatically when sync completes
-            self.logger.log("AppComponent: Initial sync scheduled".to_string());
+            info!("AppComponent: Initial sync scheduled");
         }
     }
 
@@ -177,10 +174,10 @@ impl AppComponent {
         };
 
         self.state.sidebar_selection = selection;
-        self.logger.log(format!(
+        info!(
             "AppComponent: Set initial sidebar selection to {:?}",
             self.state.sidebar_selection
-        ));
+        );
     }
 
     /// Update all components with current data
@@ -206,7 +203,6 @@ impl AppComponent {
             self.state.labels.clone(),
             self.state.tasks.clone(),
         );
-        self.dialog.set_logger(self.logger.clone());
         self.dialog.set_sync_service(self.sync_service.clone());
     }
 
@@ -226,23 +222,23 @@ impl AppComponent {
 
         match key.code {
             KeyCode::Char('q') => {
-                self.logger.log("Global key: 'q' - quitting application".to_string());
+                info!("Global key: 'q' - quitting application");
                 Action::Quit
             }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                self.logger.log("Global key: Ctrl+C - quitting application".to_string());
+                info!("Global key: Ctrl+C - quitting application");
                 Action::Quit
             }
             KeyCode::Char('?') | KeyCode::Char('h') => {
-                self.logger.log("Global key: '?' or 'h' - opening help dialog".to_string());
+                info!("Global key: '?' or 'h' - opening help dialog");
                 Action::ShowDialog(DialogType::Help)
             }
             KeyCode::Char('G') => {
-                self.logger.log("Global key: 'G' - opening logs dialog".to_string());
+                info!("Global key: 'G' - opening logs dialog");
                 Action::ShowDialog(DialogType::Logs)
             }
             KeyCode::Char('A') => {
-                self.logger.log("Global key: 'A' - opening project creation dialog".to_string());
+                info!("Global key: 'A' - opening project creation dialog");
                 Action::ShowDialog(DialogType::ProjectCreation)
             }
             KeyCode::Char('D') => {
@@ -250,45 +246,40 @@ impl AppComponent {
                 match &self.state.sidebar_selection {
                     SidebarSelection::Project(index) => {
                         if let Some(project) = self.state.projects.get(*index) {
-                            self.logger.log(format!(
+                            info!(
                                 "Global key: 'D' - deleting project '{}' (ID: {})",
                                 project.name, project.id
-                            ));
+                            );
                             Action::ShowDialog(DialogType::DeleteConfirmation {
                                 item_type: "project".to_string(),
                                 item_id: project.id.clone(),
                             })
                         } else {
-                            self.logger
-                                .log("Global key: 'D' - no project selected (invalid index)".to_string());
+                            info!("Global key: 'D' - no project selected (invalid index)");
                             Action::ShowDialog(DialogType::Error("No project selected to delete".to_string()))
                         }
                     }
                     SidebarSelection::Today => {
-                        self.logger.log("Global key: 'D' - cannot delete Today view".to_string());
+                        info!("Global key: 'D' - cannot delete Today view");
                         Action::ShowDialog(DialogType::Info("Cannot delete the Today view".to_string()))
                     }
                     SidebarSelection::Tomorrow => {
-                        self.logger.log("Global key: 'D' - cannot delete Tomorrow view".to_string());
+                        info!("Global key: 'D' - cannot delete Tomorrow view");
                         Action::ShowDialog(DialogType::Info("Cannot delete the Tomorrow view".to_string()))
                     }
                     SidebarSelection::Upcoming => {
-                        self.logger.log("Global key: 'D' - cannot delete Upcoming view".to_string());
+                        info!("Global key: 'D' - cannot delete Upcoming view");
                         Action::ShowDialog(DialogType::Info("Cannot delete the Upcoming view".to_string()))
                     }
                     SidebarSelection::Label(index) => {
                         if let Some(label) = self.state.labels.get(*index) {
-                            self.logger.log(format!(
-                                "Global key: 'D' - deleting label '{}' (ID: {})",
-                                label.name, label.id
-                            ));
+                            info!("Global key: 'D' - deleting label '{}' (ID: {})", label.name, label.id);
                             Action::ShowDialog(DialogType::DeleteConfirmation {
                                 item_type: "label".to_string(),
                                 item_id: label.id.clone(),
                             })
                         } else {
-                            self.logger
-                                .log("Global key: 'D' - no label selected (invalid index)".to_string());
+                            info!("Global key: 'D' - no label selected (invalid index)");
                             Action::ShowDialog(DialogType::Error("No label selected to delete".to_string()))
                         }
                     }
@@ -299,121 +290,107 @@ impl AppComponent {
                 match &self.state.sidebar_selection {
                     SidebarSelection::Project(index) => {
                         if let Some(project) = self.state.projects.get(*index) {
-                            self.logger.log(format!(
+                            info!(
                                 "Global key: 'E' - editing project '{}' (ID: {})",
                                 project.name, project.id
-                            ));
+                            );
                             Action::ShowDialog(DialogType::ProjectEdit {
                                 project_id: project.id.clone(),
                                 name: project.name.clone(),
                             })
                         } else {
-                            self.logger
-                                .log("Global key: 'E' - no project selected (invalid index)".to_string());
+                            info!("Global key: 'E' - no project selected (invalid index)");
                             Action::ShowDialog(DialogType::Error("No project selected to edit".to_string()))
                         }
                     }
                     SidebarSelection::Today => {
-                        self.logger.log("Global key: 'E' - cannot edit Today view".to_string());
+                        info!("Global key: 'E' - cannot edit Today view");
                         Action::ShowDialog(DialogType::Info("Cannot edit the Today view".to_string()))
                     }
                     SidebarSelection::Tomorrow => {
-                        self.logger.log("Global key: 'E' - cannot edit Tomorrow view".to_string());
+                        info!("Global key: 'E' - cannot edit Tomorrow view");
                         Action::ShowDialog(DialogType::Info("Cannot edit the Tomorrow view".to_string()))
                     }
                     SidebarSelection::Upcoming => {
-                        self.logger.log("Global key: 'E' - cannot edit Upcoming view".to_string());
+                        info!("Global key: 'E' - cannot edit Upcoming view");
                         Action::ShowDialog(DialogType::Info("Cannot edit the Upcoming view".to_string()))
                     }
                     SidebarSelection::Label(index) => {
                         if let Some(label) = self.state.labels.get(*index) {
-                            self.logger.log(format!(
-                                "Global key: 'E' - editing label '{}' (ID: {})",
-                                label.name, label.id
-                            ));
+                            info!("Global key: 'E' - editing label '{}' (ID: {})", label.name, label.id);
                             Action::ShowDialog(DialogType::LabelEdit {
                                 label_id: label.id.clone(),
                                 name: label.name.clone(),
                             })
                         } else {
-                            self.logger
-                                .log("Global key: 'E' - no label selected (invalid index)".to_string());
+                            info!("Global key: 'E' - no label selected (invalid index)");
                             Action::ShowDialog(DialogType::Error("No label selected to edit".to_string()))
                         }
                     }
                 }
             }
             KeyCode::Char('r') => {
-                self.logger.log("Global key: 'r' - starting manual sync".to_string());
+                info!("Global key: 'r' - starting manual sync");
                 Action::StartSync
             }
             KeyCode::Char('R') => {
                 if self.sync_service.is_debug_mode() {
-                    self.logger
-                        .log("Global key: 'R' - refreshing local data (debug mode)".to_string());
+                    info!("Global key: 'R' - refreshing local data (debug mode)");
                     Action::RefreshLocalData
                 } else {
                     Action::None
                 }
             }
             KeyCode::Char('/') => {
-                self.logger.log("Global key: '/' - opening task search dialog".to_string());
+                info!("Global key: '/' - opening task search dialog");
                 Action::ShowDialog(DialogType::TaskSearch)
             }
             KeyCode::Char('t') => {
                 // Set task due date to today
                 if let Some(task) = self.task_list.get_selected_task() {
-                    self.logger
-                        .log(format!("Global key: 't' - setting task '{}' due today", task.content));
+                    info!("Global key: 't' - setting task '{}' due today", task.content);
                     Action::SetTaskDueToday(task.id.clone())
                 } else {
-                    self.logger.log("Global key: 't' - no task selected".to_string());
+                    info!("Global key: 't' - no task selected");
                     Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
                 }
             }
             KeyCode::Char('T') => {
                 // Set task due date to tomorrow
                 if let Some(task) = self.task_list.get_selected_task() {
-                    self.logger.log(format!(
-                        "Global key: 'T' - setting task '{}' due tomorrow",
-                        task.content
-                    ));
+                    info!("Global key: 'T' - setting task '{}' due tomorrow", task.content);
                     Action::SetTaskDueTomorrow(task.id.clone())
                 } else {
-                    self.logger.log("Global key: 'T' - no task selected".to_string());
+                    info!("Global key: 'T' - no task selected");
                     Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
                 }
             }
             KeyCode::Char('w') => {
                 // Set task due date to next week (Monday)
                 if let Some(task) = self.task_list.get_selected_task() {
-                    self.logger.log(format!(
-                        "Global key: 'w' - setting task '{}' due next week",
-                        task.content
-                    ));
+                    info!("Global key: 'w' - setting task '{}' due next week", task.content);
                     Action::SetTaskDueNextWeek(task.id.clone())
                 } else {
-                    self.logger.log("Global key: 'w' - no task selected".to_string());
+                    info!("Global key: 'w' - no task selected");
                     Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
                 }
             }
             KeyCode::Char('W') => {
                 // Set task due date to weekend (Saturday)
                 if let Some(task) = self.task_list.get_selected_task() {
-                    self.logger
-                        .log(format!("Global key: 'W' - setting task '{}' due weekend", task.content));
+                    info!("Global key: 'W' - setting task '{}' due weekend", task.content);
                     Action::SetTaskDueWeekEnd(task.id.clone())
                 } else {
-                    self.logger.log("Global key: 'W' - no task selected".to_string());
+                    info!("Global key: 'W' - no task selected");
                     Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
                 }
             }
             KeyCode::Esc => {
                 if self.dialog.is_visible() {
-                    self.logger.log("Global key: Esc - closing dialog".to_string());
+                    info!("Global key: Esc - closing dialog");
                     Action::HideDialog
                 } else {
-                    self.logger.log("Global key: Esc - quitting application".to_string());
+                    info!("Global key: Esc - quitting application");
                     Action::Quit
                 }
             }
@@ -430,22 +407,22 @@ impl AppComponent {
             }
             Action::StartSync => {
                 if self.active_sync_task.is_none() {
-                    self.logger.log("Starting background sync".to_string());
+                    info!("Starting background sync");
                     self.state.loading = true;
                     self.start_background_sync();
                 } else {
-                    self.logger.log("Sync already in progress, ignoring".to_string());
+                    info!("Sync already in progress, ignoring");
                 }
                 Action::None
             }
             Action::RefreshLocalData => {
-                self.logger.log("Refreshing local data from database (debug mode)".to_string());
+                info!("Refreshing local data from database (debug mode)");
                 // Schedule a data fetch directly from local storage without API sync
                 self.schedule_data_fetch();
                 Action::None
             }
             Action::SyncCompleted(status) => {
-                self.logger.log(format!("Sync: Completed with status {:?}", status));
+                info!("Sync: Completed with status {:?}", status);
                 self.active_sync_task = None;
                 self.state.loading = false;
 
@@ -454,23 +431,23 @@ impl AppComponent {
                 self.sync_component_data();
 
                 self.state.info_message = Some("Sync completed successfully".to_string());
-                self.logger.log("Sync: Showing completion info dialog".to_string());
+                info!("Sync: Showing completion info dialog");
                 Action::ShowDialog(DialogType::Info(self.state.info_message.clone().unwrap()))
             }
             Action::SyncFailed(error) => {
-                self.logger.log(format!("Sync: Failed with error: {}", error));
+                info!("Sync: Failed with error: {}", error);
                 self.active_sync_task = None;
                 self.state.loading = false;
                 self.state.error_message = Some(error);
                 Action::ShowDialog(DialogType::Error(self.state.error_message.clone().unwrap_or_default()))
             }
             Action::ShowDialog(ref dialog_type) => {
-                self.logger.log(format!("Dialog: Showing dialog {:?}", dialog_type));
+                info!("Dialog: Showing dialog {:?}", dialog_type);
                 // Dialog component will handle the actual dialog setup
                 action
             }
             Action::HideDialog => {
-                self.logger.log("Dialog: Hiding current dialog".to_string());
+                info!("Dialog: Hiding current dialog");
                 // Dialog component will handle hiding
                 action
             }
@@ -496,13 +473,11 @@ impl AppComponent {
                     }
                 };
 
-                self.logger
-                    .log(format!("Navigation: Sidebar selection changed to {}", selection_desc));
+                info!("Navigation: Sidebar selection changed to {}", selection_desc);
                 self.state.sidebar_selection = selection.clone();
                 // Reload data for the new selection
                 self.schedule_data_fetch();
-                self.logger
-                    .log("Navigation: Scheduled data fetch for new selection".to_string());
+                info!("Navigation: Scheduled data fetch for new selection");
                 Action::None
             }
             // Task operations with background execution
@@ -511,10 +486,7 @@ impl AppComponent {
                     Some(id) => format!(" in project {}", id),
                     None => " in inbox".to_string(),
                 };
-                self.logger.log(format!(
-                    "Task: Creating task with content '{}'{}",
-                    content, project_desc
-                ));
+                info!("Task: Creating task with content '{}'{}", content, project_desc);
 
                 // Format task info to include both content and project_id
                 let task_info = match project_id {
@@ -530,12 +502,12 @@ impl AppComponent {
                 if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
                     let task_desc = format!("ID {} '{}'", task_id, task.content);
 
-                    self.logger.log(format!("Task: Completing task {}", task_desc));
+                    info!("Task: Completing task {}", task_desc);
 
                     // Todoist API automatically handles subtasks when parent is completed
                     self.spawn_task_operation("Complete task".to_string(), task_id);
                 } else {
-                    self.logger.log(format!("Task: Cannot complete - task {} not found", task_id));
+                    info!("Task: Cannot complete - task {} not found", task_id);
                 }
                 Action::None
             }
@@ -552,11 +524,10 @@ impl AppComponent {
                         "ID {} '{}' (P{} -> P{})",
                         task_id, task.content, task.priority, new_priority
                     );
-                    self.logger.log(format!("Task: Cycling priority for task {}", task_desc));
+                    info!("Task: Cycling priority for task {}", task_desc);
                     self.spawn_task_operation("Cycle priority".to_string(), format!("{}|{}", task_id, new_priority));
                 } else {
-                    self.logger
-                        .log(format!("Task: Cannot cycle priority - task {} not found", task_id));
+                    info!("Task: Cannot cycle priority - task {} not found", task_id);
                 }
                 Action::None
             }
@@ -568,7 +539,7 @@ impl AppComponent {
                 } else {
                     format!("ID {} [unknown]", task_id)
                 };
-                self.logger.log(format!("Task: Deleting task {}", task_desc));
+                info!("Task: Deleting task {}", task_desc);
                 self.spawn_task_operation("Delete task".to_string(), task_id);
                 Action::None
             }
@@ -580,8 +551,7 @@ impl AppComponent {
                 } else {
                     format!("ID {} [unknown]", task_id)
                 };
-                self.logger
-                    .log(format!("Task: Setting due date to today for task {}", task_desc));
+                info!("Task: Setting due date to today for task {}", task_desc);
                 self.spawn_task_operation("Set task due today".to_string(), format!("{}|today", task_id));
                 Action::None
             }
@@ -593,8 +563,7 @@ impl AppComponent {
                 } else {
                     format!("ID {} [unknown]", task_id)
                 };
-                self.logger
-                    .log(format!("Task: Setting due date to tomorrow for task {}", task_desc));
+                info!("Task: Setting due date to tomorrow for task {}", task_desc);
                 self.spawn_task_operation("Set task due tomorrow".to_string(), format!("{}|tomorrow", task_id));
                 Action::None
             }
@@ -606,8 +575,7 @@ impl AppComponent {
                 } else {
                     format!("ID {} [unknown]", task_id)
                 };
-                self.logger
-                    .log(format!("Task: Setting due date to next week for task {}", task_desc));
+                info!("Task: Setting due date to next week for task {}", task_desc);
                 self.spawn_task_operation("Set task due next week".to_string(), format!("{}|next_week", task_id));
                 Action::None
             }
@@ -619,14 +587,12 @@ impl AppComponent {
                 } else {
                     format!("ID {} [unknown]", task_id)
                 };
-                self.logger
-                    .log(format!("Task: Setting due date to weekend for task {}", task_desc));
+                info!("Task: Setting due date to weekend for task {}", task_desc);
                 self.spawn_task_operation("Set task due weekend".to_string(), format!("{}|weekend", task_id));
                 Action::None
             }
             Action::EditTask { id, content } => {
-                self.logger
-                    .log(format!("Task: Editing task ID {} with new content '{}'", id, content));
+                info!("Task: Editing task ID {} with new content '{}'", id, content);
                 self.spawn_task_operation("Edit task".to_string(), format!("{}: {}", id, content));
                 Action::None
             }
@@ -635,7 +601,7 @@ impl AppComponent {
                     Some(id) => format!(" with parent {}", id),
                     None => "".to_string(),
                 };
-                self.logger.log(format!("Project: Creating project '{}'{}", name, parent_desc));
+                info!("Project: Creating project '{}'{}", name, parent_desc);
 
                 // Format project info to include both name and parent_id
                 let project_info = match parent_id {
@@ -652,7 +618,7 @@ impl AppComponent {
                 } else {
                     format!("ID {} [unknown]", project_id)
                 };
-                self.logger.log(format!("Project: Deleting project {}", project_desc));
+                info!("Project: Deleting project {}", project_desc);
                 self.spawn_task_operation("Delete project".to_string(), project_id);
                 Action::None
             }
@@ -663,12 +629,12 @@ impl AppComponent {
                 } else {
                     format!("ID {} [unknown]", label_id)
                 };
-                self.logger.log(format!("Label: Deleting label {}", label_desc));
+                info!("Label: Deleting label {}", label_desc);
                 self.spawn_task_operation("Delete label".to_string(), label_id);
                 Action::None
             }
             Action::CreateLabel { name } => {
-                self.logger.log(format!("Label: Creating label '{}'", name));
+                info!("Label: Creating label '{}'", name);
                 self.spawn_task_operation("Create label".to_string(), name);
                 Action::None
             }
@@ -679,7 +645,7 @@ impl AppComponent {
                 } else {
                     format!("ID {} [unknown] -> '{}'", id, name)
                 };
-                self.logger.log(format!("Project: Editing project {}", project_desc));
+                info!("Project: Editing project {}", project_desc);
                 self.spawn_task_operation("Edit project".to_string(), format!("{}: {}", id, name));
                 Action::None
             }
@@ -690,7 +656,7 @@ impl AppComponent {
                 } else {
                     format!("ID {} [unknown] -> '{}'", id, name)
                 };
-                self.logger.log(format!("Label: Editing label {}", label_desc));
+                info!("Label: Editing label {}", label_desc);
                 self.spawn_task_operation("Edit label".to_string(), format!("{}: {}", id, name));
                 Action::None
             }
@@ -721,46 +687,42 @@ impl AppComponent {
                     }
                 };
 
-                self.logger.log(format!(
+                info!(
                     "Data: Loaded {} projects, {} labels, {} sections, {} tasks for {}",
                     projects.len(),
                     labels.len(),
                     sections.len(),
                     tasks.len(),
                     selection_context
-                ));
+                );
                 // Update app state with loaded data
                 self.state.update_data(projects, labels, sections, tasks);
                 self.sync_component_data();
-                self.logger.log("Data: Updated all component data after data load".to_string());
+                info!("Data: Updated all component data after data load");
                 Action::None
             }
             Action::SearchTasks(query) => {
-                self.logger.log(format!("Search: Starting database search for '{}'", query));
+                info!("Search: Starting database search for '{}'", query);
                 let sync_service = self.sync_service.clone();
                 let _task_id = self.task_manager.spawn_task_search(sync_service, query);
                 Action::None
             }
             Action::SearchResultsLoaded { query, results } => {
-                self.logger.log(format!(
-                    "Search: Loaded {} results for query '{}'",
-                    results.len(),
-                    query
-                ));
+                info!("Search: Loaded {} results for query '{}'", results.len(), query);
                 // Update dialog with search results
                 self.dialog.update_search_results(&query, results);
                 Action::None
             }
             Action::NextTask => {
-                self.logger.log("Navigation: Next task (j/down)".to_string());
+                info!("Navigation: Next task (j/down)");
                 action
             }
             Action::PreviousTask => {
-                self.logger.log("Navigation: Previous task (k/up)".to_string());
+                info!("Navigation: Previous task (k/up)");
                 action
             }
             Action::RefreshData => {
-                self.logger.log("Data: Refreshing UI data after task operation".to_string());
+                info!("Data: Refreshing UI data after task operation");
                 // Schedule a data fetch to reload current view with updated data
                 self.schedule_data_fetch();
                 Action::None
@@ -770,29 +732,23 @@ impl AppComponent {
                 if self.state.help_scroll_offset > 0 {
                     self.state.help_scroll_offset -= 1;
                 }
-                self.logger.log(format!(
-                    "Help: Scrolled up, offset now {}",
-                    self.state.help_scroll_offset
-                ));
+                info!("Help: Scrolled up, offset now {}", self.state.help_scroll_offset);
                 Action::None
             }
             Action::HelpScrollDown => {
                 self.state.help_scroll_offset += 1;
-                self.logger.log(format!(
-                    "Help: Scrolled down, offset now {}",
-                    self.state.help_scroll_offset
-                ));
+                info!("Help: Scrolled down, offset now {}", self.state.help_scroll_offset);
                 Action::None
             }
             Action::HelpScrollToTop => {
                 self.state.help_scroll_offset = 0;
-                self.logger.log("Help: Scrolled to top".to_string());
+                info!("Help: Scrolled to top");
                 Action::None
             }
             Action::HelpScrollToBottom => {
                 // Set to a large value - dialog component will handle bounds checking
                 self.state.help_scroll_offset = usize::MAX;
-                self.logger.log("Help: Scrolled to bottom".to_string());
+                info!("Help: Scrolled to bottom");
                 Action::None
             }
             Action::ShowHelp(show) => {
@@ -801,8 +757,7 @@ impl AppComponent {
                     // Reset scroll when hiding help
                     self.state.help_scroll_offset = 0;
                 }
-                self.logger
-                    .log(format!("Help: {} help panel", if show { "Showing" } else { "Hiding" }));
+                info!("Help: {} help panel", if show { "Showing" } else { "Hiding" });
                 action
             }
             // Pass through other actions
@@ -821,8 +776,7 @@ impl AppComponent {
         let description = format!("{}: {}", operation_name, task_info);
         let op_name = operation_name.clone();
         let sync_service = self.sync_service.clone();
-        self.logger
-            .log(format!("Background: Spawning task operation '{}'", description));
+        info!("Background: Spawning task operation '{}'", description);
 
         let _task_id = self.task_manager.spawn_task_operation(
             move || async move {
@@ -1009,17 +963,15 @@ impl AppComponent {
 
         // Process all available background actions
         while let Ok(action) = self.background_action_rx.try_recv() {
-            self.logger.log(format!("Background: Received action {:?}", action));
+            info!("Background: Received action {:?}", action);
             actions.push(action);
         }
 
         // Clean up finished tasks
         let completed_tasks = self.task_manager.cleanup_finished_tasks();
         if !completed_tasks.is_empty() {
-            self.logger.log(format!(
-                "Background: Cleaned up {} finished tasks",
-                completed_tasks.len()
-            ));
+            let count = completed_tasks.len();
+            info!("Background: Cleaned up {} finished tasks", count);
         }
 
         actions

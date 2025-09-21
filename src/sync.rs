@@ -11,11 +11,10 @@
 //! - Business logic for special views (Today, Tomorrow, Upcoming)
 
 use anyhow::Result;
+use log::{error, info};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use crate::config::Config;
-use crate::logger::Logger;
 use crate::storage::LocalStorage;
 use crate::todoist::{CreateProjectArgs, LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay, TodoistWrapper};
 use crate::utils::datetime;
@@ -37,11 +36,9 @@ use crate::utils::datetime;
 /// # Example
 /// ```rust,no_run
 /// use terminalist::sync::SyncService;
-/// use terminalist::config::Config;
 ///
 /// # async fn example() -> anyhow::Result<()> {
-/// let config = Config::default();
-/// let sync_service = SyncService::new("api_token".to_string(), false, &config).await?;
+/// let sync_service = SyncService::new("api_token".to_string(), false,).await?;
 ///
 /// // Sync data from Todoist API
 /// sync_service.sync().await?;
@@ -56,7 +53,6 @@ pub struct SyncService {
     todoist: TodoistWrapper,
     storage: Arc<Mutex<LocalStorage>>,
     sync_in_progress: Arc<Mutex<bool>>,
-    logger: Option<Logger>,
     debug_mode: bool,
 }
 
@@ -89,41 +85,23 @@ impl SyncService {
     /// # Arguments
     /// * `api_token` - The Todoist API token for authentication
     /// * `debug_mode` - Whether to enable debug mode for local storage
-    /// * `config` - Application configuration including logging settings
     ///
     /// # Returns
     /// A new `SyncService` instance ready for use
     ///
     /// # Errors
     /// Returns an error if local storage initialization fails
-    pub async fn new(api_token: String, debug_mode: bool, config: &Config) -> Result<Self> {
+    pub async fn new(api_token: String, debug_mode: bool) -> Result<Self> {
         let todoist = TodoistWrapper::new(api_token);
         let storage = Arc::new(Mutex::new(LocalStorage::new(debug_mode).await?));
         let sync_in_progress = Arc::new(Mutex::new(false));
-
-        // Initialize logger based on config
-        let logger = match Logger::from_config(config.logging.enabled) {
-            Ok(logger) => Some(logger),
-            Err(e) => {
-                eprintln!("Warning: Failed to initialize logging: {}", e);
-                Some(Logger::new()) // Fallback to in-memory logging
-            }
-        };
 
         Ok(Self {
             todoist,
             storage,
             sync_in_progress,
-            logger,
             debug_mode,
         })
-    }
-
-    /// Returns a clone of the logger if one is available.
-    ///
-    /// This method provides access to the service's logger for external logging needs.
-    pub fn logger(&self) -> Option<Logger> {
-        self.logger.clone()
     }
 
     /// Returns whether debug mode is enabled.
@@ -131,21 +109,6 @@ impl SyncService {
     /// This is used to enable debug-only features like local data refresh.
     pub fn is_debug_mode(&self) -> bool {
         self.debug_mode
-    }
-
-    /// Sets or replaces the logger for this sync service.
-    ///
-    /// # Arguments
-    /// * `logger` - The new logger instance to use
-    pub fn set_logger(&mut self, logger: Logger) {
-        self.logger = Some(logger);
-    }
-
-    /// Log a message if logger is available
-    fn log(&self, message: String) {
-        if let Some(ref logger) = self.logger {
-            logger.log(message);
-        }
     }
 
     /// Retrieves all projects from local storage.
@@ -440,7 +403,7 @@ impl SyncService {
     /// # Errors
     /// Returns an error if the API call fails or local storage update fails
     pub async fn create_label(&self, name: &str, color: Option<&str>) -> Result<()> {
-        self.log(format!("API: Creating label '{}' with color {:?}", name, color));
+        info!("API: Creating label '{}' with color {:?}", name, color);
 
         // Create label via API using the CreateLabelArgs structure
         let label_args = todoist_api::CreateLabelArgs {
@@ -452,7 +415,7 @@ impl SyncService {
         let label = self.todoist.create_label(&label_args).await?;
 
         // Store the created label in local database immediately for UI refresh
-        self.log(format!("Storage: Storing new label locally with ID {}", label.id));
+        info!("Storage: Storing new label locally with ID {}", label.id);
         let storage = self.storage.lock().await;
         storage.store_single_label(label).await?;
 
@@ -461,7 +424,7 @@ impl SyncService {
 
     /// Update label content (name only for now)
     pub async fn update_label_content(&self, label_id: &str, name: &str) -> Result<()> {
-        self.log(format!("API: Updating label name for ID {} to '{}'", label_id, name));
+        info!("API: Updating label name for ID {} to '{}'", label_id, name);
 
         // Update label via API using the UpdateLabelArgs structure
         let label_args = todoist_api::UpdateLabelArgs {
@@ -474,10 +437,7 @@ impl SyncService {
         let _label = self.todoist.update_label(label_id, &label_args).await?;
 
         // Update local storage immediately after successful API call
-        self.log(format!(
-            "Storage: Updating local label name for ID {} to '{}'",
-            label_id, name
-        ));
+        info!("Storage: Updating local label name for ID {} to '{}'", label_id, name);
         let storage = self.storage.lock().await;
         storage.update_label_name(label_id, name).await?;
 
@@ -495,10 +455,7 @@ impl SyncService {
 
     /// Update project content (name only for now)
     pub async fn update_project_content(&self, project_id: &str, name: &str) -> Result<()> {
-        self.log(format!(
-            "API: Updating project name for ID {} to '{}'",
-            project_id, name
-        ));
+        info!("API: Updating project name for ID {} to '{}'", project_id, name);
 
         // Update project via API using the UpdateProjectArgs structure
         let project_args = todoist_api::UpdateProjectArgs {
@@ -511,10 +468,10 @@ impl SyncService {
         let _project = self.todoist.update_project(project_id, &project_args).await?;
 
         // Update local storage immediately after successful API call
-        self.log(format!(
+        info!(
             "Storage: Updating local project name for ID {} to '{}'",
             project_id, name
-        ));
+        );
         let storage = self.storage.lock().await;
         storage.update_project_name(project_id, name).await?;
 
@@ -547,10 +504,7 @@ impl SyncService {
 
     /// Update task due date
     pub async fn update_task_due_date(&self, task_id: &str, due_date: Option<&str>) -> Result<()> {
-        self.log(format!(
-            "API: Updating task due date for ID {} to {:?}",
-            task_id, due_date
-        ));
+        info!("API: Updating task due date for ID {} to {:?}", task_id, due_date);
 
         // First, update task via API using the UpdateTaskArgs structure
         let task_args = todoist_api::UpdateTaskArgs {
@@ -574,16 +528,13 @@ impl SyncService {
         let storage = self.storage.lock().await;
         storage.update_task_due_date(task_id, due_date).await?;
 
-        self.log(format!("API: Successfully updated task due date {}", task_id));
+        info!("API: Successfully updated task due date {}", task_id);
         Ok(())
     }
 
     /// Update task priority
     pub async fn update_task_priority(&self, task_id: &str, priority: i32) -> Result<()> {
-        self.log(format!(
-            "API: Updating task priority for ID {} to {}",
-            task_id, priority
-        ));
+        info!("API: Updating task priority for ID {} to {}", task_id, priority);
 
         // First, update task via API using the UpdateTaskArgs structure
         let task_args = todoist_api::UpdateTaskArgs {
@@ -607,7 +558,7 @@ impl SyncService {
         let storage = self.storage.lock().await;
         storage.update_task_priority(task_id, priority).await?;
 
-        self.log(format!("API: Successfully updated task priority {}", task_id));
+        info!("API: Successfully updated task priority {}", task_id);
         Ok(())
     }
 
@@ -664,16 +615,16 @@ impl SyncService {
 
     /// Internal sync implementation
     async fn perform_sync(&self) -> Result<SyncStatus> {
-        self.log("🔄 Starting sync process...".to_string());
+        info!("🔄 Starting sync process...");
 
         // Fetch projects from API
         let projects = match self.todoist.get_projects().await {
             Ok(projects) => {
-                self.log(format!("✅ Fetched {} projects from API", projects.len()));
+                info!("✅ Fetched {} projects from API", projects.len());
                 projects
             }
             Err(e) => {
-                self.log(format!("❌ Failed to fetch projects: {e}"));
+                error!("❌ Failed to fetch projects: {e}");
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to fetch projects: {e}"),
                 });
@@ -683,11 +634,11 @@ impl SyncService {
         // Fetch all tasks from API
         let tasks = match self.todoist.get_tasks().await {
             Ok(tasks) => {
-                self.log(format!("✅ Fetched {} tasks from API", tasks.len()));
+                info!("✅ Fetched {} tasks from API", tasks.len());
                 tasks
             }
             Err(e) => {
-                self.log(format!("❌ Failed to fetch tasks: {e}"));
+                error!("❌ Failed to fetch tasks: {e}");
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to fetch tasks: {e}"),
                 });
@@ -697,11 +648,11 @@ impl SyncService {
         // Fetch all labels from API
         let labels = match self.todoist.get_labels().await {
             Ok(labels) => {
-                self.log(format!("✅ Fetched {} labels from API", labels.len()));
+                info!("✅ Fetched {} labels from API", labels.len());
                 labels
             }
             Err(e) => {
-                self.log(format!("❌ Failed to fetch labels: {e}"));
+                error!("❌ Failed to fetch labels: {e}");
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to fetch labels: {e}"),
                 });
@@ -711,12 +662,12 @@ impl SyncService {
         // Fetch all sections from API
         let sections = match self.todoist.get_sections().await {
             Ok(sections) => {
-                self.log(format!("✅ Fetched {} sections from API", sections.len()));
+                info!("✅ Fetched {} sections from API", sections.len());
                 sections
             }
             Err(e) => {
-                self.log(format!("❌ Failed to fetch sections: {e}"));
-                self.log("⚠️  Skipping sections sync due to API compatibility issue".to_string());
+                error!("❌ Failed to fetch sections: {e}");
+                info!("⚠️  Skipping sections sync due to API compatibility issue");
                 // For now, skip sections sync and continue with other data
                 Vec::new()
             }
@@ -725,43 +676,43 @@ impl SyncService {
         // Store in local database
         {
             let storage = self.storage.lock().await;
-            self.log("💾 Storing data in local database...".to_string());
+            info!("💾 Storing data in local database...");
 
             if let Err(e) = storage.store_projects(projects).await {
-                self.log(format!("❌ Failed to store projects: {e}"));
+                error!("❌ Failed to store projects: {e}");
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to store projects: {e}"),
                 });
             }
-            self.log("✅ Stored projects in database".to_string());
+            info!("✅ Stored projects in database");
 
             // Store labels BEFORE tasks so task-label relationships can be created
             if let Err(e) = storage.store_labels(labels).await {
-                self.log(format!("❌ Failed to store labels: {e}"));
+                error!("❌ Failed to store labels: {e}");
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to store labels: {e}"),
                 });
             }
-            self.log("✅ Stored labels in database".to_string());
+            info!("✅ Stored labels in database");
 
             if let Err(e) = storage.store_tasks(tasks).await {
-                self.log(format!("❌ Failed to store tasks: {e}"));
+                error!("❌ Failed to store tasks: {e}");
                 return Ok(SyncStatus::Error {
                     message: format!("Failed to store tasks: {e}"),
                 });
             }
-            self.log("✅ Stored tasks in database".to_string());
+            info!("✅ Stored tasks in database");
 
             if !sections.is_empty() {
                 if let Err(e) = storage.store_sections(sections).await {
-                    self.log(format!("❌ Failed to store sections: {e}"));
+                    error!("❌ Failed to store sections: {e}");
                     return Ok(SyncStatus::Error {
                         message: format!("Failed to store sections: {e}"),
                     });
                 }
-                self.log("✅ Stored sections in database".to_string());
+                info!("✅ Stored sections in database");
             } else {
-                self.log("⚠️  No sections to store (skipped due to API issue)".to_string());
+                info!("⚠️  No sections to store (skipped due to API issue)");
             }
         }
 

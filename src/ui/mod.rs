@@ -32,7 +32,7 @@
 //!
 //! # async fn example() -> anyhow::Result<()> {
 //! let config = Config::load()?;
-//! let sync_service = SyncService::new("token".to_string(), false, &config).await?;
+//! let sync_service = SyncService::new("token".to_string(), false).await?;
 //!
 //! run_app(sync_service, config).await?;
 //! # Ok(())
