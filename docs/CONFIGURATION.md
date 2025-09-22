@@ -23,7 +23,7 @@ This creates a config file at `~/.config/terminalist/config.toml` with all avail
 
 ```toml
 [ui]
-default_project = "today"         # Options: "inbox", "today", "tomorrow", "upcoming", or project ID
+default_project = "today"         # Options: "inbox", "today", "tomorrow", "upcoming", project ID, or project name
 mouse_enabled = true              # Enable mouse support
 sidebar_width = 30                # Sidebar width in columns (15-50)
 
@@ -45,7 +45,7 @@ enabled = false                   # Enable logging to file
 ### UI Configuration
 
 - **default_project**: Set the initial view when starting the app
-  - Options: `"inbox"`, `"today"`, `"tomorrow"`, `"upcoming"`, or a specific project ID
+  - Options: `"inbox"`, `"today"`, `"tomorrow"`, `"upcoming"`, a specific project ID, or project name
 - **mouse_enabled**: Enable or disable mouse support
 - **sidebar_width**: Width of the sidebar in columns (must be between 15-50)
 
