@@ -112,6 +112,8 @@ impl LocalStorage {
                 is_recurring BOOLEAN NOT NULL DEFAULT 0,
                 deadline TEXT,
                 duration TEXT,
+                is_completed BOOLEAN NOT NULL DEFAULT 0,
+                is_deleted BOOLEAN NOT NULL DEFAULT 0,
                 FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
                 FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE SET NULL

@@ -596,6 +596,11 @@ impl AppComponent {
                 self.spawn_task_operation("Edit task".to_string(), format!("{}: {}", id, content));
                 Action::None
             }
+            Action::RestoreTask(task_id) => {
+                info!("Task: Restoring task {}", task_id);
+                self.spawn_task_operation("Restore task".to_string(), task_id);
+                Action::None
+            }
             Action::CreateProject { name, parent_id } => {
                 let parent_desc = match &parent_id {
                     Some(id) => format!(" with parent {}", id),
@@ -883,6 +888,10 @@ impl AppComponent {
                             Err("❌ Invalid task edit format".to_string())
                         }
                     }
+                    "Restore task" => match sync_service.restore_task(&task_info).await {
+                        Ok(()) => Ok(format!("✅ Task restored: {}", task_info)),
+                        Err(e) => Err(format!("❌ Failed to restore task: {}", e)),
+                    },
                     "Create project" => {
                         // project_info format: "name|parent_id" or just "name" for root project
                         if let Some((name, parent_id)) = task_info.split_once('|') {

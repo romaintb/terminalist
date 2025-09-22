@@ -98,7 +98,14 @@ impl TaskItem {
 
 impl ListItem for TaskItem {
     fn render(&self, selected: bool, display_config: &DisplayConfig) -> RatatuiListItem<'static> {
-        let status_icon = self.icons.task_pending();
+        // Choose the appropriate icon based on task state
+        let status_icon = if self.task.is_deleted {
+            self.icons.task_deleted()
+        } else if self.task.is_completed {
+            self.icons.task_completed()
+        } else {
+            self.icons.task_pending()
+        };
         let mut line_spans = Vec::new();
 
         // Add hierarchical indentation for subtasks
@@ -115,10 +122,18 @@ impl ListItem for TaskItem {
             line_spans.push(Span::styled(indent_str, Style::default().fg(Color::DarkGray)));
         }
 
-        // Status icon
-        let status_style = if selected {
+        // Status icon with state-based styling
+        let status_style = if self.task.is_deleted {
+            // Deleted tasks: red icon
+            Style::default().fg(Color::Red)
+        } else if self.task.is_completed {
+            // Completed tasks: green icon for the tick mark
+            Style::default().fg(Color::Green)
+        } else if selected {
+            // Selected active tasks: yellow and bold
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
+            // Normal active tasks: white
             Style::default().fg(Color::White)
         };
         line_spans.push(Span::styled(format!("{} ", status_icon), status_style));
@@ -129,10 +144,18 @@ impl ListItem for TaskItem {
             line_spans.push(Span::raw(" "));
         }
 
-        // Task content with selection styling
-        let content_style = if selected {
+        // Task content with selection styling and deleted/completed styling
+        let content_style = if self.task.is_deleted {
+            // Deleted tasks: red with strikethrough
+            Style::default().fg(Color::Red).add_modifier(Modifier::CROSSED_OUT)
+        } else if self.task.is_completed {
+            // Completed tasks: gray with strikethrough
+            Style::default().fg(Color::DarkGray).add_modifier(Modifier::CROSSED_OUT)
+        } else if selected {
+            // Selected active tasks: yellow and bold
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
+            // Normal active tasks: white
             Style::default().fg(Color::White)
         };
         line_spans.push(Span::styled(self.task.content.clone(), content_style));

@@ -20,6 +20,8 @@ pub struct LocalTask {
     pub is_recurring: bool,
     pub deadline: Option<String>,
     pub duration: Option<String>,
+    pub is_completed: bool,
+    pub is_deleted: bool,
 }
 
 impl From<Task> for LocalTask {
@@ -45,6 +47,8 @@ impl From<Task> for LocalTask {
             deadline: task.deadline.map(|d| d.date),
             duration: duration_string,
             description: Some(task.description),
+            is_completed: task.is_completed,
+            is_deleted: false, // Tasks from API are never deleted locally
         }
     }
 }
@@ -58,7 +62,9 @@ impl LocalStorage {
     ) -> Result<Vec<TaskDisplay>> {
         let where_part = if where_clause.is_empty() { "" } else { where_clause };
         let order_part = if order_clause.is_empty() {
-            "ORDER BY t.priority DESC, t.order_index ASC"
+            // Default ordering: uncompleted first, then completed, then deleted
+            // Within each group, order by priority and then by order_index
+            "ORDER BY t.is_deleted ASC, t.is_completed ASC, t.priority DESC, t.order_index ASC"
         } else {
             order_clause
         };
@@ -68,13 +74,15 @@ impl LocalStorage {
             SELECT
                 t.id, t.content, t.project_id, t.section_id, t.parent_id, t.priority,
                 t.due_date, t.due_datetime, t.is_recurring, t.deadline, t.duration, t.description,
+                t.is_completed, t.is_deleted,
                 GROUP_CONCAT(l.id || ':' || l.name || ':' || l.color, '|') as labels_data
             FROM tasks t
             LEFT JOIN task_labels tl ON t.id = tl.task_id
             LEFT JOIN labels l ON tl.label_id = l.id
             {}
             GROUP BY t.id, t.content, t.project_id, t.section_id, t.parent_id, t.priority,
-                     t.due_date, t.due_datetime, t.is_recurring, t.deadline, t.duration, t.description
+                     t.due_date, t.due_datetime, t.is_recurring, t.deadline, t.duration, t.description,
+                     t.is_completed, t.is_deleted
             {}
             ",
             where_part, order_part
@@ -130,6 +138,8 @@ impl LocalStorage {
                     duration: row.get("duration"),
                     labels,
                     description: row.get("description"),
+                    is_completed: row.get("is_completed"),
+                    is_deleted: row.get("is_deleted"),
                 }
             })
             .collect();
@@ -236,8 +246,8 @@ impl LocalStorage {
 
         sqlx::query(
             r"
-            INSERT OR REPLACE INTO tasks (id, content, project_id, section_id, parent_id, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, description)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO tasks (id, content, project_id, section_id, parent_id, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, description, is_completed, is_deleted)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ",
         )
         .bind(&local_task.id)
@@ -253,6 +263,8 @@ impl LocalStorage {
         .bind(&local_task.deadline)
         .bind(&local_task.duration)
         .bind(&local_task.description)
+        .bind(local_task.is_completed)
+        .bind(local_task.is_deleted)
         .execute(&mut *tx)
         .await?;
 
@@ -285,7 +297,7 @@ impl LocalStorage {
         let search_pattern = format!("%{}%", query);
         self.get_tasks_with_labels_joined(
             "WHERE LOWER(t.content) LIKE LOWER(?)",
-            "ORDER BY t.priority DESC, t.order_index ASC",
+            "ORDER BY t.is_deleted ASC, t.is_completed ASC, t.priority DESC, t.order_index ASC",
             &[&search_pattern],
         )
         .await
@@ -295,7 +307,7 @@ impl LocalStorage {
     pub async fn get_tasks_due_on(&self, date: &str) -> Result<Vec<TaskDisplay>> {
         self.get_tasks_with_labels_joined(
             "WHERE t.due_date IS NOT NULL AND t.due_date = ?",
-            "ORDER BY t.priority DESC, t.order_index ASC",
+            "ORDER BY t.is_deleted ASC, t.is_completed ASC, t.priority DESC, t.order_index ASC",
             &[date],
         )
         .await
@@ -305,7 +317,7 @@ impl LocalStorage {
     pub async fn get_overdue_tasks(&self) -> Result<Vec<TaskDisplay>> {
         self.get_tasks_with_labels_joined(
             "WHERE t.due_date IS NOT NULL AND t.due_date < date('now')",
-            "ORDER BY t.due_date ASC, t.priority DESC, t.order_index ASC",
+            "ORDER BY t.is_deleted ASC, t.is_completed ASC, t.due_date ASC, t.priority DESC, t.order_index ASC",
             &[],
         )
         .await
@@ -315,7 +327,7 @@ impl LocalStorage {
     pub async fn get_tasks_due_between(&self, start_date: &str, end_date: &str) -> Result<Vec<TaskDisplay>> {
         self.get_tasks_with_labels_joined(
             "WHERE t.due_date IS NOT NULL AND t.due_date >= ? AND t.due_date <= ?",
-            "ORDER BY t.due_date ASC, t.priority DESC, t.order_index ASC",
+            "ORDER BY t.is_deleted ASC, t.is_completed ASC, t.due_date ASC, t.priority DESC, t.order_index ASC",
             &[start_date, end_date],
         )
         .await
@@ -325,7 +337,7 @@ impl LocalStorage {
     pub async fn get_tasks_without_due_date(&self) -> Result<Vec<TaskDisplay>> {
         self.get_tasks_with_labels_joined(
             "WHERE t.due_date IS NULL",
-            "ORDER BY t.priority DESC, t.order_index ASC",
+            "ORDER BY t.is_deleted ASC, t.is_completed ASC, t.priority DESC, t.order_index ASC",
             &[],
         )
         .await
@@ -337,7 +349,34 @@ impl LocalStorage {
         Ok(tasks.into_iter().next())
     }
 
-    /// Delete a task and its subtasks from local storage
+    /// Mark task as completed (soft completion)
+    pub async fn mark_task_completed(&self, task_id: &str) -> Result<()> {
+        sqlx::query("UPDATE tasks SET is_completed = 1 WHERE id = ?")
+            .bind(task_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// Mark task as deleted (soft deletion)
+    pub async fn mark_task_deleted(&self, task_id: &str) -> Result<()> {
+        sqlx::query("UPDATE tasks SET is_deleted = 1 WHERE id = ?")
+            .bind(task_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// Restore a soft-deleted task
+    pub async fn restore_task(&self, task_id: &str) -> Result<()> {
+        sqlx::query("UPDATE tasks SET is_deleted = 0, is_completed = 0 WHERE id = ?")
+            .bind(task_id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
+    }
+
+    /// Delete a task and its subtasks from local storage (hard delete)
     /// Thanks to CASCADE DELETE, subtasks are automatically removed
     pub async fn delete_task(&self, task_id: &str) -> Result<()> {
         sqlx::query("DELETE FROM tasks WHERE id = ?")
