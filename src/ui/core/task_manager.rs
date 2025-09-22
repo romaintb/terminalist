@@ -180,7 +180,12 @@ impl TaskManager {
     }
 
     /// Spawn a background data loading operation
-    pub fn spawn_data_load(&mut self, sync_service: SyncService, sidebar_selection: SidebarSelection) -> TaskId {
+    pub fn spawn_data_load(
+        &mut self,
+        sync_service: SyncService,
+        sidebar_selection: SidebarSelection,
+        is_initial_load: bool,
+    ) -> TaskId {
         let task_id = self.next_task_id;
         self.next_task_id += 1;
 
@@ -222,12 +227,22 @@ impl TaskManager {
                         tasks: tasks.clone(),
                     };
 
-                    let _ = action_sender.send(Action::DataLoaded {
-                        projects,
-                        labels,
-                        sections,
-                        tasks,
-                    });
+                    let action = if is_initial_load {
+                        Action::InitialDataLoaded {
+                            projects,
+                            labels,
+                            sections,
+                            tasks,
+                        }
+                    } else {
+                        Action::DataLoaded {
+                            projects,
+                            labels,
+                            sections,
+                            tasks,
+                        }
+                    };
+                    let _ = action_sender.send(action);
 
                     Ok(result)
                 }

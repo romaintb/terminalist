@@ -62,6 +62,12 @@ pub enum Action {
     RefreshLocalData, // Debug mode: refresh from local DB without API sync
     SyncCompleted(SyncStatus),
     SyncFailed(String),
+    InitialDataLoaded {
+        projects: Vec<crate::todoist::ProjectDisplay>,
+        labels: Vec<crate::todoist::LabelDisplay>,
+        sections: Vec<crate::todoist::SectionDisplay>,
+        tasks: Vec<crate::todoist::TaskDisplay>,
+    },
     DataLoaded {
         projects: Vec<crate::todoist::ProjectDisplay>,
         labels: Vec<crate::todoist::LabelDisplay>,

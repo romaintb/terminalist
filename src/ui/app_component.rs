@@ -139,9 +139,6 @@ impl AppComponent {
     pub fn trigger_initial_sync(&mut self) {
         info!("AppComponent: Starting initial sync");
 
-        // Set initial sidebar selection based on config
-        self.set_initial_sidebar_selection();
-
         if self.active_sync_task.is_none() {
             self.start_background_sync();
             // Data fetch will be triggered automatically when sync completes
@@ -163,9 +160,13 @@ impl AppComponent {
             "today" => SidebarSelection::Today,
             "tomorrow" => SidebarSelection::Tomorrow,
             "upcoming" => SidebarSelection::Upcoming,
-            project_id => {
-                // Try to find project by ID
-                if let Some(project_index) = self.state.projects.iter().position(|p| p.id == project_id) {
+            project_id_or_name => {
+                // Try to find project by ID first, then by name
+                if let Some(project_index) = self.state.projects.iter().position(|p| p.id == project_id_or_name) {
+                    SidebarSelection::Project(project_index)
+                } else if let Some(project_index) =
+                    self.state.projects.iter().position(|p| p.name == project_id_or_name)
+                {
                     SidebarSelection::Project(project_index)
                 } else {
                     SidebarSelection::Today
@@ -665,41 +666,49 @@ impl AppComponent {
                 self.spawn_task_operation("Edit label".to_string(), format!("{}: {}", id, name));
                 Action::None
             }
+            Action::InitialDataLoaded {
+                projects,
+                labels,
+                sections,
+                tasks,
+            } => {
+                info!(
+                    "InitialData: Loaded {} projects, {} labels, {} sections, {} tasks",
+                    projects.len(),
+                    labels.len(),
+                    sections.len(),
+                    tasks.len()
+                );
+
+                // Update app state with loaded data
+                self.state.update_data(projects, labels, sections, tasks);
+
+                // Set initial sidebar selection based on config (now we have projects loaded)
+                self.set_initial_sidebar_selection();
+                info!("AppComponent: Set initial sidebar selection after initial data load");
+
+                // Fetch data for the newly selected sidebar item
+                self.schedule_data_fetch();
+                info!("AppComponent: Scheduled data fetch for initial sidebar selection");
+
+                self.sync_component_data();
+                info!("InitialData: Updated all component data after initial data load");
+                Action::None
+            }
             Action::DataLoaded {
                 projects,
                 labels,
                 sections,
                 tasks,
             } => {
-                // Create detailed log with current selection context
-                let selection_context = match &self.state.sidebar_selection {
-                    SidebarSelection::Today => "Today view".to_string(),
-                    SidebarSelection::Tomorrow => "Tomorrow view".to_string(),
-                    SidebarSelection::Upcoming => "Upcoming view".to_string(),
-                    SidebarSelection::Project(index) => {
-                        if let Some(project) = projects.get(*index) {
-                            format!("Project '{}'", project.name)
-                        } else {
-                            format!("Project({})", index)
-                        }
-                    }
-                    SidebarSelection::Label(index) => {
-                        if let Some(label) = labels.get(*index) {
-                            format!("Label '{}'", label.name)
-                        } else {
-                            format!("Label({})", index)
-                        }
-                    }
-                };
-
                 info!(
-                    "Data: Loaded {} projects, {} labels, {} sections, {} tasks for {}",
+                    "Data: Loaded {} projects, {} labels, {} sections, {} tasks",
                     projects.len(),
                     labels.len(),
                     sections.len(),
-                    tasks.len(),
-                    selection_context
+                    tasks.len()
                 );
+
                 // Update app state with loaded data
                 self.state.update_data(projects, labels, sections, tasks);
                 self.sync_component_data();
@@ -954,16 +963,23 @@ impl AppComponent {
     fn update_data_from_sync(&mut self, status: SyncStatus) {
         // Only proceed if sync was successful
         if matches!(status, SyncStatus::Success) {
-            // Schedule a data fetch task
-            self.schedule_data_fetch();
+            // Schedule initial data fetch task
+            self.schedule_initial_data_fetch();
         }
     }
 
-    /// Schedule a background task to fetch data after sync completion
+    /// Schedule a background task to fetch initial data after sync completion
+    fn schedule_initial_data_fetch(&mut self) {
+        let _task_id =
+            self.task_manager
+                .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection.clone(), true);
+    }
+
+    /// Schedule a background task to fetch data after navigation or changes
     fn schedule_data_fetch(&mut self) {
-        let _task_id = self
-            .task_manager
-            .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection.clone());
+        let _task_id =
+            self.task_manager
+                .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection.clone(), false);
     }
 
     /// Process background actions from task manager

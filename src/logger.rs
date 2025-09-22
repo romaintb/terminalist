@@ -17,7 +17,7 @@ pub fn init_logger(enabled: bool) -> io::Result<()> {
         // Set up a logger that only writes to memory
         // Use Trace level so MemoryLogger receives all logs
         fern::Dispatch::new()
-            .level(log::LevelFilter::Trace)
+            .level(log::LevelFilter::Info)
             .chain(Box::new(MemoryLogger) as Box<dyn log::Log>)
             .apply()
             .map_err(io::Error::other)?;
