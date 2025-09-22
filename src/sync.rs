@@ -739,10 +739,10 @@ impl SyncService {
         // First, complete the task via API (this handles subtasks automatically)
         self.todoist.complete_task(task_id).await?;
 
-        // Then delete from local storage (subtasks deleted via CASCADE)
-        // Since completed tasks aren't displayed, we can remove them entirely
+        // Then mark as completed in local storage (soft completion)
+        // This allows us to show completed tasks and recover from accidental completions
         let storage = self.storage.lock().await;
-        storage.delete_task(task_id).await?;
+        storage.mark_task_completed(task_id).await?;
         drop(storage);
 
         Ok(())
@@ -762,9 +762,68 @@ impl SyncService {
         // First, delete the task via API
         self.todoist.delete_task(task_id).await?;
 
-        // Then remove from local storage
+        // Then mark as deleted in local storage (soft deletion)
+        // This allows recovery from accidental deletions
         let storage = self.storage.lock().await;
-        storage.delete_task(task_id).await?;
+        storage.mark_task_deleted(task_id).await?;
+
+        Ok(())
+    }
+
+    /// Restore a soft-deleted or completed task via the Todoist API and locally
+    /// For completed tasks, reopens them. For deleted tasks, recreates them via API.
+    pub async fn restore_task(&self, task_id: &str) -> Result<()> {
+        // First, get the task from local storage to check its state
+        let storage = self.storage.lock().await;
+        let task = storage
+            .get_task_by_id(task_id)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("Task not found in local storage: {}", task_id))?;
+
+        if task.is_deleted {
+            // For deleted tasks, we need to recreate them via API since they were permanently deleted
+            drop(storage); // Release the lock before API call
+
+            // Create the task again via API
+            let task_args = todoist_api::CreateTaskArgs {
+                content: task.content.clone(),
+                description: if task.description.is_empty() {
+                    None
+                } else {
+                    Some(task.description.clone())
+                },
+                project_id: Some(task.project_id.clone()),
+                section_id: task.section_id.clone(),
+                parent_id: task.parent_id.clone(),
+                order: None,
+                labels: Some(task.labels.iter().map(|l| l.name.clone()).collect()),
+                priority: Some(task.priority),
+                due_string: task.due.clone(),
+                due_date: None,
+                due_datetime: task.due_datetime.clone(),
+                due_lang: None,
+                assignee_id: None,
+                deadline_date: task.deadline.clone(),
+                deadline_lang: None,
+                duration: None,
+                duration_unit: None,
+            };
+
+            let new_task = self.todoist.create_task(&task_args).await?;
+
+            // Update local storage: remove the old soft-deleted task and add the new one
+            let storage = self.storage.lock().await;
+            storage.delete_task(task_id).await?; // Hard delete the old soft-deleted task
+            storage.store_single_task(new_task).await?; // Store the new task
+        } else {
+            // For completed tasks, just reopen them
+            drop(storage); // Release the lock before API call
+            self.todoist.reopen_task(task_id).await?;
+
+            // Clear local completion flag
+            let storage = self.storage.lock().await;
+            storage.restore_task(task_id).await?;
+        }
 
         Ok(())
     }

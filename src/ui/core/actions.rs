@@ -34,6 +34,7 @@ pub enum Action {
         id: String,
         content: String,
     },
+    RestoreTask(String),
 
     // Project operations
     CreateProject {

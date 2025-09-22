@@ -187,7 +187,7 @@ impl TaskListComponent {
         let tomorrow = today + Duration::days(1);
 
         // Filter for root tasks due tomorrow
-        let mut tasks: Vec<TaskDisplay> = self
+        let tasks: Vec<TaskDisplay> = self
             .tasks
             .iter()
             .filter(|t| t.parent_id.is_none())
@@ -205,7 +205,7 @@ impl TaskListComponent {
             .cloned()
             .collect();
 
-        tasks.sort_by(|a, b| b.priority.cmp(&a.priority)); // Sort by priority descending (P1=4, P2=3, P3=2, P4=1)
+        // SQL already provides proper ordering (completion status -> priority -> order_index)
 
         for task in tasks {
             self.add_task_and_children_to_items(task, 0);
@@ -334,10 +334,8 @@ impl TaskListComponent {
 
     /// Build simple items (no sectioning)
     fn build_simple_items(&mut self) {
-        let mut root_tasks: Vec<TaskDisplay> = self.tasks.iter().filter(|t| t.parent_id.is_none()).cloned().collect();
-
-        // Sort by priority descending (P1=4, P2=3, P3=2, P4=1)
-        root_tasks.sort_by(|a, b| b.priority.cmp(&a.priority));
+        // SQL already provides proper ordering (completion status -> priority -> order_index)
+        let root_tasks: Vec<TaskDisplay> = self.tasks.iter().filter(|t| t.parent_id.is_none()).cloned().collect();
 
         // Add each root task and its children recursively
         for task in root_tasks {
@@ -362,14 +360,14 @@ impl TaskListComponent {
 
         // Find and add children
         let task_id = task.id.clone();
-        let mut children: Vec<TaskDisplay> = self
+        let children: Vec<TaskDisplay> = self
             .tasks
             .iter()
             .filter(|t| t.parent_id.as_ref() == Some(&task_id))
             .cloned()
             .collect();
 
-        children.sort_by(|a, b| b.priority.cmp(&a.priority)); // Sort by priority descending (P1=4, P2=3, P3=2, P4=1)
+        // Children are already ordered by SQL query (completion status -> priority -> order_index)
 
         // Recursively add each child and their descendants
         for child in children {
@@ -470,7 +468,12 @@ impl Component for TaskListComponent {
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
                 if let Some(task) = self.get_selected_task() {
-                    Action::CompleteTask(task.id.clone())
+                    // Smart toggle: restore if deleted/completed, otherwise complete
+                    if task.is_deleted || task.is_completed {
+                        Action::RestoreTask(task.id.clone())
+                    } else {
+                        Action::CompleteTask(task.id.clone())
+                    }
                 } else {
                     Action::None
                 }
@@ -496,10 +499,15 @@ impl Component for TaskListComponent {
             }
             KeyCode::Delete | KeyCode::Char('d') => {
                 if let Some(task) = self.get_selected_task() {
-                    Action::ShowDialog(DialogType::DeleteConfirmation {
-                        item_type: "task".to_string(),
-                        item_id: task.id.clone(),
-                    })
+                    // If task is already deleted, restore it; otherwise show delete confirmation
+                    if task.is_deleted {
+                        Action::RestoreTask(task.id.clone())
+                    } else {
+                        Action::ShowDialog(DialogType::DeleteConfirmation {
+                            item_type: "task".to_string(),
+                            item_id: task.id.clone(),
+                        })
+                    }
                 } else {
                     Action::None
                 }

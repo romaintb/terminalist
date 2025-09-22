@@ -108,6 +108,10 @@ pub struct TaskDisplay {
     pub labels: Vec<LabelDisplay>,
     /// Additional description or notes for the task
     pub description: String,
+    /// Whether this task is completed
+    pub is_completed: bool,
+    /// Whether this task is soft-deleted locally
+    pub is_deleted: bool,
 }
 
 // Conversion implementations from API models to display models
@@ -186,6 +190,8 @@ impl From<Task> for TaskDisplay {
             duration: duration_string,
             labels,
             description: task.description,
+            is_completed: task.is_completed,
+            is_deleted: false, // Tasks from API are never locally deleted
         }
     }
 }
