@@ -894,7 +894,7 @@ impl AppComponent {
                                 Err(e) => Err(format!("{}: {}", ERROR_TASK_UPDATE_FAILED, e)),
                             }
                         } else {
-                            Err("❌ Invalid task edit format".to_string())
+                            Err(ERROR_INVALID_TASK_EDIT_FORMAT.to_string())
                         }
                     }
                     "Restore task" => match sync_service.restore_task(&task_info).await {
@@ -906,52 +906,52 @@ impl AppComponent {
                         if let Some((name, parent_id)) = task_info.split_once('|') {
                             // Project has a parent
                             match sync_service.create_project(name, Some(parent_id)).await {
-                                Ok(()) => Ok(format!("✅ Project created with parent: {}", name)),
-                                Err(e) => Err(format!("❌ Failed to create project: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_CREATED_PARENT, name)),
+                                Err(e) => Err(format!("{}: {}", ERROR_PROJECT_CREATE_FAILED, e)),
                             }
                         } else {
                             // Root project (no parent)
                             match sync_service.create_project(&task_info, None).await {
-                                Ok(()) => Ok(format!("✅ Root project created: {}", task_info)),
-                                Err(e) => Err(format!("❌ Failed to create project: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_CREATED_ROOT, task_info)),
+                                Err(e) => Err(format!("{}: {}", ERROR_PROJECT_CREATE_FAILED, e)),
                             }
                         }
                     }
                     "Delete project" => match sync_service.delete_project(&task_info).await {
-                        Ok(()) => Ok(format!("✅ Project deleted: {}", task_info)),
-                        Err(e) => Err(format!("❌ Failed to delete project: {}", e)),
+                        Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_DELETED, task_info)),
+                        Err(e) => Err(format!("{}: {}", ERROR_PROJECT_DELETE_FAILED, e)),
                     },
                     "Delete label" => match sync_service.delete_label(&task_info).await {
-                        Ok(()) => Ok(format!("✅ Label deleted: {}", task_info)),
-                        Err(e) => Err(format!("❌ Failed to delete label: {}", e)),
+                        Ok(()) => Ok(format!("{}: {}", SUCCESS_LABEL_DELETED, task_info)),
+                        Err(e) => Err(format!("{}: {}", ERROR_LABEL_DELETE_FAILED, e)),
                     },
                     "Create label" => match sync_service.create_label(&task_info, None).await {
-                        Ok(()) => Ok(format!("✅ Label created: {}", task_info)),
-                        Err(e) => Err(format!("❌ Failed to create label: {}", e)),
+                        Ok(()) => Ok(format!("{}: {}", SUCCESS_LABEL_CREATED, task_info)),
+                        Err(e) => Err(format!("{}: {}", ERROR_LABEL_CREATE_FAILED, e)),
                     },
                     "Edit project" => {
                         // task_info format: "project_id: new_name"
                         if let Some((project_id, name)) = task_info.split_once(": ") {
                             match sync_service.update_project_content(project_id, name).await {
-                                Ok(()) => Ok(format!("✅ Project updated: {}", project_id)),
-                                Err(e) => Err(format!("❌ Failed to update project: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_UPDATED, project_id)),
+                                Err(e) => Err(format!("{}: {}", ERROR_PROJECT_UPDATE_FAILED, e)),
                             }
                         } else {
-                            Err("❌ Invalid project edit format".to_string())
+                            Err(ERROR_INVALID_PROJECT_EDIT_FORMAT.to_string())
                         }
                     }
                     "Edit label" => {
                         // task_info format: "label_id: new_name"
                         if let Some((label_id, name)) = task_info.split_once(": ") {
                             match sync_service.update_label_content(label_id, name).await {
-                                Ok(()) => Ok(format!("✅ Label updated: {}", label_id)),
-                                Err(e) => Err(format!("❌ Failed to update label: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_LABEL_UPDATED, label_id)),
+                                Err(e) => Err(format!("{}: {}", ERROR_LABEL_UPDATE_FAILED, e)),
                             }
                         } else {
-                            Err("❌ Invalid label edit format".to_string())
+                            Err(ERROR_INVALID_LABEL_EDIT_FORMAT.to_string())
                         }
                     }
-                    _ => Err(format!("❌ Unknown operation: {}", op_name)),
+                    _ => Err(format!("{}: {}", ERROR_UNKNOWN_OPERATION, op_name)),
                 };
 
                 result.map_err(|e: String| anyhow::anyhow!(e))
