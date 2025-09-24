@@ -1,4 +1,5 @@
 use super::actions::{Action, SidebarSelection};
+use crate::constants::UI_LOADING_DATA_FROM_STORAGE;
 use crate::sync::{SyncService, SyncStatus};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
@@ -190,7 +191,7 @@ impl TaskManager {
         self.next_task_id += 1;
 
         let action_sender = self.action_sender.clone();
-        let description = "Loading data from storage".to_string();
+        let description = UI_LOADING_DATA_FROM_STORAGE.to_string();
 
         let handle = tokio::spawn(async move {
             match (

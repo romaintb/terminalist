@@ -1,5 +1,4 @@
 use crate::config::Config;
-use crate::constants::MAIN_AREA_MIN_WIDTH;
 use crate::constants::*;
 use crate::sync::{SyncService, SyncStatus};
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
@@ -262,7 +261,7 @@ impl AppComponent {
                     }
                     SidebarSelection::Today => {
                         info!("Global key: 'D' - cannot delete Today view");
-                        Action::ShowDialog(DialogType::Info("Cannot delete the Today view".to_string()))
+                        Action::ShowDialog(DialogType::Info(UI_CANNOT_DELETE_TODAY_VIEW.to_string()))
                     }
                     SidebarSelection::Tomorrow => {
                         info!("Global key: 'D' - cannot delete Tomorrow view");
@@ -353,7 +352,7 @@ impl AppComponent {
                     Action::SetTaskDueToday(task.id.clone())
                 } else {
                     info!("Global key: 't' - no task selected");
-                    Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
+                    Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
                 }
             }
             KeyCode::Char('T') => {
@@ -363,7 +362,7 @@ impl AppComponent {
                     Action::SetTaskDueTomorrow(task.id.clone())
                 } else {
                     info!("Global key: 'T' - no task selected");
-                    Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
+                    Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
                 }
             }
             KeyCode::Char('w') => {
@@ -373,7 +372,7 @@ impl AppComponent {
                     Action::SetTaskDueNextWeek(task.id.clone())
                 } else {
                     info!("Global key: 'w' - no task selected");
-                    Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
+                    Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
                 }
             }
             KeyCode::Char('W') => {
@@ -383,7 +382,7 @@ impl AppComponent {
                     Action::SetTaskDueWeekEnd(task.id.clone())
                 } else {
                     info!("Global key: 'W' - no task selected");
-                    Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
+                    Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
                 }
             }
             KeyCode::Esc => {
@@ -431,7 +430,7 @@ impl AppComponent {
                 self.update_data_from_sync(status);
                 self.sync_component_data();
 
-                self.state.info_message = Some("Sync completed successfully".to_string());
+                self.state.info_message = Some(SUCCESS_SYNC_COMPLETED.to_string());
                 info!("Sync: Showing completion info dialog");
                 Action::ShowDialog(DialogType::Info(self.state.info_message.clone().unwrap()))
             }
@@ -808,7 +807,7 @@ impl AppComponent {
                         if let Some((task_id, priority_str)) = task_info.split_once('|') {
                             if let Ok(priority) = priority_str.parse::<i32>() {
                                 match sync_service.update_task_priority(task_id, priority).await {
-                                    Ok(()) => Ok(format!("✅ Task priority updated to P{}: {}", priority, task_id)),
+                                    Ok(()) => Ok(format!("{}{}: {}", SUCCESS_TASK_PRIORITY_UPDATED, priority, task_id)),
                                     Err(e) => Err(format!("{}: {}", ERROR_TASK_PRIORITY_FAILED, e)),
                                 }
                             } else {
@@ -898,8 +897,8 @@ impl AppComponent {
                         }
                     }
                     "Restore task" => match sync_service.restore_task(&task_info).await {
-                        Ok(()) => Ok(format!("✅ Task restored: {}", task_info)),
-                        Err(e) => Err(format!("❌ Failed to restore task: {}", e)),
+                        Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_RESTORED, task_info)),
+                        Err(e) => Err(format!("{}: {}", ERROR_TASK_RESTORE_FAILED, e)),
                     },
                     "Create project" => {
                         // project_info format: "name|parent_id" or just "name" for root project
@@ -1146,9 +1145,9 @@ impl AppComponent {
         };
 
         let title = if self.state.loading {
-            "Loading data"
+            UI_LOADING_DATA
         } else {
-            "Syncing with Todoist"
+            UI_SYNCING_WITH_TODOIST
         };
 
         let spinner = "⟳";
