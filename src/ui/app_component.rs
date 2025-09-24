@@ -1,5 +1,4 @@
 use crate::config::Config;
-use crate::constants::MAIN_AREA_MIN_WIDTH;
 use crate::constants::*;
 use crate::sync::{SyncService, SyncStatus};
 use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
@@ -262,7 +261,7 @@ impl AppComponent {
                     }
                     SidebarSelection::Today => {
                         info!("Global key: 'D' - cannot delete Today view");
-                        Action::ShowDialog(DialogType::Info("Cannot delete the Today view".to_string()))
+                        Action::ShowDialog(DialogType::Info(UI_CANNOT_DELETE_TODAY_VIEW.to_string()))
                     }
                     SidebarSelection::Tomorrow => {
                         info!("Global key: 'D' - cannot delete Tomorrow view");
@@ -353,7 +352,7 @@ impl AppComponent {
                     Action::SetTaskDueToday(task.id.clone())
                 } else {
                     info!("Global key: 't' - no task selected");
-                    Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
+                    Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
                 }
             }
             KeyCode::Char('T') => {
@@ -363,7 +362,7 @@ impl AppComponent {
                     Action::SetTaskDueTomorrow(task.id.clone())
                 } else {
                     info!("Global key: 'T' - no task selected");
-                    Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
+                    Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
                 }
             }
             KeyCode::Char('w') => {
@@ -373,7 +372,7 @@ impl AppComponent {
                     Action::SetTaskDueNextWeek(task.id.clone())
                 } else {
                     info!("Global key: 'w' - no task selected");
-                    Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
+                    Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
                 }
             }
             KeyCode::Char('W') => {
@@ -383,7 +382,7 @@ impl AppComponent {
                     Action::SetTaskDueWeekEnd(task.id.clone())
                 } else {
                     info!("Global key: 'W' - no task selected");
-                    Action::ShowDialog(DialogType::Info("No task selected to set due date".to_string()))
+                    Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
                 }
             }
             KeyCode::Esc => {
@@ -431,7 +430,7 @@ impl AppComponent {
                 self.update_data_from_sync(status);
                 self.sync_component_data();
 
-                self.state.info_message = Some("Sync completed successfully".to_string());
+                self.state.info_message = Some(SUCCESS_SYNC_COMPLETED.to_string());
                 info!("Sync: Showing completion info dialog");
                 Action::ShowDialog(DialogType::Info(self.state.info_message.clone().unwrap()))
             }
@@ -808,7 +807,7 @@ impl AppComponent {
                         if let Some((task_id, priority_str)) = task_info.split_once('|') {
                             if let Ok(priority) = priority_str.parse::<i32>() {
                                 match sync_service.update_task_priority(task_id, priority).await {
-                                    Ok(()) => Ok(format!("✅ Task priority updated to P{}: {}", priority, task_id)),
+                                    Ok(()) => Ok(format!("{}{}: {}", SUCCESS_TASK_PRIORITY_UPDATED, priority, task_id)),
                                     Err(e) => Err(format!("{}: {}", ERROR_TASK_PRIORITY_FAILED, e)),
                                 }
                             } else {
@@ -894,64 +893,64 @@ impl AppComponent {
                                 Err(e) => Err(format!("{}: {}", ERROR_TASK_UPDATE_FAILED, e)),
                             }
                         } else {
-                            Err("❌ Invalid task edit format".to_string())
+                            Err(ERROR_INVALID_TASK_EDIT_FORMAT.to_string())
                         }
                     }
                     "Restore task" => match sync_service.restore_task(&task_info).await {
-                        Ok(()) => Ok(format!("✅ Task restored: {}", task_info)),
-                        Err(e) => Err(format!("❌ Failed to restore task: {}", e)),
+                        Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_RESTORED, task_info)),
+                        Err(e) => Err(format!("{}: {}", ERROR_TASK_RESTORE_FAILED, e)),
                     },
                     "Create project" => {
                         // project_info format: "name|parent_id" or just "name" for root project
                         if let Some((name, parent_id)) = task_info.split_once('|') {
                             // Project has a parent
                             match sync_service.create_project(name, Some(parent_id)).await {
-                                Ok(()) => Ok(format!("✅ Project created with parent: {}", name)),
-                                Err(e) => Err(format!("❌ Failed to create project: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_CREATED_PARENT, name)),
+                                Err(e) => Err(format!("{}: {}", ERROR_PROJECT_CREATE_FAILED, e)),
                             }
                         } else {
                             // Root project (no parent)
                             match sync_service.create_project(&task_info, None).await {
-                                Ok(()) => Ok(format!("✅ Root project created: {}", task_info)),
-                                Err(e) => Err(format!("❌ Failed to create project: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_CREATED_ROOT, task_info)),
+                                Err(e) => Err(format!("{}: {}", ERROR_PROJECT_CREATE_FAILED, e)),
                             }
                         }
                     }
                     "Delete project" => match sync_service.delete_project(&task_info).await {
-                        Ok(()) => Ok(format!("✅ Project deleted: {}", task_info)),
-                        Err(e) => Err(format!("❌ Failed to delete project: {}", e)),
+                        Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_DELETED, task_info)),
+                        Err(e) => Err(format!("{}: {}", ERROR_PROJECT_DELETE_FAILED, e)),
                     },
                     "Delete label" => match sync_service.delete_label(&task_info).await {
-                        Ok(()) => Ok(format!("✅ Label deleted: {}", task_info)),
-                        Err(e) => Err(format!("❌ Failed to delete label: {}", e)),
+                        Ok(()) => Ok(format!("{}: {}", SUCCESS_LABEL_DELETED, task_info)),
+                        Err(e) => Err(format!("{}: {}", ERROR_LABEL_DELETE_FAILED, e)),
                     },
                     "Create label" => match sync_service.create_label(&task_info, None).await {
-                        Ok(()) => Ok(format!("✅ Label created: {}", task_info)),
-                        Err(e) => Err(format!("❌ Failed to create label: {}", e)),
+                        Ok(()) => Ok(format!("{}: {}", SUCCESS_LABEL_CREATED, task_info)),
+                        Err(e) => Err(format!("{}: {}", ERROR_LABEL_CREATE_FAILED, e)),
                     },
                     "Edit project" => {
                         // task_info format: "project_id: new_name"
                         if let Some((project_id, name)) = task_info.split_once(": ") {
                             match sync_service.update_project_content(project_id, name).await {
-                                Ok(()) => Ok(format!("✅ Project updated: {}", project_id)),
-                                Err(e) => Err(format!("❌ Failed to update project: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_UPDATED, project_id)),
+                                Err(e) => Err(format!("{}: {}", ERROR_PROJECT_UPDATE_FAILED, e)),
                             }
                         } else {
-                            Err("❌ Invalid project edit format".to_string())
+                            Err(ERROR_INVALID_PROJECT_EDIT_FORMAT.to_string())
                         }
                     }
                     "Edit label" => {
                         // task_info format: "label_id: new_name"
                         if let Some((label_id, name)) = task_info.split_once(": ") {
                             match sync_service.update_label_content(label_id, name).await {
-                                Ok(()) => Ok(format!("✅ Label updated: {}", label_id)),
-                                Err(e) => Err(format!("❌ Failed to update label: {}", e)),
+                                Ok(()) => Ok(format!("{}: {}", SUCCESS_LABEL_UPDATED, label_id)),
+                                Err(e) => Err(format!("{}: {}", ERROR_LABEL_UPDATE_FAILED, e)),
                             }
                         } else {
-                            Err("❌ Invalid label edit format".to_string())
+                            Err(ERROR_INVALID_LABEL_EDIT_FORMAT.to_string())
                         }
                     }
-                    _ => Err(format!("❌ Unknown operation: {}", op_name)),
+                    _ => Err(format!("{}: {}", ERROR_UNKNOWN_OPERATION, op_name)),
                 };
 
                 result.map_err(|e: String| anyhow::anyhow!(e))
@@ -1146,9 +1145,9 @@ impl AppComponent {
         };
 
         let title = if self.state.loading {
-            "Loading data"
+            UI_LOADING_DATA
         } else {
-            "Syncing with Todoist"
+            UI_SYNCING_WITH_TODOIST
         };
 
         let spinner = "⟳";
