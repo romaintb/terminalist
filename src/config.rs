@@ -16,6 +16,7 @@ pub struct Config {
     pub sync: SyncConfig,
     pub display: DisplayConfig,
     pub logging: LoggingConfig,
+    pub backends: BackendsConfig,
 }
 
 /// UI configuration
@@ -65,6 +66,33 @@ pub struct LoggingConfig {
     pub enabled: bool,
 }
 
+/// Backend configurations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BackendsConfig {
+    /// Default backend to use for new items
+    pub default_backend: String,
+    /// Individual backend configurations
+    pub todoist: TodoistBackendConfig,
+    // Future backends can be added here:
+    // pub local: LocalBackendConfig,
+    // pub caldav: CalDAVBackendConfig,
+}
+
+/// Todoist backend configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TodoistBackendConfig {
+    /// Enable this backend
+    pub enabled: bool,
+    /// Environment variable containing the API token
+    pub api_token_env: String,
+    /// Human-readable name for this backend instance
+    pub name: String,
+    /// Custom backend ID (optional, defaults to "todoist")
+    pub backend_id: Option<String>,
+}
+
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
@@ -92,6 +120,26 @@ impl Default for DisplayConfig {
             show_durations: true,
             show_labels: true,
             show_project_colors: false,
+        }
+    }
+}
+
+impl Default for BackendsConfig {
+    fn default() -> Self {
+        Self {
+            default_backend: "todoist".to_string(),
+            todoist: TodoistBackendConfig::default(),
+        }
+    }
+}
+
+impl Default for TodoistBackendConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            api_token_env: "TODOIST_API_TOKEN".to_string(),
+            name: "Todoist".to_string(),
+            backend_id: None, // Defaults to "todoist"
         }
     }
 }
@@ -172,7 +220,77 @@ impl Config {
             anyhow::bail!("Invalid time_format '{}': {}", self.display.time_format, e);
         }
 
+        // Validate backend configuration
+        self.validate_backends()?;
+
         Ok(())
+    }
+
+    /// Validate backend configurations
+    fn validate_backends(&self) -> Result<()> {
+        // Check if default backend is valid
+        let available_backends = self.get_available_backend_ids();
+        if !available_backends.contains(&self.backends.default_backend) {
+            anyhow::bail!(
+                "default_backend '{}' is not available. Available backends: {}",
+                self.backends.default_backend,
+                available_backends.join(", ")
+            );
+        }
+
+        // Validate Todoist backend config
+        if self.backends.todoist.enabled {
+            if self.backends.todoist.api_token_env.is_empty() {
+                anyhow::bail!("todoist.api_token_env cannot be empty when todoist backend is enabled");
+            }
+            if self.backends.todoist.name.is_empty() {
+                anyhow::bail!("todoist.name cannot be empty when todoist backend is enabled");
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Get list of available backend IDs based on configuration
+    pub fn get_available_backend_ids(&self) -> Vec<String> {
+        let mut backends = Vec::new();
+
+        if self.backends.todoist.enabled {
+            let backend_id = self.backends.todoist.backend_id
+                .as_deref()
+                .unwrap_or("todoist")
+                .to_string();
+            backends.push(backend_id);
+        }
+
+        backends
+    }
+
+    /// Check if a specific backend is enabled
+    pub fn is_backend_enabled(&self, backend_type: &str) -> bool {
+        match backend_type {
+            "todoist" => self.backends.todoist.enabled,
+            _ => false,
+        }
+    }
+
+    /// Get the Todoist backend configuration
+    pub fn get_todoist_config(&self) -> &TodoistBackendConfig {
+        &self.backends.todoist
+    }
+
+    /// Get the environment variable name for a backend's API token
+    pub fn get_api_token_env_var(&self, backend_type: &str) -> Option<&str> {
+        match backend_type {
+            "todoist" => {
+                if self.backends.todoist.enabled {
+                    Some(&self.backends.todoist.api_token_env)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
     }
 
     /// Generate default configuration file
