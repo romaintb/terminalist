@@ -19,6 +19,9 @@
 /// Configuration module for managing application settings
 pub mod config;
 
+/// Backend abstraction layer for multiple task management systems
+pub mod backends;
+
 /// Application constants and default values
 pub mod constants;
 
