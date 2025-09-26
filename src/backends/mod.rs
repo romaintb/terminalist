@@ -12,6 +12,9 @@ use anyhow::Result;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+/// Todoist backend implementation
+pub mod todoist;
+
 // Re-export common types that backends will use
 pub use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
 
