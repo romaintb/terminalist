@@ -1,9 +1,10 @@
 use anyhow::Result;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteConnection, SqlitePool, SqlitePoolOptions},
-    Connection,
+    Connection, Row,
 };
 use std::str::FromStr;
+use uuid::Uuid;
 
 /// Local storage manager for Todoist data
 pub struct LocalStorage {
@@ -64,47 +65,86 @@ impl LocalStorage {
 
     /// Initialize database schema
     async fn init_schema(&self) -> Result<()> {
-        // Create projects table
+        // Create backend registry table first
+        sqlx::query(
+            r"
+            CREATE TABLE IF NOT EXISTS backends (
+                backend_id TEXT PRIMARY KEY,
+                backend_type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                enabled BOOLEAN NOT NULL DEFAULT 1,
+                last_sync DATETIME,
+                sync_error TEXT,
+                config TEXT
+            )
+            ",
+        )
+        .execute(&self.pool)
+        .await?;
+
+        // Create projects table with backend tracking
         sqlx::query(
             r"
             CREATE TABLE IF NOT EXISTS projects (
-                id TEXT PRIMARY KEY,
+                uuid TEXT PRIMARY KEY,
+                backend_id TEXT NOT NULL DEFAULT 'todoist',
+                external_id TEXT NOT NULL,
                 name TEXT NOT NULL,
                 color TEXT,
                 is_favorite BOOLEAN NOT NULL DEFAULT 0,
                 is_inbox_project BOOLEAN NOT NULL DEFAULT 0,
                 order_index INTEGER NOT NULL DEFAULT 0,
-                parent_id TEXT REFERENCES projects(id) ON DELETE CASCADE
+                parent_uuid TEXT REFERENCES projects(uuid) ON DELETE CASCADE,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (backend_id) REFERENCES backends(backend_id) ON DELETE CASCADE,
+                UNIQUE(backend_id, external_id)
             )
             ",
         )
         .execute(&self.pool)
         .await?;
 
-        // Create sections table
+        // Create sections table (backend is inferred from project)
         sqlx::query(
             r"
             CREATE TABLE IF NOT EXISTS sections (
-                id TEXT PRIMARY KEY,
+                uuid TEXT PRIMARY KEY,
+                external_id TEXT NOT NULL,
                 name TEXT NOT NULL,
-                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-                order_index INTEGER NOT NULL DEFAULT 0
+                project_uuid TEXT NOT NULL REFERENCES projects(uuid) ON DELETE CASCADE,
+                order_index INTEGER NOT NULL DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
             ",
         )
         .execute(&self.pool)
         .await?;
 
-        // Create tasks table
+        // Add unique constraint for sections to prevent duplicate external_ids within same backend
+        sqlx::query(
+            r"
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_sections_unique_external_per_backend
+            ON sections (external_id, (
+                SELECT backend_id FROM projects WHERE projects.uuid = sections.project_uuid
+            ))
+            ",
+        )
+        .execute(&self.pool)
+        .await?;
+
+        // Create tasks table (backend is inferred from project)
         sqlx::query(
             r"
             CREATE TABLE IF NOT EXISTS tasks (
-                id TEXT PRIMARY KEY,
+                uuid TEXT PRIMARY KEY,
+                external_id TEXT NOT NULL,
                 content TEXT NOT NULL,
                 description TEXT,
-                project_id TEXT NOT NULL,
-                section_id TEXT,
-                parent_id TEXT,
+                project_uuid TEXT NOT NULL,
+                section_uuid TEXT,
+                parent_uuid TEXT,
                 priority INTEGER NOT NULL DEFAULT 1,
                 order_index INTEGER NOT NULL DEFAULT 0,
                 due_date TEXT,
@@ -114,24 +154,44 @@ impl LocalStorage {
                 duration TEXT,
                 is_completed BOOLEAN NOT NULL DEFAULT 0,
                 is_deleted BOOLEAN NOT NULL DEFAULT 0,
-                FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE,
-                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-                FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE SET NULL
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (parent_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE,
+                FOREIGN KEY (project_uuid) REFERENCES projects(uuid) ON DELETE CASCADE,
+                FOREIGN KEY (section_uuid) REFERENCES sections(uuid) ON DELETE SET NULL
             )
             ",
         )
         .execute(&self.pool)
         .await?;
 
-        // Create labels table
+        // Add unique constraint for tasks to prevent duplicate external_ids within same backend
+        sqlx::query(
+            r"
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_unique_external_per_backend
+            ON tasks (external_id, (
+                SELECT backend_id FROM projects WHERE projects.uuid = tasks.project_uuid
+            ))
+            ",
+        )
+        .execute(&self.pool)
+        .await?;
+
+        // Create labels table with backend tracking
         sqlx::query(
             r"
             CREATE TABLE IF NOT EXISTS labels (
-                id TEXT PRIMARY KEY,
+                uuid TEXT PRIMARY KEY,
+                backend_id TEXT NOT NULL DEFAULT 'todoist',
+                external_id TEXT NOT NULL,
                 name TEXT NOT NULL,
                 color TEXT NOT NULL,
                 order_index INTEGER NOT NULL DEFAULT 0,
-                is_favorite BOOLEAN NOT NULL DEFAULT 0
+                is_favorite BOOLEAN NOT NULL DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (backend_id) REFERENCES backends(backend_id) ON DELETE CASCADE,
+                UNIQUE(backend_id, external_id)
             )
             ",
         )
@@ -142,11 +202,11 @@ impl LocalStorage {
         sqlx::query(
             r"
             CREATE TABLE IF NOT EXISTS task_labels (
-                task_id TEXT NOT NULL,
-                label_id TEXT NOT NULL,
-                PRIMARY KEY (task_id, label_id),
-                FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-                FOREIGN KEY (label_id) REFERENCES labels(id) ON DELETE CASCADE
+                task_uuid TEXT NOT NULL,
+                label_uuid TEXT NOT NULL,
+                PRIMARY KEY (task_uuid, label_uuid),
+                FOREIGN KEY (task_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE,
+                FOREIGN KEY (label_uuid) REFERENCES labels(uuid) ON DELETE CASCADE
             )
             ",
         )
@@ -154,24 +214,50 @@ impl LocalStorage {
         .await?;
 
         // Create indexes for performance
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_task_labels_task_id ON task_labels(task_id)")
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_task_labels_task_uuid ON task_labels(task_uuid)")
             .execute(&self.pool)
             .await?;
 
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_task_labels_label_id ON task_labels(label_id)")
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_task_labels_label_uuid ON task_labels(label_uuid)")
             .execute(&self.pool)
             .await?;
 
         // Create indexes for tasks table
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id)")
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_project_uuid ON tasks(project_uuid)")
             .execute(&self.pool)
             .await?;
 
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_section_id ON tasks(section_id)")
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_section_uuid ON tasks(section_uuid)")
             .execute(&self.pool)
             .await?;
 
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id)")
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_parent_uuid ON tasks(parent_uuid)")
+            .execute(&self.pool)
+            .await?;
+
+        // Create indexes for backend tracking
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_projects_backend_id ON projects(backend_id)")
+            .execute(&self.pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_labels_backend_id ON labels(backend_id)")
+            .execute(&self.pool)
+            .await?;
+
+        // Create indexes for external IDs (for efficient lookups during sync)
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_projects_external_id ON projects(backend_id, external_id)")
+            .execute(&self.pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_labels_external_id ON labels(backend_id, external_id)")
+            .execute(&self.pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_external_id ON tasks(external_id)")
+            .execute(&self.pool)
+            .await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_sections_external_id ON sections(external_id)")
             .execute(&self.pool)
             .await?;
 
@@ -198,4 +284,139 @@ impl LocalStorage {
 
         Ok(())
     }
+
+    /// Register a backend instance in the database
+    pub async fn register_backend(
+        &self,
+        backend_id: &str,
+        backend_type: &str,
+        name: &str,
+        enabled: bool,
+        config: Option<&str>,
+    ) -> Result<()> {
+        sqlx::query(
+            r"
+            INSERT OR REPLACE INTO backends (backend_id, backend_type, name, enabled, config)
+            VALUES (?, ?, ?, ?, ?)
+            ",
+        )
+        .bind(backend_id)
+        .bind(backend_type)
+        .bind(name)
+        .bind(enabled)
+        .bind(config)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Update backend sync status
+    pub async fn update_backend_sync_status(
+        &self,
+        backend_id: &str,
+        last_sync: Option<&str>,
+        sync_error: Option<&str>,
+    ) -> Result<()> {
+        sqlx::query(
+            r"
+            UPDATE backends
+            SET last_sync = ?, sync_error = ?
+            WHERE backend_id = ?
+            ",
+        )
+        .bind(last_sync)
+        .bind(sync_error)
+        .bind(backend_id)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// Get all registered backends
+    pub async fn get_registered_backends(&self) -> Result<Vec<RegisteredBackend>> {
+        let rows = sqlx::query(
+            r"
+            SELECT backend_id, backend_type, name, enabled, last_sync, sync_error, config
+            FROM backends
+            ORDER BY backend_id
+            ",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let backends = rows
+            .into_iter()
+            .map(|row| RegisteredBackend {
+                backend_id: row.get("backend_id"),
+                backend_type: row.get("backend_type"),
+                name: row.get("name"),
+                enabled: row.get("enabled"),
+                last_sync: row.get("last_sync"),
+                sync_error: row.get("sync_error"),
+                config: row.get("config"),
+            })
+            .collect();
+
+        Ok(backends)
+    }
+
+    /// Generate a unique internal UUID for database entities
+    pub fn generate_uuid() -> String {
+        Uuid::new_v4().to_string()
+    }
+
+    /// Find an entity by backend_id and external_id combination
+    /// This is used during sync to check if an item already exists
+    pub async fn find_entity_by_external_id(
+        &self,
+        table: &str,
+        backend_id: &str,
+        external_id: &str,
+    ) -> Result<Option<String>> {
+        let query = match table {
+            "projects" => {
+                "SELECT uuid FROM projects WHERE backend_id = ? AND external_id = ?"
+            }
+            "labels" => {
+                "SELECT uuid FROM labels WHERE backend_id = ? AND external_id = ?"
+            }
+            "tasks" => {
+                r"
+                SELECT t.uuid FROM tasks t
+                JOIN projects p ON t.project_uuid = p.uuid
+                WHERE p.backend_id = ? AND t.external_id = ?
+                "
+            }
+            "sections" => {
+                r"
+                SELECT s.uuid FROM sections s
+                JOIN projects p ON s.project_uuid = p.uuid
+                WHERE p.backend_id = ? AND s.external_id = ?
+                "
+            }
+            _ => return Err(anyhow::anyhow!("Unknown table: {}", table)),
+        };
+
+        let result: Option<String> = sqlx::query_scalar(query)
+            .bind(backend_id)
+            .bind(external_id)
+            .fetch_optional(&self.pool)
+            .await?;
+
+        Ok(result)
+    }
+}
+
+/// Represents a registered backend in the database
+#[derive(Debug, Clone)]
+pub struct RegisteredBackend {
+    pub backend_id: String,
+    pub backend_type: String,
+    pub name: String,
+    pub enabled: bool,
+    pub last_sync: Option<String>,
+    pub sync_error: Option<String>,
+    pub config: Option<String>,
 }
