@@ -49,7 +49,7 @@ fn test_border_edge_case() {
     let rect = Rect::new(0, 0, 50, 10); // Height 10, but content height is 8 with borders
     let total_items = 9; // 9 items in content height 8 - should need scrollbar
 
-    let (list_area, scrollbar_area) = ScrollbarHelper::calculate_areas(rect, total_items);
+    let (_list_area, scrollbar_area) = ScrollbarHelper::calculate_areas(rect, total_items);
 
     // The ScrollbarHelper currently uses rect.height (10) for comparison
     // So 9 items vs height 10 should NOT need scrollbar
