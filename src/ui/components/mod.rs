@@ -36,6 +36,9 @@
 // Visual element components
 pub mod badge;
 
+// Utility components
+pub mod scrollbar_helper;
+
 // Core interactive components
 pub mod dialog_component;
 pub mod dialogs;

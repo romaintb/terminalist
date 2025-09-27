@@ -80,6 +80,7 @@ pub struct AppComponent {
 
     // Layout state
     sidebar_width: u16,
+    screen_width: u16,
     screen_height: u16,
 }
 
@@ -106,6 +107,7 @@ impl AppComponent {
             should_quit: false,
             active_sync_task: None,
             sidebar_width: 30, // Default width
+            screen_width: 100, // Default width
             screen_height: 50, // Default height
         }
     }
@@ -1010,10 +1012,17 @@ impl AppComponent {
     pub async fn handle_event(&mut self, event_type: EventType) -> anyhow::Result<()> {
         let action = match event_type {
             EventType::Mouse(mouse) => {
-                // Handle mouse events using actual sidebar dimensions
-                if !self.dialog.is_visible() && mouse.column < self.sidebar_width {
-                    let sidebar_area = Rect::new(0, 0, self.sidebar_width, self.screen_height);
-                    self.sidebar.handle_mouse(mouse, sidebar_area)
+                if !self.dialog.is_visible() {
+                    if mouse.column < self.sidebar_width {
+                        // Mouse is in sidebar area
+                        let sidebar_area = Rect::new(0, 0, self.sidebar_width, self.screen_height);
+                        self.sidebar.handle_mouse(mouse, sidebar_area)
+                    } else {
+                        // Mouse is in task list area - calculate proper width
+                        let task_list_width = self.screen_width.saturating_sub(self.sidebar_width).max(1);
+                        let task_list_area = Rect::new(self.sidebar_width, 0, task_list_width, self.screen_height);
+                        self.task_list.handle_mouse(mouse, task_list_area)
+                    }
                 } else {
                     Action::None
                 }
@@ -1045,6 +1054,7 @@ impl AppComponent {
             EventType::Resize(width, height) => {
                 // Handle terminal resize - update cached dimensions
                 self.sidebar_width = self.calculate_sidebar_width(width);
+                self.screen_width = width;
                 self.screen_height = height;
                 Action::None
             }
@@ -1104,6 +1114,7 @@ impl Component for AppComponent {
 
         // Update cached dimensions for mouse event handling
         self.sidebar_width = sidebar_width;
+        self.screen_width = rect.width;
         self.screen_height = rect.height;
 
         let main_chunks = Layout::horizontal([Constraint::Length(sidebar_width), Constraint::Min(0)]).split(rect);

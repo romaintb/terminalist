@@ -6,6 +6,7 @@
 
 use crate::icons::IconService;
 use crate::todoist::{LabelDisplay, ProjectDisplay};
+use crate::ui::components::scrollbar_helper::ScrollbarHelper;
 use crate::ui::core::SidebarSelection;
 use crate::ui::core::{actions::Action, Component};
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
@@ -13,7 +14,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{block::BorderType, Block, Borders, List, ListItem, ListState, Scrollbar, ScrollbarOrientation, ScrollbarState},
+    widgets::{block::BorderType, Block, Borders, List, ListItem, ListState},
     Frame,
 };
 
@@ -37,7 +38,7 @@ pub struct SidebarComponent {
     pub icons: IconService,
     list_state: ListState,
     scroll_position: usize, // Virtual scroll position for view
-    scrollbar_state: ScrollbarState,
+    scrollbar_helper: ScrollbarHelper,
 }
 
 impl Default for SidebarComponent {
@@ -57,7 +58,7 @@ impl SidebarComponent {
             icons: IconService::default(),
             list_state,
             scroll_position: 0,
-            scrollbar_state: ScrollbarState::new(0),
+            scrollbar_helper: ScrollbarHelper::new(),
         }
     }
 
@@ -98,9 +99,7 @@ impl SidebarComponent {
 
         // Update scrollbar based on scroll position
         let total_items = self.total_items();
-        self.scrollbar_state = self.scrollbar_state
-            .content_length(total_items)
-            .position(self.scroll_position);
+        self.scrollbar_helper.update_state(total_items, self.scroll_position, None);
     }
 
     /// Update list state to reflect current selection (not scroll position)
@@ -111,9 +110,7 @@ impl SidebarComponent {
 
         // Update scrollbar state for selection-based positioning
         let total_items = self.total_items();
-        self.scrollbar_state = self.scrollbar_state
-            .content_length(total_items)
-            .position(selection_index);
+        self.scrollbar_helper.update_state(total_items, selection_index, None);
     }
 
     fn get_next_selection(&self) -> SidebarSelection {
@@ -327,18 +324,46 @@ impl SidebarComponent {
 
     /// Handle mouse events
     pub fn handle_mouse(&mut self, mouse: MouseEvent, area: Rect) -> Action {
-        if mouse.kind == MouseEventKind::Down(MouseButton::Left)
-            && mouse.column >= area.x
+        // Check if mouse is within the sidebar area
+        let is_in_area = mouse.column >= area.x
             && mouse.column < area.x + area.width
-            && mouse.row > area.y
-            && mouse.row < area.y + area.height - 1
-        {
-            let clicked_index = (mouse.row - area.y - 1) as usize;
-            let selection = self.index_to_selection(clicked_index);
-            self.list_state.select(Some(clicked_index));
-            return Action::NavigateToSidebar(selection);
+            && mouse.row >= area.y
+            && mouse.row < area.y + area.height;
+
+        if !is_in_area {
+            return Action::None;
         }
-        Action::None
+
+        match mouse.kind {
+            // Left click for selection
+            MouseEventKind::Down(MouseButton::Left) => {
+                if mouse.row > area.y && mouse.row < area.y + area.height - 1 {
+                    let local_index = (mouse.row - area.y - 1) as usize;
+                    let clicked_index = self.list_state.offset() + local_index;
+
+                    // Guard against clicks beyond the available data
+                    if clicked_index >= self.total_items() {
+                        return Action::None;
+                    }
+
+                    let selection = self.index_to_selection(clicked_index);
+                    self.list_state.select(Some(clicked_index));
+                    Action::NavigateToSidebar(selection)
+                } else {
+                    Action::None
+                }
+            }
+            // Mouse wheel for navigation (move selection like task list)
+            MouseEventKind::ScrollUp => {
+                let prev_selection = self.get_previous_selection();
+                Action::NavigateToSidebar(prev_selection)
+            }
+            MouseEventKind::ScrollDown => {
+                let next_selection = self.get_next_selection();
+                Action::NavigateToSidebar(next_selection)
+            }
+            _ => Action::None,
+        }
     }
 }
 
@@ -484,37 +509,15 @@ impl Component for SidebarComponent {
         // Ensure list state is synced with current selection
         self.update_list_state();
 
-        // Calculate available height for content (excluding borders)
-        let available_height = rect.height.saturating_sub(2) as usize; // 2 for top and bottom borders
+        // Calculate areas for list and scrollbar using helper
         let total_items = all_items.len();
-        let needs_scrollbar = total_items > available_height;
+        let (list_area, scrollbar_area) = ScrollbarHelper::calculate_areas(rect, total_items);
 
-        // Update scrollbar state with viewport information for proper positioning
-        if needs_scrollbar {
-            self.scrollbar_state = self.scrollbar_state
-                .content_length(total_items)
-                .viewport_content_length(available_height)
-                .position(self.list_state.selected().unwrap_or(0));
-        }
-
-        // Create areas for list and scrollbar
-        let (list_area, scrollbar_area) = if needs_scrollbar {
-            let list_area = Rect {
-                x: rect.x,
-                y: rect.y,
-                width: rect.width.saturating_sub(1), // Reserve 1 column for scrollbar
-                height: rect.height,
-            };
-            let scrollbar_area = Rect {
-                x: rect.x + rect.width.saturating_sub(1),
-                y: rect.y + 1, // Start below top border
-                width: 1,
-                height: rect.height.saturating_sub(2), // Exclude top and bottom borders
-            };
-            (list_area, Some(scrollbar_area))
-        } else {
-            (rect, None)
-        };
+        // Update scrollbar state with current position and viewport info
+        let available_height = rect.height.saturating_sub(2) as usize;
+        let current_position = self.list_state.selected().unwrap_or(0);
+        self.scrollbar_helper
+            .update_state(total_items, current_position, Some(available_height));
 
         let list = List::new(all_items)
             .block(
@@ -529,17 +532,7 @@ impl Component for SidebarComponent {
 
         f.render_stateful_widget(list, list_area, &mut self.list_state);
 
-        // Render scrollbar if needed
-        if let Some(scrollbar_area) = scrollbar_area {
-            let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-                .begin_symbol(Some("↑"))
-                .end_symbol(Some("↓"))
-                .track_symbol(Some("│"))
-                .thumb_symbol("█")
-                .style(Style::default().fg(Color::DarkGray))
-                .thumb_style(Style::default().fg(Color::DarkGray));
-
-            f.render_stateful_widget(scrollbar, scrollbar_area, &mut self.scrollbar_state);
-        }
+        // Render scrollbar using helper
+        self.scrollbar_helper.render(f, scrollbar_area);
     }
 }
