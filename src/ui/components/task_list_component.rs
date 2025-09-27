@@ -395,15 +395,15 @@ impl TaskListComponent {
             self.list_state.select(physical_index);
         }
 
-        // Update scrollbar state
-        self.update_scrollbar_state();
+        // Scrollbar state will be refreshed during render when the viewport is known.
     }
 
-    /// Update scrollbar state based on current selection and content
-    fn update_scrollbar_state(&mut self) {
+    /// Update scrollbar state once we know the viewport height and current offset
+    fn update_scrollbar_state(&mut self, viewport_len: usize) {
         let total_items = self.items.len();
-        let current_position = self.list_state.selected().unwrap_or(0);
-        self.scrollbar_helper.update_state(total_items, current_position, None);
+        let current_offset = self.list_state.offset();
+        self.scrollbar_helper
+            .update_state(total_items, current_offset, Some(viewport_len));
     }
 
     /// Convert logical selection index (among selectable items) to physical list index
@@ -605,6 +605,11 @@ impl Component for TaskListComponent {
         );
 
         f.render_stateful_widget(tasks_list, list_area, &mut self.list_state);
+
+        // Update scrollbar state with actual viewport info after list widget has processed
+        let inner_height = list_area.height.saturating_sub(2); // Account for list borders
+        let viewport_len = usize::from(inner_height.max(1));
+        self.update_scrollbar_state(viewport_len);
 
         // Render scrollbar using helper
         self.scrollbar_helper.render(f, scrollbar_area);
