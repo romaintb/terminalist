@@ -398,14 +398,6 @@ impl TaskListComponent {
         // Scrollbar state will be refreshed during render when the viewport is known.
     }
 
-    /// Update scrollbar state once we know the viewport height and current offset
-    fn update_scrollbar_state(&mut self, viewport_len: usize) {
-        let total_items = self.items.len();
-        let current_offset = self.list_state.offset();
-        self.scrollbar_helper
-            .update_state(total_items, current_offset, Some(viewport_len));
-    }
-
     /// Convert logical selection index (among selectable items) to physical list index
     fn logical_to_physical_index(&self, logical_index: usize) -> Option<usize> {
         let mut selectable_count = 0;
@@ -579,6 +571,8 @@ impl Component for TaskListComponent {
     fn render(&mut self, f: &mut Frame, rect: Rect) {
         // Calculate areas for list and scrollbar using helper
         let total_items = self.items.len();
+
+        // Calculate areas for list and scrollbar using helper
         let (list_area, scrollbar_area) = ScrollbarHelper::calculate_areas(rect, total_items);
 
         let tasks_list = if self.items.is_empty() {
@@ -604,12 +598,13 @@ impl Component for TaskListComponent {
                 .border_style(Style::default().fg(Color::DarkGray)),
         );
 
-        f.render_stateful_widget(tasks_list, list_area, &mut self.list_state);
+        // Update scrollbar state with current position and viewport info
+        let available_height = rect.height.saturating_sub(2) as usize;
+        let current_position = self.list_state.selected().unwrap_or(0);
+        self.scrollbar_helper
+            .update_state(total_items, current_position, Some(available_height));
 
-        // Update scrollbar state with actual viewport info after list widget has processed
-        let inner_height = list_area.height.saturating_sub(2); // Account for list borders
-        let viewport_len = usize::from(inner_height.max(1));
-        self.update_scrollbar_state(viewport_len);
+        f.render_stateful_widget(tasks_list, list_area, &mut self.list_state);
 
         // Render scrollbar using helper
         self.scrollbar_helper.render(f, scrollbar_area);
