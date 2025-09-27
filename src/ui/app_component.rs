@@ -1010,10 +1010,16 @@ impl AppComponent {
     pub async fn handle_event(&mut self, event_type: EventType) -> anyhow::Result<()> {
         let action = match event_type {
             EventType::Mouse(mouse) => {
-                // Handle mouse events using actual sidebar dimensions
-                if !self.dialog.is_visible() && mouse.column < self.sidebar_width {
-                    let sidebar_area = Rect::new(0, 0, self.sidebar_width, self.screen_height);
-                    self.sidebar.handle_mouse(mouse, sidebar_area)
+                if !self.dialog.is_visible() {
+                    if mouse.column < self.sidebar_width {
+                        // Mouse is in sidebar area
+                        let sidebar_area = Rect::new(0, 0, self.sidebar_width, self.screen_height);
+                        self.sidebar.handle_mouse(mouse, sidebar_area)
+                    } else {
+                        // Mouse is in task list area - we don't have screen_width stored, so use a large width
+                        let task_list_area = Rect::new(self.sidebar_width, 0, 1000, self.screen_height);
+                        self.task_list.handle_mouse(mouse, task_list_area)
+                    }
                 } else {
                     Action::None
                 }
