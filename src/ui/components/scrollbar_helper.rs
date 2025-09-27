@@ -74,7 +74,7 @@ impl ScrollbarHelper {
     /// # Returns
     /// A tuple of (content_area, optional_scrollbar_area)
     pub fn calculate_areas(rect: Rect, total_items: usize) -> (Rect, Option<Rect>) {
-        let available_height = rect.height.saturating_sub(2) as usize; // Exclude borders
+        let available_height = rect.height as usize; // Treat rect as actual drawable area
         let needs_scrollbar = Self::needs_scrollbar(total_items, available_height);
 
         if needs_scrollbar {
@@ -86,9 +86,9 @@ impl ScrollbarHelper {
             };
             let scrollbar_area = Rect {
                 x: rect.x + rect.width.saturating_sub(1),
-                y: rect.y + 1, // Start below top border
+                y: rect.y, // Use actual drawable area y
                 width: 1,
-                height: rect.height.saturating_sub(2), // Exclude top and bottom borders
+                height: rect.height, // Use full drawable height
             };
             (content_area, Some(scrollbar_area))
         } else {
