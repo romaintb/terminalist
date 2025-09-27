@@ -17,7 +17,7 @@ use crate::ui::core::{
 };
 use crate::utils::datetime;
 use chrono::{Duration, Local};
-use crossterm::event::{KeyCode, KeyEvent, MouseEvent, MouseEventKind};
+use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
@@ -412,6 +412,30 @@ impl TaskListComponent {
         None
     }
 
+    /// Convert physical list index to logical selection index (among selectable items)
+    fn physical_to_logical_index(&self, physical_index: usize) -> Option<usize> {
+        if physical_index >= self.items.len() {
+            return None;
+        }
+
+        // Check if the clicked item is selectable
+        if !self.items[physical_index].is_selectable() {
+            return None;
+        }
+
+        // Count selectable items up to the physical index
+        let mut logical_index = 0;
+        for (i, item) in self.items.iter().enumerate() {
+            if item.is_selectable() {
+                if i == physical_index {
+                    return Some(logical_index);
+                }
+                logical_index += 1;
+            }
+        }
+        None
+    }
+
     pub fn get_selected_task(&self) -> Option<&TaskDisplay> {
         // Find the currently selected task item
         if let Some(physical_index) = self.logical_to_physical_index(self.selected_index) {
@@ -435,6 +459,25 @@ impl TaskListComponent {
         }
 
         match mouse.kind {
+            // Left click for task selection
+            MouseEventKind::Down(MouseButton::Left) => {
+                if mouse.row > area.y && mouse.row < area.y + area.height - 1 {
+                    let local_index = (mouse.row - area.y - 1) as usize;
+                    let clicked_index = self.list_state.offset() + local_index;
+
+                    // Guard against clicks beyond the available data
+                    if clicked_index >= self.items.len() {
+                        return Action::None;
+                    }
+
+                    // Convert physical index to logical selection index
+                    if let Some(logical_index) = self.physical_to_logical_index(clicked_index) {
+                        self.selected_index = logical_index;
+                        self.update_list_state();
+                    }
+                }
+                Action::None
+            }
             // Mouse wheel for scrolling
             MouseEventKind::ScrollUp => {
                 self.previous_task();
