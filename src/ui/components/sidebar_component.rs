@@ -13,7 +13,7 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{block::BorderType, Block, Borders, List, ListItem, ListState},
+    widgets::{block::BorderType, Block, Borders, List, ListItem, ListState, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
 
@@ -36,7 +36,8 @@ pub struct SidebarComponent {
     pub labels: Vec<LabelDisplay>,
     pub icons: IconService,
     list_state: ListState,
-    scroll_offset: usize, // Track viewport scroll position
+    scroll_position: usize, // Virtual scroll position for view
+    scrollbar_state: ScrollbarState,
 }
 
 impl Default for SidebarComponent {
@@ -55,7 +56,8 @@ impl SidebarComponent {
             labels: Vec::new(),
             icons: IconService::default(),
             list_state,
-            scroll_offset: 0,
+            scroll_position: 0,
+            scrollbar_state: ScrollbarState::new(0),
         }
     }
 
@@ -63,7 +65,7 @@ impl SidebarComponent {
         self.projects = projects;
         self.labels = labels;
         // Reset scroll when data changes
-        self.scroll_offset = 0;
+        self.scroll_position = 0;
         self.update_list_state();
     }
 
@@ -74,27 +76,44 @@ impl SidebarComponent {
 
     /// Scroll the viewport up (showing earlier items)
     fn scroll_up(&mut self) {
-        if self.scroll_offset > 0 {
-            self.scroll_offset -= 1;
+        if self.scroll_position > 0 {
+            self.scroll_position -= 1;
+            self.update_scroll_state();
         }
     }
 
     /// Scroll the viewport down (showing later items)
     fn scroll_down(&mut self) {
         let total_items = self.total_items();
-        if total_items > 0 && self.scroll_offset < total_items.saturating_sub(1) {
-            self.scroll_offset += 1;
+        if self.scroll_position + 1 < total_items {
+            self.scroll_position += 1;
+            self.update_scroll_state();
         }
     }
 
-    /// Update list state to reflect current selection and scroll position
+    /// Update list state and scrollbar for scrolling (different from selection)
+    fn update_scroll_state(&mut self) {
+        // Set list state to show the scroll position, which causes ratatui to scroll
+        self.list_state.select(Some(self.scroll_position));
+
+        // Update scrollbar based on scroll position
+        let total_items = self.total_items();
+        self.scrollbar_state = self.scrollbar_state
+            .content_length(total_items)
+            .position(self.scroll_position);
+    }
+
+    /// Update list state to reflect current selection (not scroll position)
     fn update_list_state(&mut self) {
         // Find the index of the current selection
         let selection_index = self.selection_to_index(&self.selection);
         self.list_state.select(Some(selection_index));
 
-        // Set the scroll offset for the List widget
-        *self.list_state.offset_mut() = self.scroll_offset;
+        // Update scrollbar state for selection-based positioning
+        let total_items = self.total_items();
+        self.scrollbar_state = self.scrollbar_state
+            .content_length(total_items)
+            .position(selection_index);
     }
 
     fn get_next_selection(&self) -> SidebarSelection {
@@ -465,6 +484,38 @@ impl Component for SidebarComponent {
         // Ensure list state is synced with current selection
         self.update_list_state();
 
+        // Calculate available height for content (excluding borders)
+        let available_height = rect.height.saturating_sub(2) as usize; // 2 for top and bottom borders
+        let total_items = all_items.len();
+        let needs_scrollbar = total_items > available_height;
+
+        // Update scrollbar state with viewport information for proper positioning
+        if needs_scrollbar {
+            self.scrollbar_state = self.scrollbar_state
+                .content_length(total_items)
+                .viewport_content_length(available_height)
+                .position(self.list_state.selected().unwrap_or(0));
+        }
+
+        // Create areas for list and scrollbar
+        let (list_area, scrollbar_area) = if needs_scrollbar {
+            let list_area = Rect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width.saturating_sub(1), // Reserve 1 column for scrollbar
+                height: rect.height,
+            };
+            let scrollbar_area = Rect {
+                x: rect.x + rect.width.saturating_sub(1),
+                y: rect.y + 1, // Start below top border
+                width: 1,
+                height: rect.height.saturating_sub(2), // Exclude top and bottom borders
+            };
+            (list_area, Some(scrollbar_area))
+        } else {
+            (rect, None)
+        };
+
         let list = List::new(all_items)
             .block(
                 Block::default()
@@ -476,6 +527,19 @@ impl Component for SidebarComponent {
             )
             .style(Style::default().fg(Color::White));
 
-        f.render_stateful_widget(list, rect, &mut self.list_state);
+        f.render_stateful_widget(list, list_area, &mut self.list_state);
+
+        // Render scrollbar if needed
+        if let Some(scrollbar_area) = scrollbar_area {
+            let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("↑"))
+                .end_symbol(Some("↓"))
+                .track_symbol(Some("│"))
+                .thumb_symbol("█")
+                .style(Style::default().fg(Color::DarkGray))
+                .thumb_style(Style::default().fg(Color::DarkGray));
+
+            f.render_stateful_widget(scrollbar, scrollbar_area, &mut self.scrollbar_state);
+        }
     }
 }

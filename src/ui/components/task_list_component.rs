@@ -20,7 +20,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
-    widgets::{block::BorderType, Block, Borders, List, ListItem as RatatuiListItem, ListState},
+    widgets::{block::BorderType, Block, Borders, List, ListItem as RatatuiListItem, ListState, Scrollbar, ScrollbarOrientation, ScrollbarState},
     Frame,
 };
 
@@ -47,6 +47,7 @@ pub struct TaskListComponent {
     // Keep raw task data for building items
     pub tasks: Vec<TaskDisplay>,
     pub display_config: DisplayConfig,
+    scrollbar_state: ScrollbarState,
 }
 
 impl Default for TaskListComponent {
@@ -68,6 +69,7 @@ impl TaskListComponent {
             labels: Vec::new(),
             icons: IconService::default(),
             display_config: DisplayConfig::default(),
+            scrollbar_state: ScrollbarState::new(0),
         }
     }
 
@@ -391,6 +393,18 @@ impl TaskListComponent {
             let physical_index = self.logical_to_physical_index(self.selected_index);
             self.list_state.select(physical_index);
         }
+
+        // Update scrollbar state
+        self.update_scrollbar_state();
+    }
+
+    /// Update scrollbar state based on current selection and content
+    fn update_scrollbar_state(&mut self) {
+        let total_items = self.items.len();
+        let current_position = self.list_state.selected().unwrap_or(0);
+        self.scrollbar_state = self.scrollbar_state
+            .content_length(total_items)
+            .position(current_position);
     }
 
     /// Convert logical selection index (among selectable items) to physical list index
@@ -538,6 +552,30 @@ impl Component for TaskListComponent {
     }
 
     fn render(&mut self, f: &mut Frame, rect: Rect) {
+        // Calculate available height for content (excluding borders)
+        let available_height = rect.height.saturating_sub(2) as usize; // 2 for top and bottom borders
+        let total_items = self.items.len();
+        let needs_scrollbar = total_items > available_height;
+
+        // Create areas for list and scrollbar
+        let (list_area, scrollbar_area) = if needs_scrollbar {
+            let list_area = Rect {
+                x: rect.x,
+                y: rect.y,
+                width: rect.width.saturating_sub(1), // Reserve 1 column for scrollbar
+                height: rect.height,
+            };
+            let scrollbar_area = Rect {
+                x: rect.x + rect.width.saturating_sub(1),
+                y: rect.y + 1, // Start below top border
+                width: 1,
+                height: rect.height.saturating_sub(2), // Exclude top and bottom borders
+            };
+            (list_area, Some(scrollbar_area))
+        } else {
+            (rect, None)
+        };
+
         let tasks_list = if self.items.is_empty() {
             // Show contextual empty state message
             let empty_message = match &self.sidebar_selection {
@@ -549,7 +587,7 @@ impl Component for TaskListComponent {
 
             List::new(vec![RatatuiListItem::new(empty_message)])
         } else {
-            List::new(self.create_list_items(rect))
+            List::new(self.create_list_items(list_area))
                 .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
         }
         .block(
@@ -561,6 +599,19 @@ impl Component for TaskListComponent {
                 .border_style(Style::default().fg(Color::DarkGray)),
         );
 
-        f.render_stateful_widget(tasks_list, rect, &mut self.list_state);
+        f.render_stateful_widget(tasks_list, list_area, &mut self.list_state);
+
+        // Render scrollbar if needed
+        if let Some(scrollbar_area) = scrollbar_area {
+            let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+                .begin_symbol(Some("↑"))
+                .end_symbol(Some("↓"))
+                .track_symbol(Some("│"))
+                .thumb_symbol("█")
+                .style(Style::default().fg(Color::DarkGray))
+                .thumb_style(Style::default().fg(Color::DarkGray));
+
+            f.render_stateful_widget(scrollbar, scrollbar_area, &mut self.scrollbar_state);
+        }
     }
 }
