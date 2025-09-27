@@ -338,7 +338,14 @@ impl SidebarComponent {
             // Left click for selection
             MouseEventKind::Down(MouseButton::Left) => {
                 if mouse.row > area.y && mouse.row < area.y + area.height - 1 {
-                    let clicked_index = (mouse.row - area.y - 1) as usize;
+                    let local_index = (mouse.row - area.y - 1) as usize;
+                    let clicked_index = self.list_state.offset() + local_index;
+
+                    // Guard against clicks beyond the available data
+                    if clicked_index >= self.total_items() {
+                        return Action::None;
+                    }
+
                     let selection = self.index_to_selection(clicked_index);
                     self.list_state.select(Some(clicked_index));
                     Action::NavigateToSidebar(selection)
