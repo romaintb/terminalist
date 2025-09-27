@@ -46,6 +46,16 @@ impl Default for SidebarComponent {
 }
 
 impl SidebarComponent {
+    /// Creates a new SidebarComponent with default, ready-to-use state.
+    ///
+    /// The component is initialized with the "Today" selection, empty project and label lists,
+    /// a default IconService, the internal list selection set to the first item, and a scroll offset of 0.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let _sidebar = SidebarComponent::new();
+    /// ```
     pub fn new() -> Self {
         let mut list_state = ListState::default();
         list_state.select(Some(0)); // Start with Today selected
@@ -59,6 +69,20 @@ impl SidebarComponent {
         }
     }
 
+    /// Replace the sidebar's project and label data, reset the viewport scroll, and resynchronize UI state.
+    ///
+    /// After calling this, the component will display the provided `projects` and `labels`,
+    /// its internal scroll offset is set to zero, and the list selection/offset are updated to match
+    /// the current selection.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut sidebar = SidebarComponent::new();
+    /// // Replace existing data with empty lists and reset scroll/state.
+    /// sidebar.update_data(vec![], vec![]);
+    /// assert_eq!(sidebar.total_items(), 3); // Today, Tomorrow, Upcoming
+    /// ```
     pub fn update_data(&mut self, projects: Vec<ProjectDisplay>, labels: Vec<LabelDisplay>) {
         self.projects = projects;
         self.labels = labels;
@@ -67,19 +91,54 @@ impl SidebarComponent {
         self.update_list_state();
     }
 
-    /// Get total number of items in the sidebar
+    /// Returns the total number of selectable entries in the sidebar.
+    ///
+    /// This counts the three fixed navigation entries (Today, Tomorrow, Upcoming)
+    /// plus the current number of labels and projects.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let sb = SidebarComponent::new();
+    /// // with no labels or projects, only Today/Tomorrow/Upcoming are present
+    /// assert_eq!(sb.total_items(), 3);
+    /// ```
     fn total_items(&self) -> usize {
         3 + self.labels.len() + self.projects.len() // Today, Tomorrow, Upcoming + labels + projects
     }
 
-    /// Scroll the viewport up (showing earlier items)
+    /// Decrements the sidebar viewport scroll offset by one if the viewport is not already at the top.
+    ///
+    /// This moves the visible window toward earlier items; if `scroll_offset` is zero the method does nothing.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut c = SidebarComponent::new();
+    /// c.scroll_offset = 2;
+    /// c.scroll_up();
+    /// assert_eq!(c.scroll_offset, 1);
+    /// ```
     fn scroll_up(&mut self) {
         if self.scroll_offset > 0 {
             self.scroll_offset -= 1;
         }
     }
 
-    /// Scroll the viewport down (showing later items)
+    /// Advances the sidebar viewport downward by one item, if additional items exist.
+    ///
+    /// Does nothing when there are no items or the viewport is already positioned at the last item.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut sidebar = SidebarComponent::new();
+    /// // simulate data so there are multiple items
+    /// sidebar.update_data(vec![/* one project */], vec![/* one label */]);
+    /// let before = sidebar.scroll_offset;
+    /// sidebar.scroll_down();
+    /// assert!(sidebar.scroll_offset == before || sidebar.scroll_offset == before + 1);
+    /// ```
     fn scroll_down(&mut self) {
         let total_items = self.total_items();
         if total_items > 0 && self.scroll_offset < total_items.saturating_sub(1) {
@@ -87,7 +146,16 @@ impl SidebarComponent {
         }
     }
 
-    /// Update list state to reflect current selection and scroll position
+    /// Synchronizes the internal `ListState` with the component's current selection and scroll offset.
+    ///
+    /// Updates the selected index shown by the list and applies `scroll_offset` so the List widget will render the correct viewport.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut sidebar = SidebarComponent::new();
+    /// sidebar.update_list_state();
+    /// ```
     fn update_list_state(&mut self) {
         // Find the index of the current selection
         let selection_index = self.selection_to_index(&self.selection);
@@ -97,6 +165,17 @@ impl SidebarComponent {
         *self.list_state.offset_mut() = self.scroll_offset;
     }
 
+    /// Computes the next logical sidebar selection in forward order.
+    ///
+    /// Navigation advances through the fixed items (Today → Tomorrow → Upcoming), then through labels (in index order), then through projects (in sorted order). From Upcoming it moves to the first label if any, otherwise to the first project if any, otherwise wraps to Today. From a Label it moves to the next label if present, otherwise to the first project if any, otherwise to Today. From a Project it moves to the next project in sorted order, otherwise wraps to Today.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let comp = SidebarComponent::default();
+    /// // Default selection is Today, so the next selection is Tomorrow.
+    /// assert_eq!(comp.get_next_selection(), SidebarSelection::Tomorrow);
+    /// ```
     fn get_next_selection(&self) -> SidebarSelection {
         match &self.selection {
             SidebarSelection::Today => SidebarSelection::Tomorrow,
@@ -259,7 +338,28 @@ impl SidebarComponent {
         }
     }
 
-    /// Convert list index to SidebarSelection
+    /// Map a sidebar list index into the corresponding `SidebarSelection`.
+    ///
+    /// The `index` is the zero-based position in the rendered sidebar list:
+    /// - 0 => Today, 1 => Tomorrow, 2 => Upcoming
+    /// - 3..(3 + labels.len()) => `Label(index - 3)`
+    /// - remaining indices map to `Project(original_index)` according to the component's sorted project order
+    ///
+    /// # Returns
+    ///
+    /// The `SidebarSelection` for the given list index. If the index does not correspond to any project (out of range),
+    /// `SidebarSelection::Today` is returned as a safe default.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// // assuming `comp` is a SidebarComponent with at least one label and one project:
+    /// let sel0 = comp.index_to_selection(0);
+    /// assert_eq!(sel0, SidebarSelection::Today);
+    ///
+    /// let sel_label0 = comp.index_to_selection(3);
+    /// matches!(sel_label0, SidebarSelection::Label(0));
+    /// ```
     fn index_to_selection(&self, index: usize) -> SidebarSelection {
         if index == 0 {
             return SidebarSelection::Today;
@@ -285,7 +385,24 @@ impl SidebarComponent {
         }
     }
 
-    /// Convert SidebarSelection to list index
+    /// Map a `SidebarSelection` to its corresponding list index in the sidebar view.
+    ///
+    /// The mapping is:
+    /// - `Today` -> 0
+    /// - `Tomorrow` -> 1
+    /// - `Upcoming` -> 2
+    /// - `Label(i)` -> `3 + i`
+    /// - `Project(original_index)` -> `3 + labels.len() + position_in_sorted_projects`
+    ///
+    /// If a `Project` selection's original index is not found in the current sorted projects, the function returns `0`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut sidebar = SidebarComponent::new();
+    /// // Default selection mapping for Today
+    /// assert_eq!(sidebar.selection_to_index(&SidebarSelection::Today), 0);
+    /// ```
     fn selection_to_index(&self, selection: &SidebarSelection) -> usize {
         match selection {
             SidebarSelection::Today => 0,
@@ -306,7 +423,24 @@ impl SidebarComponent {
         }
     }
 
-    /// Handle mouse events
+    /// Handle a left-button mouse click inside the sidebar area and navigate to the clicked item.
+    ///
+    /// If the mouse event is a left-button down within the given rectangular `area`, the function
+    /// computes which list item was clicked (based on the row offset), updates the internal list
+    /// selection state to that index, and returns `Action::NavigateToSidebar` with the corresponding
+    /// `SidebarSelection`. If the event is outside the clickable bounds or not a left-button down,
+    /// the function returns `Action::None`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut sidebar = SidebarComponent::new();
+    /// let area = Rect { x: 0, y: 0, width: 10, height: 5 };
+    /// let mouse = MouseEvent { kind: MouseEventKind::Down(MouseButton::Left), column: 1, row: 2 };
+    /// let action = sidebar.handle_mouse(mouse, area);
+    /// let expected = Action::NavigateToSidebar(sidebar.index_to_selection((2 - area.y - 1) as usize));
+    /// assert_eq!(action, expected);
+    /// ```
     pub fn handle_mouse(&mut self, mouse: MouseEvent, area: Rect) -> Action {
         if mouse.kind == MouseEventKind::Down(MouseButton::Left)
             && mouse.column >= area.x
@@ -324,6 +458,27 @@ impl SidebarComponent {
 }
 
 impl Component for SidebarComponent {
+    /// Handles keyboard input for sidebar navigation and scrolling.
+    ///
+    /// Maps specific key events to navigation or viewport scroll actions:
+    /// - `J`, `Shift+Down` => move selection forward and return `Action::NavigateToSidebar` with the new selection.
+    /// - `K`, `Shift+Up` => move selection backward and return `Action::NavigateToSidebar` with the new selection.
+    /// - `Ctrl+Up` => scroll the sidebar viewport up and return `Action::None`.
+    /// - `Ctrl+Down` => scroll the sidebar viewport down and return `Action::None`.
+    /// - any other key => no action (`Action::None`).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    ///
+    /// let mut sidebar = SidebarComponent::default();
+    /// let action = sidebar.handle_key_events(KeyEvent::new(KeyCode::Char('J'), KeyModifiers::NONE));
+    /// match action {
+    ///     Action::NavigateToSidebar(_) => {}
+    ///     _ => panic!("expected navigation action"),
+    /// }
+    /// ```
     fn handle_key_events(&mut self, key: KeyEvent) -> Action {
         use crossterm::event::KeyModifiers;
 
@@ -356,6 +511,20 @@ impl Component for SidebarComponent {
         }
     }
 
+    /// Updates the component in response to an action and synchronizes the sidebar selection state.
+    ///
+    /// When given `Action::NavigateToSidebar(selection)`, sets the component's selection to `selection`,
+    /// refreshes the internal list state (including the scroll offset) to reflect that selection, and
+    /// returns `Action::NavigateToSidebar(selection)`. All other actions are returned unchanged.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut s = SidebarComponent::new();
+    /// let action = Action::NavigateToSidebar(SidebarSelection::Tomorrow);
+    /// let out = s.update(action.clone());
+    /// assert_eq!(out, action);
+    /// ```
     fn update(&mut self, action: Action) -> Action {
         match action {
             Action::NavigateToSidebar(selection) => {
@@ -368,6 +537,25 @@ impl Component for SidebarComponent {
         }
     }
 
+    /// Renders the sidebar navigation list into the provided frame rectangle.
+    ///
+    /// This draws the static sections (Today, Tomorrow, Upcoming), label entries, and
+    /// the project list (hierarchically sorted and indented), applying iconography
+    /// and a visual selection style for the current `SidebarSelection`. The component's
+    /// internal `list_state` is synchronized with the current selection and scroll
+    /// offset before the list widget is rendered inside a bordered block titled
+    /// "Navigation".
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// # use terminalist_ui::{SidebarComponent, Frame, Rect};
+    /// # fn get_frame_and_rect() -> (Frame<'static>, Rect) { unimplemented!() }
+    /// let mut sidebar = SidebarComponent::new();
+    /// // populate sidebar.labels / sidebar.projects as needed...
+    /// let (mut frame, rect) = get_frame_and_rect();
+    /// sidebar.render(&mut frame, rect);
+    /// ```
     fn render(&mut self, f: &mut Frame, rect: Rect) {
         let mut all_items: Vec<ListItem> = Vec::new();
 
