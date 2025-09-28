@@ -96,6 +96,18 @@ impl SyncService {
         let storage = Arc::new(Mutex::new(LocalStorage::new(debug_mode).await?));
         let sync_in_progress = Arc::new(Mutex::new(false));
 
+        // Register the default "todoist" backend for compatibility with new schema
+        {
+            let storage_lock = storage.lock().await;
+            storage_lock.register_backend(
+                "todoist",
+                "todoist",
+                "Todoist",
+                true, // enabled
+                None  // no config stored in DB
+            ).await?;
+        }
+
         Ok(Self {
             todoist,
             storage,
@@ -187,7 +199,7 @@ impl SyncService {
         let labels = local_labels
             .into_iter()
             .map(|local| LabelDisplay {
-                id: local.id,
+                uuid: local.uuid,
                 name: local.name,
                 color: local.color,
             })
@@ -794,7 +806,7 @@ impl SyncService {
                 },
                 project_id: Some(task.project_id.clone()),
                 section_id: task.section_id.clone(),
-                parent_id: task.parent_id.clone(),
+                parent_id: task.parent_uuid.clone(),
                 order: None,
                 labels: Some(task.labels.iter().map(|l| l.name.clone()).collect()),
                 priority: Some(task.priority),

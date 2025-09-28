@@ -112,7 +112,7 @@ impl DialogComponent {
 
     /// Get root projects (projects without a parent) for parent selection
     pub fn get_root_projects(&self) -> Vec<&ProjectDisplay> {
-        self.projects.iter().filter(|project| project.parent_id.is_none()).collect()
+        self.projects.iter().filter(|project| project.parent_uuid.is_none()).collect()
     }
 
     /// Get all non-inbox projects for task creation (excludes inbox project)
@@ -146,7 +146,7 @@ impl DialogComponent {
                     let project_id = if let Some(task_index) = self.selected_task_project_index {
                         let task_projects = self.get_task_projects();
                         if task_index < task_projects.len() {
-                            Some(task_projects[task_index].id.clone())
+                            Some(task_projects[task_index].uuid.clone())
                         } else {
                             None // Task goes to inbox (no project)
                         }
@@ -179,10 +179,10 @@ impl DialogComponent {
             }
             Some(DialogType::ProjectCreation) => {
                 if !self.input_buffer.is_empty() {
-                    let parent_id = if let Some(parent_index) = self.selected_parent_project_index {
+                    let parent_uuid = if let Some(parent_index) = self.selected_parent_project_index {
                         let root_projects = self.get_root_projects();
                         if parent_index < root_projects.len() {
-                            Some(root_projects[parent_index].id.clone())
+                            Some(root_projects[parent_index].uuid.clone())
                         } else {
                             None
                         }
@@ -192,7 +192,7 @@ impl DialogComponent {
 
                     let action = Action::CreateProject {
                         name: self.input_buffer.clone(),
-                        parent_id,
+                        parent_id: parent_uuid,
                     };
                     self.clear_dialog();
                     action
@@ -334,7 +334,7 @@ impl DialogComponent {
 
         // Find the current project index for the task being edited
         let current_project_index = if let Some(DialogType::TaskEdit { project_id, .. }) = &self.dialog_type {
-            task_projects.iter().position(|p| p.id == *project_id)
+            task_projects.iter().position(|p| p.uuid == *project_id)
         } else {
             None
         };
@@ -717,7 +717,7 @@ impl Component for DialogComponent {
                         // Set the selected task project index if a default project is provided
                         if let Some(project_id) = default_project_id {
                             let task_projects = self.get_task_projects();
-                            if let Some(index) = task_projects.iter().position(|p| &p.id == project_id) {
+                            if let Some(index) = task_projects.iter().position(|p| &p.uuid == project_id) {
                                 self.selected_task_project_index = Some(index);
                             }
                         }

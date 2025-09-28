@@ -163,7 +163,7 @@ impl AppComponent {
             "upcoming" => SidebarSelection::Upcoming,
             project_id_or_name => {
                 // Try to find project by ID first, then by name
-                if let Some(project_index) = self.state.projects.iter().position(|p| p.id == project_id_or_name) {
+                if let Some(project_index) = self.state.projects.iter().position(|p| p.uuid == project_id_or_name) {
                     SidebarSelection::Project(project_index)
                 } else if let Some(project_index) =
                     self.state.projects.iter().position(|p| p.name == project_id_or_name)
@@ -250,11 +250,11 @@ impl AppComponent {
                         if let Some(project) = self.state.projects.get(*index) {
                             info!(
                                 "Global key: 'D' - deleting project '{}' (ID: {})",
-                                project.name, project.id
+                                project.name, project.uuid
                             );
                             Action::ShowDialog(DialogType::DeleteConfirmation {
                                 item_type: "project".to_string(),
-                                item_id: project.id.clone(),
+                                item_id: project.uuid.clone(),
                             })
                         } else {
                             info!("Global key: 'D' - no project selected (invalid index)");
@@ -275,10 +275,10 @@ impl AppComponent {
                     }
                     SidebarSelection::Label(index) => {
                         if let Some(label) = self.state.labels.get(*index) {
-                            info!("Global key: 'D' - deleting label '{}' (ID: {})", label.name, label.id);
+                            info!("Global key: 'D' - deleting label '{}' (ID: {})", label.name, label.uuid);
                             Action::ShowDialog(DialogType::DeleteConfirmation {
                                 item_type: "label".to_string(),
-                                item_id: label.id.clone(),
+                                item_id: label.uuid.clone(),
                             })
                         } else {
                             info!("Global key: 'D' - no label selected (invalid index)");
@@ -294,10 +294,10 @@ impl AppComponent {
                         if let Some(project) = self.state.projects.get(*index) {
                             info!(
                                 "Global key: 'E' - editing project '{}' (ID: {})",
-                                project.name, project.id
+                                project.name, project.uuid
                             );
                             Action::ShowDialog(DialogType::ProjectEdit {
-                                project_id: project.id.clone(),
+                                project_id: project.uuid.clone(),
                                 name: project.name.clone(),
                             })
                         } else {
@@ -319,9 +319,9 @@ impl AppComponent {
                     }
                     SidebarSelection::Label(index) => {
                         if let Some(label) = self.state.labels.get(*index) {
-                            info!("Global key: 'E' - editing label '{}' (ID: {})", label.name, label.id);
+                            info!("Global key: 'E' - editing label '{}' (ID: {})", label.name, label.uuid);
                             Action::ShowDialog(DialogType::LabelEdit {
-                                label_id: label.id.clone(),
+                                label_id: label.uuid.clone(),
                                 name: label.name.clone(),
                             })
                         } else {
@@ -351,7 +351,7 @@ impl AppComponent {
                 // Set task due date to today
                 if let Some(task) = self.task_list.get_selected_task() {
                     info!("Global key: 't' - setting task '{}' due today", task.content);
-                    Action::SetTaskDueToday(task.id.clone())
+                    Action::SetTaskDueToday(task.uuid.clone())
                 } else {
                     info!("Global key: 't' - no task selected");
                     Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
@@ -361,7 +361,7 @@ impl AppComponent {
                 // Set task due date to tomorrow
                 if let Some(task) = self.task_list.get_selected_task() {
                     info!("Global key: 'T' - setting task '{}' due tomorrow", task.content);
-                    Action::SetTaskDueTomorrow(task.id.clone())
+                    Action::SetTaskDueTomorrow(task.uuid.clone())
                 } else {
                     info!("Global key: 'T' - no task selected");
                     Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
@@ -371,7 +371,7 @@ impl AppComponent {
                 // Set task due date to next week (Monday)
                 if let Some(task) = self.task_list.get_selected_task() {
                     info!("Global key: 'w' - setting task '{}' due next week", task.content);
-                    Action::SetTaskDueNextWeek(task.id.clone())
+                    Action::SetTaskDueNextWeek(task.uuid.clone())
                 } else {
                     info!("Global key: 'w' - no task selected");
                     Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
@@ -381,7 +381,7 @@ impl AppComponent {
                 // Set task due date to weekend (Saturday)
                 if let Some(task) = self.task_list.get_selected_task() {
                     info!("Global key: 'W' - setting task '{}' due weekend", task.content);
-                    Action::SetTaskDueWeekEnd(task.id.clone())
+                    Action::SetTaskDueWeekEnd(task.uuid.clone())
                 } else {
                     info!("Global key: 'W' - no task selected");
                     Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
@@ -620,7 +620,7 @@ impl AppComponent {
             }
             Action::DeleteProject(project_id) => {
                 // Find project name for better logging
-                let project_desc = if let Some(project) = self.state.projects.iter().find(|p| p.id == project_id) {
+                let project_desc = if let Some(project) = self.state.projects.iter().find(|p| p.uuid == project_id) {
                     format!("ID {} '{}'", project_id, project.name)
                 } else {
                     format!("ID {} [unknown]", project_id)
@@ -631,7 +631,7 @@ impl AppComponent {
             }
             Action::DeleteLabel(label_id) => {
                 // Find label name for better logging
-                let label_desc = if let Some(label) = self.state.labels.iter().find(|l| l.id == label_id) {
+                let label_desc = if let Some(label) = self.state.labels.iter().find(|l| l.uuid == label_id) {
                     format!("ID {} '{}'", label_id, label.name)
                 } else {
                     format!("ID {} [unknown]", label_id)
@@ -647,7 +647,7 @@ impl AppComponent {
             }
             Action::EditProject { id, name } => {
                 // Find project name for better logging
-                let project_desc = if let Some(project) = self.state.projects.iter().find(|p| p.id == id) {
+                let project_desc = if let Some(project) = self.state.projects.iter().find(|p| p.uuid == id) {
                     format!("ID {} '{}' -> '{}'", id, project.name, name)
                 } else {
                     format!("ID {} [unknown] -> '{}'", id, name)
@@ -658,7 +658,7 @@ impl AppComponent {
             }
             Action::EditLabel { id, name } => {
                 // Find label name for better logging
-                let label_desc = if let Some(label) = self.state.labels.iter().find(|l| l.id == id) {
+                let label_desc = if let Some(label) = self.state.labels.iter().find(|l| l.uuid == id) {
                     format!("ID {} '{}' -> '{}'", id, label.name, name)
                 } else {
                     format!("ID {} [unknown] -> '{}'", id, name)

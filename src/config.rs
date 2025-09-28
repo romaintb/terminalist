@@ -6,6 +6,7 @@ use crate::constants::{CONFIG_GENERATED, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDT
 use crate::utils::datetime;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Main configuration structure
@@ -16,6 +17,7 @@ pub struct Config {
     pub sync: SyncConfig,
     pub display: DisplayConfig,
     pub logging: LoggingConfig,
+    pub backends: BackendsConfig,
 }
 
 /// UI configuration
@@ -65,6 +67,30 @@ pub struct LoggingConfig {
     pub enabled: bool,
 }
 
+/// Backend configurations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct BackendsConfig {
+    /// Default backend to use for new items
+    pub default_backend: String,
+    /// Map of backend_id -> backend configuration
+    /// This allows multiple instances of the same backend type
+    pub instances: HashMap<String, BackendInstanceConfig>,
+}
+
+/// Configuration for a single backend instance
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackendInstanceConfig {
+    /// Backend type (e.g., "todoist", "caldav", "local")
+    pub backend_type: String,
+    /// Human-readable name for this backend instance
+    pub name: String,
+    /// Whether this backend instance is enabled
+    pub enabled: bool,
+    /// Backend-specific configuration as a map of key-value pairs
+    pub config: HashMap<String, String>,
+}
+
 impl Default for UiConfig {
     fn default() -> Self {
         Self {
@@ -92,6 +118,61 @@ impl Default for DisplayConfig {
             show_durations: true,
             show_labels: true,
             show_project_colors: false,
+        }
+    }
+}
+
+impl Default for BackendsConfig {
+    fn default() -> Self {
+        let mut instances = HashMap::new();
+
+        // Create default Todoist backend instance
+        instances.insert(
+            "todoist".to_string(),
+            BackendInstanceConfig {
+                backend_type: "todoist".to_string(),
+                name: "Todoist".to_string(),
+                enabled: true,
+                config: {
+                    let mut config = HashMap::new();
+                    config.insert("api_token_env".to_string(), "TODOIST_API_TOKEN".to_string());
+                    config
+                },
+            },
+        );
+
+        Self {
+            default_backend: "todoist".to_string(),
+            instances,
+        }
+    }
+}
+
+impl BackendInstanceConfig {
+    /// Create a new Todoist backend instance configuration
+    pub fn new_todoist(_backend_id: String, name: String, api_token_env: String) -> Self {
+        let mut config = HashMap::new();
+        config.insert("api_token_env".to_string(), api_token_env);
+
+        Self {
+            backend_type: "todoist".to_string(),
+            name,
+            enabled: true,
+            config,
+        }
+    }
+
+    /// Get a configuration value by key
+    pub fn get_config(&self, key: &str) -> Option<&String> {
+        self.config.get(key)
+    }
+
+    /// Get the API token environment variable for Todoist backends
+    pub fn get_api_token_env(&self) -> Option<&String> {
+        if self.backend_type == "todoist" {
+            self.get_config("api_token_env")
+        } else {
+            None
         }
     }
 }
@@ -172,7 +253,107 @@ impl Config {
             anyhow::bail!("Invalid time_format '{}': {}", self.display.time_format, e);
         }
 
+        // Validate backend configuration
+        self.validate_backends()?;
+
         Ok(())
+    }
+
+    /// Validate backend configurations
+    fn validate_backends(&self) -> Result<()> {
+        // Check if default backend exists and is enabled
+        let default_backend = &self.backends.default_backend;
+        match self.backends.instances.get(default_backend) {
+            Some(instance) => {
+                if !instance.enabled {
+                    anyhow::bail!("default_backend '{}' is disabled", default_backend);
+                }
+            }
+            None => {
+                let available: Vec<String> = self.get_available_backend_ids();
+                anyhow::bail!(
+                    "default_backend '{}' not found. Available backends: {}",
+                    default_backend,
+                    if available.is_empty() { "none".to_string() } else { available.join(", ") }
+                );
+            }
+        }
+
+        // Validate each backend instance
+        for (backend_id, instance) in &self.backends.instances {
+            if instance.enabled {
+                self.validate_backend_instance(backend_id, instance)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Validate a single backend instance
+    fn validate_backend_instance(&self, backend_id: &str, instance: &BackendInstanceConfig) -> Result<()> {
+        // Validate common fields
+        if instance.name.is_empty() {
+            anyhow::bail!("Backend '{}': name cannot be empty", backend_id);
+        }
+        if instance.backend_type.is_empty() {
+            anyhow::bail!("Backend '{}': backend_type cannot be empty", backend_id);
+        }
+
+        // Validate backend-specific configuration
+        match instance.backend_type.as_str() {
+            "todoist" => {
+                if let Some(api_token_env) = instance.get_config("api_token_env") {
+                    if api_token_env.is_empty() {
+                        anyhow::bail!("Backend '{}': api_token_env cannot be empty", backend_id);
+                    }
+                } else {
+                    anyhow::bail!("Backend '{}': missing required config 'api_token_env'", backend_id);
+                }
+            }
+            backend_type => {
+                anyhow::bail!("Backend '{}': unsupported backend_type '{}'", backend_id, backend_type);
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Get list of available (enabled) backend IDs
+    pub fn get_available_backend_ids(&self) -> Vec<String> {
+        self.backends
+            .instances
+            .iter()
+            .filter(|(_, instance)| instance.enabled)
+            .map(|(backend_id, _)| backend_id.clone())
+            .collect()
+    }
+
+    /// Get all backend instances (enabled and disabled)
+    pub fn get_all_backend_instances(&self) -> &HashMap<String, BackendInstanceConfig> {
+        &self.backends.instances
+    }
+
+    /// Get a specific backend instance configuration
+    pub fn get_backend_instance(&self, backend_id: &str) -> Option<&BackendInstanceConfig> {
+        self.backends.instances.get(backend_id)
+    }
+
+    /// Check if a specific backend instance is enabled
+    pub fn is_backend_enabled(&self, backend_id: &str) -> bool {
+        self.backends
+            .instances
+            .get(backend_id)
+            .map(|instance| instance.enabled)
+            .unwrap_or(false)
+    }
+
+    /// Get backend instances by type
+    pub fn get_backends_by_type(&self, backend_type: &str) -> Vec<(&String, &BackendInstanceConfig)> {
+        self.backends
+            .instances
+            .iter()
+            .filter(|(_, instance)| instance.backend_type == backend_type && instance.enabled)
+            .collect()
     }
 
     /// Generate default configuration file

@@ -13,6 +13,7 @@ static MEMORY_LOGS: once_cell::sync::Lazy<Arc<Mutex<VecDeque<String>>>> =
 
 /// Initialize the fern logger with file and memory outputs
 pub fn init_logger(enabled: bool) -> io::Result<()> {
+    eprintln!("LOGGER DEBUG: init_logger called with enabled={}", enabled);
     if !enabled {
         // Set up a logger that only writes to memory
         // Use Trace level so MemoryLogger receives all logs
@@ -26,22 +27,33 @@ pub fn init_logger(enabled: bool) -> io::Result<()> {
 
     let log_file_path = get_log_file_path()?;
 
+    // Write a test message to stderr to confirm this code runs
+    eprintln!("LOGGER DEBUG: Attempting to create log at: {}", log_file_path.display());
+
     // Ensure the config directory exists
     if let Some(parent) = log_file_path.parent() {
         std::fs::create_dir_all(parent)?;
+        eprintln!("LOGGER DEBUG: Created directory: {}", parent.display());
     }
 
-    // Open log file in append mode
-    let log_file = OpenOptions::new().create(true).append(true).open(&log_file_path)?;
+    // Test file creation manually first
+    {
+        let mut test_file = OpenOptions::new().create(true).append(true).open(&log_file_path)?;
+        use std::io::Write;
+        writeln!(test_file, "[{}] Logger initialization test", Utc::now().format("%H:%M:%S%.3f"))?;
+        eprintln!("LOGGER DEBUG: Successfully wrote test line to log file");
+    }
 
-    // Configure fern logger
+    // Configure fern logger with file output
     fern::Dispatch::new()
         .format(|out, message, _record| out.finish(format_args!("[{}] {}", Utc::now().format("%H:%M:%S%.3f"), message)))
         .level(log::LevelFilter::Info)
-        .chain(log_file)
+        .chain(fern::Output::file(OpenOptions::new().create(true).append(true).open(&log_file_path)?, "\n"))
         .chain(Box::new(MemoryLogger) as Box<dyn log::Log>)
         .apply()
         .map_err(io::Error::other)?;
+
+    eprintln!("LOGGER DEBUG: Fern logger configured successfully");
 
     Ok(())
 }

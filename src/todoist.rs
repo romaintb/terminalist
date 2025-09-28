@@ -25,7 +25,7 @@ pub use todoist_api::*;
 #[derive(Debug, Clone)]
 pub struct ProjectDisplay {
     /// Unique identifier for the project
-    pub id: String,
+    pub uuid: String,
     /// Human-readable name of the project
     pub name: String,
     /// Color identifier for the project (used for UI theming)
@@ -33,7 +33,7 @@ pub struct ProjectDisplay {
     /// Whether this project is marked as a favorite
     pub is_favorite: bool,
     /// Optional parent project ID for sub-projects
-    pub parent_id: Option<String>,
+    pub parent_uuid: Option<String>,
     /// Whether this is the special "Inbox" project
     pub is_inbox_project: bool,
 }
@@ -45,7 +45,7 @@ pub struct ProjectDisplay {
 #[derive(Debug, Clone)]
 pub struct LabelDisplay {
     /// Unique identifier for the label
-    pub id: String,
+    pub uuid: String,
     /// Human-readable name of the label
     pub name: String,
     /// Color identifier for the label (used for UI theming)
@@ -56,10 +56,10 @@ pub struct LabelDisplay {
 ///
 /// Sections are used to organize tasks within projects. This model contains
 /// the section information needed for proper task organization and display.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone)]  // UI still expects 'id' field
 pub struct SectionDisplay {
     /// Unique identifier for the section
-    pub id: String,
+    pub uuid: String,
     /// Human-readable name of the section
     pub name: String,
     /// ID of the project this section belongs to
@@ -83,7 +83,7 @@ pub struct SectionDisplay {
 #[derive(Debug, Clone)]
 pub struct TaskDisplay {
     /// Unique identifier for the task
-    pub id: String,
+    pub uuid: String,
     /// Main content/description of the task
     pub content: String,
     /// ID of the project this task belongs to
@@ -91,7 +91,7 @@ pub struct TaskDisplay {
     /// Optional section ID within the project
     pub section_id: Option<String>,
     /// Optional parent task ID for sub-tasks
-    pub parent_id: Option<String>,
+    pub parent_uuid: Option<String>,
     /// Priority level (1=normal, 2=high, 3=very high, 4=urgent)
     pub priority: i32,
     /// Due date in YYYY-MM-DD format
@@ -114,84 +114,9 @@ pub struct TaskDisplay {
     pub is_deleted: bool,
 }
 
-// Conversion implementations from API models to display models
-
-/// Converts a Todoist API `Project` into a `ProjectDisplay` for UI use.
-///
-/// This implementation handles the transformation from the API's project model
-/// to the flattened display model used throughout the application.
-impl From<Project> for ProjectDisplay {
-    fn from(project: Project) -> Self {
-        Self {
-            id: project.id,
-            name: project.name,
-            color: project.color,
-            is_favorite: project.is_favorite,
-            parent_id: project.parent_id,
-            is_inbox_project: project.is_inbox_project,
-        }
-    }
-}
-
-/// Converts a Todoist API `Section` into a `SectionDisplay` for UI use.
-///
-/// This implementation handles the transformation from the API's section model
-/// to the flattened display model used throughout the application.
-impl From<Section> for SectionDisplay {
-    fn from(section: Section) -> Self {
-        Self {
-            id: section.id,
-            name: section.name,
-            project_id: section.project_id,
-            order: section.order,
-        }
-    }
-}
-
-/// Converts a Todoist API `Task` into a `TaskDisplay` for UI use.
-///
-/// This implementation handles the complex transformation from the API's task model
-/// to the flattened display model. It includes special handling for:
-/// - Duration formatting (converts API duration objects to human-readable strings)
-/// - Label conversion (transforms label names to LabelDisplay objects)
-/// - Date field extraction and formatting
-/// - Recurring task detection
-impl From<Task> for TaskDisplay {
-    fn from(task: Task) -> Self {
-        let duration_string = task.duration.map(|d| match d.unit.as_str() {
-            "minute" => format!("{}m", d.amount),
-            "hour" => format!("{}h", d.amount),
-            "day" => format!("{}d", d.amount),
-            _ => format!("{} {}", d.amount, d.unit),
-        });
-
-        // Convert label names to LabelDisplay objects (colors will be filled in later)
-        let labels: Vec<LabelDisplay> = task
-            .labels
-            .into_iter()
-            .map(|name| LabelDisplay {
-                id: name.clone(), // Use name as ID for now
-                name,
-                color: "blue".to_string(), // Default color, will be updated from storage
-            })
-            .collect();
-
-        Self {
-            id: task.id,
-            content: task.content,
-            project_id: task.project_id,
-            section_id: task.section_id,
-            parent_id: task.parent_id,
-            priority: task.priority,
-            due: task.due.as_ref().map(|d| d.date.clone()),
-            due_datetime: task.due.as_ref().and_then(|d| d.datetime.clone()),
-            is_recurring: task.due.as_ref().is_some_and(|d| d.is_recurring),
-            deadline: task.deadline.as_ref().map(|d| d.date.clone()),
-            duration: duration_string,
-            labels,
-            description: task.description,
-            is_completed: task.is_completed,
-            is_deleted: false, // Tasks from API are never locally deleted
-        }
-    }
-}
+// NOTE: Direct conversion from API objects to Display models has been removed.
+// Display models should only be created from Local storage objects through the storage layer.
+// This ensures proper UUID assignment and maintains the clean separation between:
+// - Raw API objects (handled by backends and sync service)
+// - Local storage objects (managed by storage layer with UUIDs and backend tracking)
+// - Display models (used by UI, sourced only from storage layer)
