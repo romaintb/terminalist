@@ -233,8 +233,8 @@ impl SidebarComponent {
             }
 
             // Same root, now sort by immediate parent to keep siblings together
-            let a_parent = &a_project.parent_id;
-            let b_parent = &b_project.parent_id;
+            let a_parent = &a_project.parent_uuid;
+            let b_parent = &b_project.parent_uuid;
             let parent_cmp = a_parent.cmp(b_parent);
             if parent_cmp != std::cmp::Ordering::Equal {
                 return parent_cmp;
@@ -253,7 +253,7 @@ impl SidebarComponent {
     /// Get the root project ID (top-level parent)
     /// Since Todoist only has parent/child, root is either the project itself or its parent
     fn get_root_project_id(&self, project: &ProjectDisplay) -> String {
-        project.parent_id.clone().unwrap_or_else(|| project.id.clone())
+        project.parent_uuid.clone().unwrap_or_else(|| project.uuid.clone())
     }
 
     /// Get the root project (top-level parent) - always returns from self.projects
@@ -261,14 +261,14 @@ impl SidebarComponent {
         let root_id = self.get_root_project_id(project);
         self.projects
             .iter()
-            .find(|p| p.id == root_id)
+            .find(|p| p.uuid == root_id)
             .expect("Root project should exist in projects list")
     }
 
     /// Calculate the tree depth of a project for indentation
     /// Since Todoist only has parent/child (no deeper nesting), depth is either 0 or 1
     fn calculate_tree_depth(&self, project: &ProjectDisplay) -> usize {
-        if project.parent_id.is_some() {
+        if project.parent_uuid.is_some() {
             1
         } else {
             0
@@ -481,8 +481,13 @@ impl Component for SidebarComponent {
 
             let depth = self.calculate_tree_depth(project);
             let tree_prefix = if depth > 0 {
-                let is_last = i + 1 == sorted_projects.len() || sorted_projects[i + 1].1.parent_id != project.parent_id;
-                if is_last {
+                // Check if this is the last child of its parent
+                let is_last_child = sorted_projects[(i + 1)..]
+                    .iter()
+                    .find(|(_, p)| p.parent_uuid == project.parent_uuid)
+                    .is_none();
+
+                if is_last_child {
                     "└─"
                 } else {
                     "├─"

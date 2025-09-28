@@ -37,6 +37,9 @@ pub mod storage;
 /// Synchronization engine for keeping local and remote data in sync
 pub mod sync;
 
+/// Multi-backend sync coordinator for managing synchronization across different backends
+pub mod sync_coordinator;
+
 /// Todoist API client and data models
 pub mod todoist;
 

@@ -15,6 +15,9 @@
 /// Database connection and core storage operations
 pub mod db;
 
+/// Backend registration and management storage
+pub mod backends;
+
 /// Label storage and color management
 pub mod labels;
 
@@ -30,6 +33,9 @@ pub mod tasks;
 // Re-export the main types and struct
 /// Main storage interface for all data operations
 pub use db::LocalStorage;
+
+/// Backend registration and status information
+pub use backends::RegisteredBackend;
 
 /// Local representation of a Todoist label with color information
 pub use labels::{LocalLabel, LocalLabelColor};

@@ -168,7 +168,7 @@ impl ListItem for TaskItem {
         }
 
         // Project display (with optional colors)
-        if let Some(project) = self.projects.iter().find(|p| p.id == self.task.project_id) {
+        if let Some(project) = self.projects.iter().find(|p| p.uuid == self.task.project_id) {
             line_spans.push(Span::raw(" "));
             let project_style = if display_config.show_project_colors {
                 // Use project color if available, otherwise cyan

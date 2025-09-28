@@ -15,12 +15,14 @@
 //!
 //! * `TODOIST_API_TOKEN` - Your Todoist API token (required)
 
+pub mod backends;
 pub mod config;
 pub mod constants;
 pub mod icons;
 pub mod logger;
 pub mod storage;
 pub mod sync;
+pub mod sync_coordinator;
 pub mod todoist;
 pub mod ui;
 pub mod utils;
@@ -72,6 +74,11 @@ async fn main() -> Result<()> {
         println!();
         println!("ENVIRONMENT VARIABLES:");
         println!("    TODOIST_API_TOKEN    Your Todoist API token (required)");
+        println!("    WORK_TODOIST_API_TOKEN  Work Todoist API token (optional)");
+        println!();
+        println!("CONFIGURATION:");
+        println!("    Multiple Todoist accounts can be configured in terminalist.toml");
+        println!("    Each backend instance can be enabled/disabled independently");
         println!();
         return Ok(());
     }

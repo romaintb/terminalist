@@ -207,7 +207,7 @@ impl TaskManager {
                         SidebarSelection::Upcoming => sync_service.get_tasks_for_upcoming().await.unwrap_or_default(),
                         SidebarSelection::Project(index) => {
                             if let Some(project) = projects.get(index) {
-                                sync_service.get_tasks_for_project(&project.id).await.unwrap_or_default()
+                                sync_service.get_tasks_for_project(&project.uuid).await.unwrap_or_default()
                             } else {
                                 Vec::new()
                             }

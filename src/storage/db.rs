@@ -1,7 +1,7 @@
 use anyhow::Result;
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqliteConnection, SqlitePool, SqlitePoolOptions},
-    Connection, Row,
+    Connection,
 };
 use std::str::FromStr;
 use uuid::Uuid;
@@ -122,17 +122,8 @@ impl LocalStorage {
         .execute(&self.pool)
         .await?;
 
-        // Add unique constraint for sections to prevent duplicate external_ids within same backend
-        sqlx::query(
-            r"
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_sections_unique_external_per_backend
-            ON sections (external_id, (
-                SELECT backend_id FROM projects WHERE projects.uuid = sections.project_uuid
-            ))
-            ",
-        )
-        .execute(&self.pool)
-        .await?;
+        // Note: Uniqueness for sections will be enforced at application level
+        // since SQLite doesn't support subqueries in index expressions
 
         // Create tasks table (backend is inferred from project)
         sqlx::query(
@@ -165,17 +156,8 @@ impl LocalStorage {
         .execute(&self.pool)
         .await?;
 
-        // Add unique constraint for tasks to prevent duplicate external_ids within same backend
-        sqlx::query(
-            r"
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_unique_external_per_backend
-            ON tasks (external_id, (
-                SELECT backend_id FROM projects WHERE projects.uuid = tasks.project_uuid
-            ))
-            ",
-        )
-        .execute(&self.pool)
-        .await?;
+        // Note: Uniqueness for tasks will be enforced at application level
+        // since SQLite doesn't support subqueries in index expressions
 
         // Create labels table with backend tracking
         sqlx::query(
@@ -285,138 +267,11 @@ impl LocalStorage {
         Ok(())
     }
 
-    /// Register a backend instance in the database
-    pub async fn register_backend(
-        &self,
-        backend_id: &str,
-        backend_type: &str,
-        name: &str,
-        enabled: bool,
-        config: Option<&str>,
-    ) -> Result<()> {
-        sqlx::query(
-            r"
-            INSERT OR REPLACE INTO backends (backend_id, backend_type, name, enabled, config)
-            VALUES (?, ?, ?, ?, ?)
-            ",
-        )
-        .bind(backend_id)
-        .bind(backend_type)
-        .bind(name)
-        .bind(enabled)
-        .bind(config)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
-    }
-
-    /// Update backend sync status
-    pub async fn update_backend_sync_status(
-        &self,
-        backend_id: &str,
-        last_sync: Option<&str>,
-        sync_error: Option<&str>,
-    ) -> Result<()> {
-        sqlx::query(
-            r"
-            UPDATE backends
-            SET last_sync = ?, sync_error = ?
-            WHERE backend_id = ?
-            ",
-        )
-        .bind(last_sync)
-        .bind(sync_error)
-        .bind(backend_id)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(())
-    }
-
-    /// Get all registered backends
-    pub async fn get_registered_backends(&self) -> Result<Vec<RegisteredBackend>> {
-        let rows = sqlx::query(
-            r"
-            SELECT backend_id, backend_type, name, enabled, last_sync, sync_error, config
-            FROM backends
-            ORDER BY backend_id
-            ",
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        let backends = rows
-            .into_iter()
-            .map(|row| RegisteredBackend {
-                backend_id: row.get("backend_id"),
-                backend_type: row.get("backend_type"),
-                name: row.get("name"),
-                enabled: row.get("enabled"),
-                last_sync: row.get("last_sync"),
-                sync_error: row.get("sync_error"),
-                config: row.get("config"),
-            })
-            .collect();
-
-        Ok(backends)
-    }
 
     /// Generate a unique internal UUID for database entities
     pub fn generate_uuid() -> String {
         Uuid::new_v4().to_string()
     }
 
-    /// Find an entity by backend_id and external_id combination
-    /// This is used during sync to check if an item already exists
-    pub async fn find_entity_by_external_id(
-        &self,
-        table: &str,
-        backend_id: &str,
-        external_id: &str,
-    ) -> Result<Option<String>> {
-        let query = match table {
-            "projects" => {
-                "SELECT uuid FROM projects WHERE backend_id = ? AND external_id = ?"
-            }
-            "labels" => {
-                "SELECT uuid FROM labels WHERE backend_id = ? AND external_id = ?"
-            }
-            "tasks" => {
-                r"
-                SELECT t.uuid FROM tasks t
-                JOIN projects p ON t.project_uuid = p.uuid
-                WHERE p.backend_id = ? AND t.external_id = ?
-                "
-            }
-            "sections" => {
-                r"
-                SELECT s.uuid FROM sections s
-                JOIN projects p ON s.project_uuid = p.uuid
-                WHERE p.backend_id = ? AND s.external_id = ?
-                "
-            }
-            _ => return Err(anyhow::anyhow!("Unknown table: {}", table)),
-        };
-
-        let result: Option<String> = sqlx::query_scalar(query)
-            .bind(backend_id)
-            .bind(external_id)
-            .fetch_optional(&self.pool)
-            .await?;
-
-        Ok(result)
-    }
 }
 
-/// Represents a registered backend in the database
-#[derive(Debug, Clone)]
-pub struct RegisteredBackend {
-    pub backend_id: String,
-    pub backend_type: String,
-    pub name: String,
-    pub enabled: bool,
-    pub last_sync: Option<String>,
-    pub sync_error: Option<String>,
-    pub config: Option<String>,
-}

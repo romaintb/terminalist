@@ -112,7 +112,7 @@ impl TaskListComponent {
             SidebarSelection::Upcoming => self.build_upcoming_items(),
             SidebarSelection::Project(index) => {
                 if let Some(project) = self.projects.get(*index) {
-                    let project_id = project.id.clone();
+                    let project_id = project.uuid.clone();
                     self.build_project_items(&project_id);
                 } else {
                     self.build_simple_items();
@@ -120,7 +120,7 @@ impl TaskListComponent {
             }
             SidebarSelection::Label(index) => {
                 if let Some(label) = self.labels.get(*index) {
-                    let label_id = label.id.clone();
+                    let label_id = label.uuid.clone();
                     self.build_label_items(&label_id);
                 } else {
                     self.build_simple_items();
@@ -138,7 +138,7 @@ impl TaskListComponent {
         let mut today_tasks = Vec::new();
 
         // Separate tasks by date (only root tasks - subtasks will be added recursively)
-        for task in self.tasks.iter().filter(|t| t.parent_id.is_none()) {
+        for task in self.tasks.iter().filter(|t| t.parent_uuid.is_none()) {
             if let Some(due_date_str) = &task.due {
                 if let Ok(due_date) = datetime::parse_date(due_date_str) {
                     if due_date < now {
@@ -193,7 +193,7 @@ impl TaskListComponent {
         let tasks: Vec<TaskDisplay> = self
             .tasks
             .iter()
-            .filter(|t| t.parent_id.is_none())
+            .filter(|t| t.parent_uuid.is_none())
             .filter(|t| {
                 if let Some(due_date_str) = &t.due {
                     if let Ok(due_date) = datetime::parse_date(due_date_str) {
@@ -225,7 +225,7 @@ impl TaskListComponent {
         let mut future_tasks_by_date: BTreeMap<chrono::NaiveDate, Vec<TaskDisplay>> = BTreeMap::new();
 
         // Group tasks by date (only root tasks - subtasks will be added recursively)
-        for task in self.tasks.iter().filter(|t| t.parent_id.is_none()) {
+        for task in self.tasks.iter().filter(|t| t.parent_uuid.is_none()) {
             if let Some(due_date_str) = &task.due {
                 if let Ok(due_date) = datetime::parse_date(due_date_str) {
                     if due_date < today {
@@ -288,7 +288,7 @@ impl TaskListComponent {
 
         // Group tasks by section (only root tasks - subtasks will be added recursively)
         let mut tasks_by_section: HashMap<Option<String>, Vec<TaskDisplay>> = HashMap::new();
-        for task in self.tasks.iter().filter(|t| t.parent_id.is_none()) {
+        for task in self.tasks.iter().filter(|t| t.parent_uuid.is_none()) {
             if task.project_id == *project_id {
                 tasks_by_section.entry(task.section_id.clone()).or_default().push(task.clone());
             }
@@ -303,7 +303,7 @@ impl TaskListComponent {
 
         // Add sections with their tasks
         for section in project_sections {
-            if let Some(section_tasks) = tasks_by_section.get(&Some(section.id.clone())) {
+            if let Some(section_tasks) = tasks_by_section.get(&Some(section.uuid.clone())) {
                 // Add separator before section
                 if !self.items.is_empty() {
                     self.items.push(TaskListItemType::Separator(SeparatorItem::new(0)));
@@ -326,7 +326,7 @@ impl TaskListComponent {
         let filtered_tasks: Vec<TaskDisplay> = self
             .tasks
             .iter()
-            .filter(|task| task.parent_id.is_none() && task.labels.iter().any(|label| label.id == *label_id))
+            .filter(|task| task.parent_uuid.is_none() && task.labels.iter().any(|label| label.uuid == *label_id))
             .cloned()
             .collect();
 
@@ -338,7 +338,7 @@ impl TaskListComponent {
     /// Build simple items (no sectioning)
     fn build_simple_items(&mut self) {
         // SQL already provides proper ordering (completion status -> priority -> order_index)
-        let root_tasks: Vec<TaskDisplay> = self.tasks.iter().filter(|t| t.parent_id.is_none()).cloned().collect();
+        let root_tasks: Vec<TaskDisplay> = self.tasks.iter().filter(|t| t.parent_uuid.is_none()).cloned().collect();
 
         // Add each root task and its children recursively
         for task in root_tasks {
@@ -349,7 +349,7 @@ impl TaskListComponent {
     /// Recursively add a task and its children to the items list
     fn add_task_and_children_to_items(&mut self, task: TaskDisplay, depth: usize) {
         // Calculate child count
-        let child_count = self.get_child_task_count(&task.id);
+        let child_count = self.get_child_task_count(&task.uuid);
 
         // Create and add the task item
         let task_item = TaskItem::new(
@@ -362,11 +362,11 @@ impl TaskListComponent {
         self.items.push(TaskListItemType::Task(Box::new(task_item)));
 
         // Find and add children
-        let task_id = task.id.clone();
+        let task_id = task.uuid.clone();
         let children: Vec<TaskDisplay> = self
             .tasks
             .iter()
-            .filter(|t| t.parent_id.as_ref() == Some(&task_id))
+            .filter(|t| t.parent_uuid.as_ref() == Some(&task_id))
             .cloned()
             .collect();
 
@@ -492,8 +492,8 @@ impl TaskListComponent {
     }
 
     /// Get child task count for a parent task
-    fn get_child_task_count(&self, parent_id: &str) -> usize {
-        self.tasks.iter().filter(|t| t.parent_id.as_deref() == Some(parent_id)).count()
+    fn get_child_task_count(&self, parent_uuid: &str) -> usize {
+        self.tasks.iter().filter(|t| t.parent_uuid.as_deref() == Some(parent_uuid)).count()
     }
 
     /// Create the list items for rendering
@@ -544,9 +544,9 @@ impl Component for TaskListComponent {
                 if let Some(task) = self.get_selected_task() {
                     // Smart toggle: restore if deleted/completed, otherwise complete
                     if task.is_deleted || task.is_completed {
-                        Action::RestoreTask(task.id.clone())
+                        Action::RestoreTask(task.uuid.clone())
                     } else {
-                        Action::CompleteTask(task.id.clone())
+                        Action::CompleteTask(task.uuid.clone())
                     }
                 } else {
                     Action::None
@@ -555,7 +555,7 @@ impl Component for TaskListComponent {
             KeyCode::Char('a') => {
                 // When viewing a specific project, preselect it as the default project
                 let default_project_id = match &self.sidebar_selection {
-                    SidebarSelection::Project(index) => self.projects.get(*index).map(|p| p.id.clone()),
+                    SidebarSelection::Project(index) => self.projects.get(*index).map(|p| p.uuid.clone()),
                     _ => None,
                 };
                 Action::ShowDialog(DialogType::TaskCreation { default_project_id })
@@ -563,7 +563,7 @@ impl Component for TaskListComponent {
             KeyCode::Char('e') => {
                 if let Some(task) = self.get_selected_task() {
                     Action::ShowDialog(DialogType::TaskEdit {
-                        task_id: task.id.clone(),
+                        task_id: task.uuid.clone(),
                         content: task.content.clone(),
                         project_id: task.project_id.clone(),
                     })
@@ -575,11 +575,11 @@ impl Component for TaskListComponent {
                 if let Some(task) = self.get_selected_task() {
                     // If task is already deleted, restore it; otherwise show delete confirmation
                     if task.is_deleted {
-                        Action::RestoreTask(task.id.clone())
+                        Action::RestoreTask(task.uuid.clone())
                     } else {
                         Action::ShowDialog(DialogType::DeleteConfirmation {
                             item_type: "task".to_string(),
-                            item_id: task.id.clone(),
+                            item_id: task.uuid.clone(),
                         })
                     }
                 } else {
@@ -588,7 +588,7 @@ impl Component for TaskListComponent {
             }
             KeyCode::Char('p') => {
                 if let Some(task) = self.get_selected_task() {
-                    Action::CyclePriority(task.id.clone())
+                    Action::CyclePriority(task.uuid.clone())
                 } else {
                     Action::None
                 }

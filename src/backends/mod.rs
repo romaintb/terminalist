@@ -18,8 +18,8 @@ pub mod registry;
 /// Todoist backend implementation
 pub mod todoist;
 
-// Re-export common types that backends will use
-pub use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
+// Re-export raw API types that backends will use
+pub use todoist_api::{Label, Project, Section, Task};
 
 /// Generic argument structures for backend operations
 /// These provide a backend-agnostic way to pass data for create/update operations
@@ -94,34 +94,34 @@ pub struct BackendStatus {
 #[async_trait]
 pub trait Backend: Send + Sync {
     /// Retrieve all projects from the backend
-    async fn get_projects(&self) -> Result<Vec<ProjectDisplay>>;
+    async fn get_projects(&self) -> Result<Vec<Project>>;
 
     /// Retrieve all tasks from the backend
-    async fn get_tasks(&self) -> Result<Vec<TaskDisplay>>;
+    async fn get_tasks(&self) -> Result<Vec<Task>>;
 
     /// Retrieve all labels from the backend
-    async fn get_labels(&self) -> Result<Vec<LabelDisplay>>;
+    async fn get_labels(&self) -> Result<Vec<Label>>;
 
     /// Retrieve all sections from the backend
-    async fn get_sections(&self) -> Result<Vec<SectionDisplay>>;
+    async fn get_sections(&self) -> Result<Vec<Section>>;
 
     /// Create a new project in the backend
-    async fn create_project(&self, args: &CreateProjectArgs) -> Result<ProjectDisplay>;
+    async fn create_project(&self, args: &CreateProjectArgs) -> Result<Project>;
 
     /// Create a new task in the backend
-    async fn create_task(&self, args: &CreateTaskArgs) -> Result<TaskDisplay>;
+    async fn create_task(&self, args: &CreateTaskArgs) -> Result<Task>;
 
     /// Create a new label in the backend
-    async fn create_label(&self, args: &CreateLabelArgs) -> Result<LabelDisplay>;
+    async fn create_label(&self, args: &CreateLabelArgs) -> Result<Label>;
 
     /// Update an existing project in the backend
-    async fn update_project(&self, id: &str, args: &UpdateProjectArgs) -> Result<ProjectDisplay>;
+    async fn update_project(&self, id: &str, args: &UpdateProjectArgs) -> Result<Project>;
 
     /// Update an existing task in the backend
-    async fn update_task(&self, id: &str, args: &UpdateTaskArgs) -> Result<TaskDisplay>;
+    async fn update_task(&self, id: &str, args: &UpdateTaskArgs) -> Result<Task>;
 
     /// Update an existing label in the backend
-    async fn update_label(&self, id: &str, args: &UpdateLabelArgs) -> Result<LabelDisplay>;
+    async fn update_label(&self, id: &str, args: &UpdateLabelArgs) -> Result<Label>;
 
     /// Delete a project from the backend
     async fn delete_project(&self, id: &str) -> Result<()>;

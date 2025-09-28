@@ -9,8 +9,7 @@ use chrono::Utc;
 
 use super::{
     Backend, BackendProvider, BackendStatus, CreateLabelArgs, CreateProjectArgs, CreateTaskArgs,
-    LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay, UpdateLabelArgs, UpdateProjectArgs,
-    UpdateTaskArgs,
+    UpdateLabelArgs, UpdateProjectArgs, UpdateTaskArgs,
 };
 use crate::todoist::{CreateProjectArgs as TodoistCreateProjectArgs, TodoistWrapper};
 
@@ -170,75 +169,50 @@ impl TodoistBackend {
 
 #[async_trait]
 impl Backend for TodoistBackend {
-    async fn get_projects(&self) -> Result<Vec<ProjectDisplay>> {
-        let projects = self.wrapper.get_projects().await?;
-        Ok(projects.into_iter().map(Into::into).collect())
+    async fn get_projects(&self) -> Result<Vec<todoist_api::Project>> {
+        self.wrapper.get_projects().await.map_err(Into::into)
     }
 
-    async fn get_tasks(&self) -> Result<Vec<TaskDisplay>> {
-        let tasks = self.wrapper.get_tasks().await?;
-        Ok(tasks.into_iter().map(Into::into).collect())
+    async fn get_tasks(&self) -> Result<Vec<todoist_api::Task>> {
+        self.wrapper.get_tasks().await.map_err(Into::into)
     }
 
-    async fn get_labels(&self) -> Result<Vec<LabelDisplay>> {
-        let labels = self.wrapper.get_labels().await?;
-        Ok(labels
-            .into_iter()
-            .map(|label| LabelDisplay {
-                id: label.id,
-                name: label.name,
-                color: label.color,
-            })
-            .collect())
+    async fn get_labels(&self) -> Result<Vec<todoist_api::Label>> {
+        self.wrapper.get_labels().await.map_err(Into::into)
     }
 
-    async fn get_sections(&self) -> Result<Vec<SectionDisplay>> {
-        let sections = self.wrapper.get_sections().await?;
-        Ok(sections.into_iter().map(Into::into).collect())
+    async fn get_sections(&self) -> Result<Vec<todoist_api::Section>> {
+        self.wrapper.get_sections().await.map_err(Into::into)
     }
 
-    async fn create_project(&self, args: &CreateProjectArgs) -> Result<ProjectDisplay> {
+    async fn create_project(&self, args: &CreateProjectArgs) -> Result<todoist_api::Project> {
         let todoist_args = self.convert_create_project_args(args);
-        let project = self.wrapper.create_project(&todoist_args).await?;
-        Ok(project.into())
+        self.wrapper.create_project(&todoist_args).await.map_err(Into::into)
     }
 
-    async fn create_task(&self, args: &CreateTaskArgs) -> Result<TaskDisplay> {
+    async fn create_task(&self, args: &CreateTaskArgs) -> Result<todoist_api::Task> {
         let todoist_args = self.convert_create_task_args(args);
-        let task = self.wrapper.create_task(&todoist_args).await?;
-        Ok(task.into())
+        self.wrapper.create_task(&todoist_args).await.map_err(Into::into)
     }
 
-    async fn create_label(&self, args: &CreateLabelArgs) -> Result<LabelDisplay> {
+    async fn create_label(&self, args: &CreateLabelArgs) -> Result<todoist_api::Label> {
         let todoist_args = self.convert_create_label_args(args);
-        let label = self.wrapper.create_label(&todoist_args).await?;
-        Ok(LabelDisplay {
-            id: label.id,
-            name: label.name,
-            color: label.color,
-        })
+        self.wrapper.create_label(&todoist_args).await.map_err(Into::into)
     }
 
-    async fn update_project(&self, id: &str, args: &UpdateProjectArgs) -> Result<ProjectDisplay> {
+    async fn update_project(&self, id: &str, args: &UpdateProjectArgs) -> Result<todoist_api::Project> {
         let todoist_args = self.convert_update_project_args(args);
-        let project = self.wrapper.update_project(id, &todoist_args).await?;
-        Ok(project.into())
+        self.wrapper.update_project(id, &todoist_args).await.map_err(Into::into)
     }
 
-    async fn update_task(&self, id: &str, args: &UpdateTaskArgs) -> Result<TaskDisplay> {
+    async fn update_task(&self, id: &str, args: &UpdateTaskArgs) -> Result<todoist_api::Task> {
         let todoist_args = self.convert_update_task_args(args);
-        let task = self.wrapper.update_task(id, &todoist_args).await?;
-        Ok(task.into())
+        self.wrapper.update_task(id, &todoist_args).await.map_err(Into::into)
     }
 
-    async fn update_label(&self, id: &str, args: &UpdateLabelArgs) -> Result<LabelDisplay> {
+    async fn update_label(&self, id: &str, args: &UpdateLabelArgs) -> Result<todoist_api::Label> {
         let todoist_args = self.convert_update_label_args(args);
-        let label = self.wrapper.update_label(id, &todoist_args).await?;
-        Ok(LabelDisplay {
-            id: label.id,
-            name: label.name,
-            color: label.color,
-        })
+        self.wrapper.update_label(id, &todoist_args).await.map_err(Into::into)
     }
 
     async fn delete_project(&self, id: &str) -> Result<()> {
