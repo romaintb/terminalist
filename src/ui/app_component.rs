@@ -77,6 +77,7 @@ pub struct AppComponent {
     // Simple UI state
     should_quit: bool,
     active_sync_task: Option<TaskId>,
+    is_initial_sync: bool,
 
     // Layout state
     sidebar_width: u16,
@@ -106,6 +107,7 @@ impl AppComponent {
             config,
             should_quit: false,
             active_sync_task: None,
+            is_initial_sync: false,
             sidebar_width: 30, // Default width
             screen_width: 100, // Default width
             screen_height: 50, // Default height
@@ -141,6 +143,7 @@ impl AppComponent {
         info!("AppComponent: Starting initial sync");
 
         if self.active_sync_task.is_none() {
+            self.is_initial_sync = true;
             self.start_background_sync();
             // Data fetch will be triggered automatically when sync completes
             info!("AppComponent: Initial sync scheduled");
@@ -440,6 +443,7 @@ impl AppComponent {
                 info!("Sync: Failed with error: {}", error);
                 self.active_sync_task = None;
                 self.state.loading = false;
+                self.is_initial_sync = false; // Reset flag on failure
                 self.state.error_message = Some(error);
                 Action::ShowDialog(DialogType::Error(self.state.error_message.clone().unwrap_or_default()))
             }
@@ -964,8 +968,14 @@ impl AppComponent {
     fn update_data_from_sync(&mut self, status: SyncStatus) {
         // Only proceed if sync was successful
         if matches!(status, SyncStatus::Success) {
-            // Schedule initial data fetch task
-            self.schedule_initial_data_fetch();
+            if self.is_initial_sync {
+                // For initial sync, use initial data fetch which sets default selection
+                self.schedule_initial_data_fetch();
+                self.is_initial_sync = false;
+            } else {
+                // For manual refresh, use regular data fetch to maintain current selection
+                self.schedule_data_fetch();
+            }
         }
     }
 
