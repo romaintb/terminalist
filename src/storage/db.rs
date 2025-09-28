@@ -75,8 +75,7 @@ impl LocalStorage {
                 is_inbox_project BOOLEAN NOT NULL DEFAULT 0,
                 order_index INTEGER NOT NULL DEFAULT 0,
                 parent_id TEXT REFERENCES projects(id) ON DELETE CASCADE
-            )
-            ",
+            )",
         )
         .execute(&self.pool)
         .await?;
@@ -89,8 +88,7 @@ impl LocalStorage {
                 name TEXT NOT NULL,
                 project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
                 order_index INTEGER NOT NULL DEFAULT 0
-            )
-            ",
+            )",
         )
         .execute(&self.pool)
         .await?;
@@ -117,8 +115,7 @@ impl LocalStorage {
                 FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE,
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
                 FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE SET NULL
-            )
-            ",
+            )",
         )
         .execute(&self.pool)
         .await?;
@@ -132,8 +129,7 @@ impl LocalStorage {
                 color TEXT NOT NULL,
                 order_index INTEGER NOT NULL DEFAULT 0,
                 is_favorite BOOLEAN NOT NULL DEFAULT 0
-            )
-            ",
+            )",
         )
         .execute(&self.pool)
         .await?;
@@ -147,8 +143,7 @@ impl LocalStorage {
                 PRIMARY KEY (task_id, label_id),
                 FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
                 FOREIGN KEY (label_id) REFERENCES labels(id) ON DELETE CASCADE
-            )
-            ",
+            )",
         )
         .execute(&self.pool)
         .await?;

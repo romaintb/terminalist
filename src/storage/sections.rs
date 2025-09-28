@@ -1,5 +1,4 @@
 use anyhow::Result;
-use sqlx::Row;
 
 use super::db::LocalStorage;
 use crate::todoist::{Section, SectionDisplay};
@@ -66,52 +65,29 @@ impl LocalStorage {
 
     /// Get all sections from local storage
     pub async fn get_sections(&self) -> Result<Vec<SectionDisplay>> {
-        let rows = sqlx::query(
-            r"
-            SELECT id, name, project_id, order_index
-            FROM sections
-            ORDER BY project_id, order_index, name
-            ",
+        let sections = sqlx::query_as::<_, LocalSection>(
+            "SELECT id, name, project_id, order_index FROM sections ORDER BY project_id, order_index, name",
         )
         .fetch_all(&self.pool)
-        .await?;
-
-        let sections = rows
-            .into_iter()
-            .map(|row| SectionDisplay {
-                id: row.get("id"),
-                name: row.get("name"),
-                project_id: row.get("project_id"),
-                order: row.get("order_index"),
-            })
-            .collect();
+        .await?
+        .into_iter()
+        .map(|local| local.into())
+        .collect();
 
         Ok(sections)
     }
 
     /// Get sections for a specific project from local storage
     pub async fn get_sections_for_project(&self, project_id: &str) -> Result<Vec<SectionDisplay>> {
-        let rows = sqlx::query(
-            r"
-            SELECT id, name, project_id, order_index
-            FROM sections
-            WHERE project_id = ?
-            ORDER BY order_index, name
-            ",
+        let sections = sqlx::query_as::<_, LocalSection>(
+            "SELECT id, name, project_id, order_index FROM sections WHERE project_id = ? ORDER BY order_index, name",
         )
         .bind(project_id)
         .fetch_all(&self.pool)
-        .await?;
-
-        let sections = rows
-            .into_iter()
-            .map(|row| SectionDisplay {
-                id: row.get("id"),
-                name: row.get("name"),
-                project_id: row.get("project_id"),
-                order: row.get("order_index"),
-            })
-            .collect();
+        .await?
+        .into_iter()
+        .map(|local| local.into())
+        .collect();
 
         Ok(sections)
     }

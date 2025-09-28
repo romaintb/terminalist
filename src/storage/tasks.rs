@@ -5,7 +5,7 @@ use super::db::LocalStorage;
 use crate::todoist::{Task, TaskDisplay};
 
 /// Local task representation with sync metadata
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, sqlx::FromRow)]
 pub struct LocalTask {
     pub id: String,
     pub content: String,
