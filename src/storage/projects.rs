@@ -1,12 +1,11 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use sqlx::Row;
 
 use super::db::LocalStorage;
 use crate::todoist::{Project, ProjectDisplay};
 
 /// Local project representation with sync metadata
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct LocalProject {
     pub id: String,
     pub name: String,
@@ -130,23 +129,14 @@ impl LocalStorage {
 
     /// Get all projects from local storage
     pub async fn get_projects(&self) -> Result<Vec<ProjectDisplay>> {
-        let rows = sqlx::query(
-            "SELECT id, name, color, is_favorite, parent_id, is_inbox_project FROM projects ORDER BY order_index, name",
+        let projects = sqlx::query_as::<_, LocalProject>(
+            "SELECT id, name, color, is_favorite, parent_id, is_inbox_project, order_index FROM projects ORDER BY order_index, name"
         )
         .fetch_all(&self.pool)
-        .await?;
-
-        let projects = rows
-            .into_iter()
-            .map(|row| ProjectDisplay {
-                id: row.get("id"),
-                name: row.get("name"),
-                color: row.get("color"),
-                is_favorite: row.get("is_favorite"),
-                parent_id: row.get("parent_id"),
-                is_inbox_project: row.get("is_inbox_project"),
-            })
-            .collect();
+        .await?
+        .into_iter()
+        .map(|local| local.into())
+        .collect();
 
         Ok(projects)
     }

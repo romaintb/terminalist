@@ -1,5 +1,4 @@
 use anyhow::Result;
-use sqlx::Row;
 
 use super::db::LocalStorage;
 use crate::todoist::Label;
@@ -84,26 +83,11 @@ impl LocalStorage {
 
     /// Get all labels from local storage
     pub async fn get_all_labels(&self) -> Result<Vec<LocalLabel>> {
-        let rows = sqlx::query(
-            r"
-            SELECT id, name, color, order_index, is_favorite
-            FROM labels
-            ORDER BY order_index ASC, name ASC
-            ",
+        let labels = sqlx::query_as::<_, LocalLabel>(
+            "SELECT id, name, color, order_index, is_favorite FROM labels ORDER BY order_index ASC, name ASC",
         )
         .fetch_all(&self.pool)
         .await?;
-
-        let labels = rows
-            .into_iter()
-            .map(|row| LocalLabel {
-                id: row.get("id"),
-                name: row.get("name"),
-                color: row.get("color"),
-                order_index: row.get("order_index"),
-                is_favorite: row.get("is_favorite"),
-            })
-            .collect();
 
         Ok(labels)
     }
