@@ -1,8 +1,7 @@
 use anyhow::Result;
-use sqlx::Row;
 
 use super::db::LocalStorage;
-use crate::todoist::{Task, TaskDisplay};
+use crate::todoist::{LabelDisplay, Task, TaskDisplay};
 
 /// Local task representation with sync metadata
 #[derive(Debug, Clone, sqlx::FromRow)]
@@ -54,6 +53,38 @@ impl From<Task> for LocalTask {
 }
 
 impl LocalStorage {
+    /// Get labels for a specific task
+    async fn get_labels_for_task(&self, task_id: &str) -> Result<Vec<LabelDisplay>> {
+        #[derive(sqlx::FromRow)]
+        struct LabelRow {
+            id: String,
+            name: String,
+            color: String,
+        }
+
+        let labels = sqlx::query_as::<_, LabelRow>(
+            r"
+            SELECT l.id, l.name, l.color
+            FROM labels l
+            INNER JOIN task_labels tl ON l.id = tl.label_id
+            WHERE tl.task_id = ?
+            ORDER BY l.order_index ASC
+            ",
+        )
+        .bind(task_id)
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(|row| LabelDisplay {
+            id: row.id,
+            name: row.name,
+            color: row.color,
+        })
+        .collect();
+
+        Ok(labels)
+    }
+
     async fn get_tasks_with_labels_joined(
         &self,
         where_clause: &str,
@@ -64,7 +95,7 @@ impl LocalStorage {
         let order_part = if order_clause.is_empty() {
             // Default ordering: uncompleted first, then completed, then deleted
             // Within each group, order by priority and then by order_index
-            "ORDER BY t.is_deleted ASC, t.is_completed ASC, t.priority DESC, t.order_index ASC"
+            "ORDER BY is_deleted ASC, is_completed ASC, priority DESC, order_index ASC"
         } else {
             order_clause
         };
@@ -72,79 +103,46 @@ impl LocalStorage {
         let query = format!(
             r"
             SELECT
-                t.id, t.content, t.project_id, t.section_id, t.parent_id, t.priority,
-                t.due_date, t.due_datetime, t.is_recurring, t.deadline, t.duration, t.description,
-                t.is_completed, t.is_deleted,
-                GROUP_CONCAT(l.id || ':' || l.name || ':' || l.color, '|') as labels_data
-            FROM tasks t
-            LEFT JOIN task_labels tl ON t.id = tl.task_id
-            LEFT JOIN labels l ON tl.label_id = l.id
+                id, content, project_id, section_id, parent_id, priority, order_index,
+                due_date, due_datetime, is_recurring, deadline, duration, description,
+                is_completed, is_deleted
+            FROM tasks
             {}
-            GROUP BY t.id, t.content, t.project_id, t.section_id, t.parent_id, t.priority,
-                     t.due_date, t.due_datetime, t.is_recurring, t.deadline, t.duration, t.description,
-                     t.is_completed, t.is_deleted
             {}
             ",
             where_part, order_part
         );
 
-        let mut query_builder = sqlx::query(&query);
+        let mut query_builder = sqlx::query_as::<_, LocalTask>(&query);
         for param in params {
             query_builder = query_builder.bind(param);
         }
 
-        let rows = query_builder.fetch_all(&self.pool).await?;
+        let tasks = query_builder.fetch_all(&self.pool).await?;
 
-        let tasks = rows
-            .into_iter()
-            .map(|row| {
-                // Parse the concatenated labels data
-                let labels_data: Option<String> = row.get("labels_data");
+        let mut task_displays = Vec::new();
+        for task in tasks {
+            let labels = self.get_labels_for_task(&task.id).await?;
+            task_displays.push(TaskDisplay {
+                id: task.id,
+                content: task.content,
+                project_id: task.project_id,
+                section_id: task.section_id,
+                parent_id: task.parent_id,
+                priority: task.priority,
+                due: task.due_date,
+                due_datetime: task.due_datetime,
+                is_recurring: task.is_recurring,
+                deadline: task.deadline,
+                duration: task.duration,
+                labels,
+                description: task.description.unwrap_or_default(),
+                is_completed: task.is_completed,
+                is_deleted: task.is_deleted,
+            });
+        }
 
-                let labels = if let Some(data) = labels_data {
-                    if data.is_empty() {
-                        Vec::new()
-                    } else {
-                        data.split('|')
-                            .filter_map(|label_str| {
-                                let parts: Vec<&str> = label_str.split(':').collect();
-                                if parts.len() == 3 {
-                                    Some(crate::todoist::LabelDisplay {
-                                        id: parts[0].to_string(),
-                                        name: parts[1].to_string(),
-                                        color: parts[2].to_string(),
-                                    })
-                                } else {
-                                    None
-                                }
-                            })
-                            .collect()
-                    }
-                } else {
-                    Vec::new()
-                };
-
-                TaskDisplay {
-                    id: row.get("id"),
-                    content: row.get("content"),
-                    project_id: row.get("project_id"),
-                    section_id: row.get("section_id"),
-                    parent_id: row.get("parent_id"),
-                    priority: row.get("priority"),
-                    due: row.get("due_date"),
-                    due_datetime: row.get("due_datetime"),
-                    is_recurring: row.get("is_recurring"),
-                    deadline: row.get("deadline"),
-                    duration: row.get("duration"),
-                    labels,
-                    description: row.get("description"),
-                    is_completed: row.get("is_completed"),
-                    is_deleted: row.get("is_deleted"),
-                }
-            })
-            .collect();
-
-        Ok(tasks)
+        Ok(task_displays)
     }
 
     /// Store task-label relationships in junction table
@@ -154,11 +152,16 @@ impl LocalStorage {
             return Ok(());
         }
 
+        #[derive(sqlx::FromRow)]
+        struct LabelIdRow {
+            id: String,
+        }
+
         // Get existing label IDs from names
         let placeholders = label_names.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-        let query = format!("SELECT id, name FROM labels WHERE name IN ({placeholders})");
+        let query = format!("SELECT id FROM labels WHERE name IN ({placeholders})");
 
-        let mut query_builder = sqlx::query(&query);
+        let mut query_builder = sqlx::query_as::<_, LabelIdRow>(&query);
         for name in label_names {
             query_builder = query_builder.bind(name);
         }
@@ -167,10 +170,9 @@ impl LocalStorage {
 
         // Insert task-label relationships for found labels
         for row in label_rows {
-            let label_id: String = row.get("id");
             sqlx::query("INSERT OR IGNORE INTO task_labels (task_id, label_id) VALUES (?, ?)")
                 .bind(task_id)
-                .bind(&label_id)
+                .bind(&row.id)
                 .execute(&self.pool)
                 .await?;
         }
@@ -278,7 +280,7 @@ impl LocalStorage {
 
     /// Get tasks for a specific project from local storage
     pub async fn get_tasks_for_project(&self, project_id: &str) -> Result<Vec<TaskDisplay>> {
-        self.get_tasks_with_labels_joined("WHERE t.project_id = ?", "", &[project_id])
+        self.get_tasks_with_labels_joined("WHERE project_id = ?", "", &[project_id])
             .await
     }
 
@@ -296,8 +298,8 @@ impl LocalStorage {
         // Use SQL LIKE with wildcards for efficient database-level search
         let search_pattern = format!("%{}%", query);
         self.get_tasks_with_labels_joined(
-            "WHERE LOWER(t.content) LIKE LOWER(?)",
-            "ORDER BY t.is_deleted ASC, t.is_completed ASC, t.priority DESC, t.order_index ASC",
+            "WHERE LOWER(content) LIKE LOWER(?)",
+            "ORDER BY is_deleted ASC, is_completed ASC, priority DESC, order_index ASC",
             &[&search_pattern],
         )
         .await
@@ -306,8 +308,8 @@ impl LocalStorage {
     /// Get tasks due on a specific date (pure data access)
     pub async fn get_tasks_due_on(&self, date: &str) -> Result<Vec<TaskDisplay>> {
         self.get_tasks_with_labels_joined(
-            "WHERE t.due_date IS NOT NULL AND t.due_date = ?",
-            "ORDER BY t.is_deleted ASC, t.is_completed ASC, t.priority DESC, t.order_index ASC",
+            "WHERE due_date IS NOT NULL AND due_date = ?",
+            "ORDER BY is_deleted ASC, is_completed ASC, priority DESC, order_index ASC",
             &[date],
         )
         .await
@@ -316,8 +318,8 @@ impl LocalStorage {
     /// Get overdue tasks (pure data access)
     pub async fn get_overdue_tasks(&self) -> Result<Vec<TaskDisplay>> {
         self.get_tasks_with_labels_joined(
-            "WHERE t.due_date IS NOT NULL AND t.due_date < date('now')",
-            "ORDER BY t.is_deleted ASC, t.is_completed ASC, t.due_date ASC, t.priority DESC, t.order_index ASC",
+            "WHERE due_date IS NOT NULL AND due_date < date('now')",
+            "ORDER BY is_deleted ASC, is_completed ASC, due_date ASC, priority DESC, order_index ASC",
             &[],
         )
         .await
@@ -326,8 +328,8 @@ impl LocalStorage {
     /// Get tasks due between two dates (inclusive)
     pub async fn get_tasks_due_between(&self, start_date: &str, end_date: &str) -> Result<Vec<TaskDisplay>> {
         self.get_tasks_with_labels_joined(
-            "WHERE t.due_date IS NOT NULL AND t.due_date >= ? AND t.due_date <= ?",
-            "ORDER BY t.is_deleted ASC, t.is_completed ASC, t.due_date ASC, t.priority DESC, t.order_index ASC",
+            "WHERE due_date IS NOT NULL AND due_date >= ? AND due_date <= ?",
+            "ORDER BY is_deleted ASC, is_completed ASC, due_date ASC, priority DESC, order_index ASC",
             &[start_date, end_date],
         )
         .await
@@ -336,8 +338,8 @@ impl LocalStorage {
     /// Get tasks with no due date
     pub async fn get_tasks_without_due_date(&self) -> Result<Vec<TaskDisplay>> {
         self.get_tasks_with_labels_joined(
-            "WHERE t.due_date IS NULL",
-            "ORDER BY t.is_deleted ASC, t.is_completed ASC, t.priority DESC, t.order_index ASC",
+            "WHERE due_date IS NULL",
+            "ORDER BY is_deleted ASC, is_completed ASC, priority DESC, order_index ASC",
             &[],
         )
         .await
@@ -345,7 +347,7 @@ impl LocalStorage {
 
     /// Get a single task by ID from local storage
     pub async fn get_task_by_id(&self, task_id: &str) -> Result<Option<TaskDisplay>> {
-        let tasks = self.get_tasks_with_labels_joined("WHERE t.id = ?", "", &[task_id]).await?;
+        let tasks = self.get_tasks_with_labels_joined("WHERE id = ?", "", &[task_id]).await?;
         Ok(tasks.into_iter().next())
     }
 
