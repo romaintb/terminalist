@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use super::db::LocalStorage;
+use super::{db::LocalStorage, labels::LocalLabel};
 use crate::todoist::{LabelDisplay, Task, TaskDisplay};
 
 /// Local task representation with sync metadata
@@ -55,16 +55,9 @@ impl From<Task> for LocalTask {
 impl LocalStorage {
     /// Get labels for a specific task
     async fn get_labels_for_task(&self, task_id: &str) -> Result<Vec<LabelDisplay>> {
-        #[derive(sqlx::FromRow)]
-        struct LabelRow {
-            id: String,
-            name: String,
-            color: String,
-        }
-
-        let labels = sqlx::query_as::<_, LabelRow>(
+        let labels = sqlx::query_as::<_, LocalLabel>(
             r"
-            SELECT l.id, l.name, l.color
+            SELECT l.id, l.name, l.color, l.order_index, l.is_favorite
             FROM labels l
             INNER JOIN task_labels tl ON l.id = tl.label_id
             WHERE tl.task_id = ?
@@ -75,10 +68,10 @@ impl LocalStorage {
         .fetch_all(&self.pool)
         .await?
         .into_iter()
-        .map(|row| LabelDisplay {
-            id: row.id,
-            name: row.name,
-            color: row.color,
+        .map(|label| LabelDisplay {
+            id: label.id,
+            name: label.name,
+            color: label.color,
         })
         .collect();
 
