@@ -187,7 +187,7 @@ impl SyncService {
         let labels = local_labels
             .into_iter()
             .map(|local| LabelDisplay {
-                id: local.id,
+                id: local.uuid,
                 name: local.name,
                 color: local.color,
             })

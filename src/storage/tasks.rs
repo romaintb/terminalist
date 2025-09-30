@@ -6,12 +6,13 @@ use crate::todoist::{LabelDisplay, Task, TaskDisplay};
 /// Local task representation with sync metadata
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct LocalTask {
-    pub id: String,
+    pub uuid: String,
+    pub remote_id: String,
     pub content: String,
     pub description: Option<String>,
-    pub project_id: String,
-    pub section_id: Option<String>,
-    pub parent_id: Option<String>,
+    pub project_uuid: String,
+    pub section_uuid: Option<String>,
+    pub parent_uuid: Option<String>,
     pub priority: i32,
     pub order_index: i32,
     pub due_date: Option<String>,
@@ -33,11 +34,12 @@ impl From<Task> for LocalTask {
         });
 
         Self {
-            id: task.id,
+            uuid: uuid::Uuid::new_v4().to_string(),
+            remote_id: task.id,
             content: task.content,
-            project_id: task.project_id,
-            section_id: task.section_id,
-            parent_id: task.parent_id,
+            project_uuid: String::new(), // Will be resolved at storage layer
+            section_uuid: None,          // Will be resolved at storage layer
+            parent_uuid: None,           // Will be resolved at storage layer
             priority: task.priority,
             order_index: task.order,
             due_date: task.due.as_ref().map(|d| d.date.clone()),
@@ -57,10 +59,10 @@ impl LocalStorage {
     async fn get_labels_for_task(&self, task_id: &str) -> Result<Vec<LabelDisplay>> {
         let labels = sqlx::query_as::<_, LocalLabel>(
             r"
-            SELECT l.id, l.name, l.color, l.order_index, l.is_favorite
+            SELECT l.uuid, l.remote_id, l.name, l.color, l.order_index, l.is_favorite
             FROM labels l
-            INNER JOIN task_labels tl ON l.id = tl.label_id
-            WHERE tl.task_id = ?
+            INNER JOIN task_labels tl ON l.uuid = tl.label_uuid
+            WHERE tl.task_uuid = ?
             ORDER BY l.order_index ASC
             ",
         )
@@ -69,7 +71,7 @@ impl LocalStorage {
         .await?
         .into_iter()
         .map(|label| LabelDisplay {
-            id: label.id,
+            id: label.uuid,
             name: label.name,
             color: label.color,
         })
@@ -96,7 +98,7 @@ impl LocalStorage {
         let query = format!(
             r"
             SELECT
-                id, content, project_id, section_id, parent_id, priority, order_index,
+                uuid, remote_id, content, project_uuid, section_uuid, parent_uuid, priority, order_index,
                 due_date, due_datetime, is_recurring, deadline, duration, description,
                 is_completed, is_deleted
             FROM tasks
@@ -115,13 +117,13 @@ impl LocalStorage {
 
         let mut task_displays = Vec::new();
         for task in tasks {
-            let labels = self.get_labels_for_task(&task.id).await?;
+            let labels = self.get_labels_for_task(&task.uuid).await?;
             task_displays.push(TaskDisplay {
-                id: task.id,
+                id: task.remote_id,
                 content: task.content,
-                project_id: task.project_id,
-                section_id: task.section_id,
-                parent_id: task.parent_id,
+                project_id: task.project_uuid,
+                section_id: task.section_uuid,
+                parent_id: task.parent_uuid,
                 priority: task.priority,
                 due: task.due_date,
                 due_datetime: task.due_datetime,
@@ -146,15 +148,15 @@ impl LocalStorage {
         }
 
         #[derive(sqlx::FromRow)]
-        struct LabelIdRow {
-            id: String,
+        struct LabelUuidRow {
+            uuid: String,
         }
 
-        // Get existing label IDs from names
+        // Get existing label UUIDs from names
         let placeholders = label_names.iter().map(|_| "?").collect::<Vec<_>>().join(",");
-        let query = format!("SELECT id FROM labels WHERE name IN ({placeholders})");
+        let query = format!("SELECT uuid FROM labels WHERE name IN ({placeholders})");
 
-        let mut query_builder = sqlx::query_as::<_, LabelIdRow>(&query);
+        let mut query_builder = sqlx::query_as::<_, LabelUuidRow>(&query);
         for name in label_names {
             query_builder = query_builder.bind(name);
         }
@@ -163,9 +165,9 @@ impl LocalStorage {
 
         // Insert task-label relationships for found labels
         for row in label_rows {
-            sqlx::query("INSERT OR IGNORE INTO task_labels (task_id, label_id) VALUES (?, ?)")
+            sqlx::query("INSERT OR IGNORE INTO task_labels (task_uuid, label_uuid) VALUES (?, ?)")
                 .bind(task_id)
-                .bind(&row.id)
+                .bind(&row.uuid)
                 .execute(&self.pool)
                 .await?;
         }
@@ -175,7 +177,7 @@ impl LocalStorage {
 
     /// Remove all label relationships for a task
     async fn clear_task_labels(&self, task_id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM task_labels WHERE task_id = ?")
+        sqlx::query("DELETE FROM task_labels WHERE task_uuid = ?")
             .bind(task_id)
             .execute(&self.pool)
             .await?;
@@ -186,30 +188,55 @@ impl LocalStorage {
     pub async fn store_tasks(&self, tasks: Vec<Task>) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 
-        // Clear existing tasks and their label relationships
-        sqlx::query("DELETE FROM task_labels").execute(&mut *tx).await?;
-        sqlx::query("DELETE FROM tasks").execute(&mut *tx).await?;
-
-        // Collect task info for label processing
+        // First pass: Upsert all tasks without parent_uuid relationships
+        // This preserves existing UUIDs when remote_id matches
         let mut task_labels: Vec<(String, Vec<String>)> = Vec::new();
 
-        // Insert new tasks
-        for task in tasks {
+        for task in &tasks {
             let label_names = task.labels.clone();
-            let local_task: LocalTask = task.into();
-            task_labels.push((local_task.id.clone(), label_names));
+            let mut local_task: LocalTask = task.clone().into();
+
+            // Look up local project UUID from remote project_id
+            if let Some(local_project_uuid) = self.find_uuid_by_remote_id(&mut tx, "projects", &task.project_id).await?
+            {
+                local_task.project_uuid = local_project_uuid;
+            }
+
+            // Look up local section UUID from remote section_id if present
+            if let Some(remote_section_id) = &task.section_id {
+                if let Some(local_section_uuid) =
+                    self.find_uuid_by_remote_id(&mut tx, "sections", remote_section_id).await?
+                {
+                    local_task.section_uuid = Some(local_section_uuid);
+                }
+            }
 
             sqlx::query(
                 r"
-                INSERT INTO tasks (id, content, project_id, section_id, parent_id, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO tasks (uuid, remote_id, content, project_uuid, section_uuid, parent_uuid, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, description, is_completed, is_deleted)
+                VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(remote_id) DO UPDATE SET
+                    content = excluded.content,
+                    project_uuid = excluded.project_uuid,
+                    section_uuid = excluded.section_uuid,
+                    parent_uuid = NULL,
+                    priority = excluded.priority,
+                    order_index = excluded.order_index,
+                    due_date = excluded.due_date,
+                    due_datetime = excluded.due_datetime,
+                    is_recurring = excluded.is_recurring,
+                    deadline = excluded.deadline,
+                    duration = excluded.duration,
+                    description = excluded.description,
+                    is_completed = excluded.is_completed,
+                    is_deleted = excluded.is_deleted
                 ",
             )
-            .bind(&local_task.id)
+            .bind(&local_task.uuid)
+            .bind(&local_task.remote_id)
             .bind(&local_task.content)
-            .bind(&local_task.project_id)
-            .bind(&local_task.section_id)
-            .bind(&local_task.parent_id)
+            .bind(&local_task.project_uuid)
+            .bind(&local_task.section_uuid)
             .bind(local_task.priority)
             .bind(local_task.order_index)
             .bind(&local_task.due_date)
@@ -218,15 +245,37 @@ impl LocalStorage {
             .bind(&local_task.deadline)
             .bind(&local_task.duration)
             .bind(&local_task.description)
+            .bind(local_task.is_completed)
+            .bind(local_task.is_deleted)
             .execute(&mut *tx)
             .await?;
+
+            // Get the uuid of the task we just inserted/updated to use for label relationships
+            if let Some(task_uuid) = self.find_uuid_by_remote_id(&mut tx, "tasks", &task.id).await? {
+                task_labels.push((task_uuid, label_names));
+            }
+        }
+
+        // Second pass: Update parent_uuid references to use local UUIDs
+        for task in &tasks {
+            if let Some(remote_parent_id) = &task.parent_id {
+                if let Some(local_parent_uuid) = self.find_uuid_by_remote_id(&mut tx, "tasks", remote_parent_id).await?
+                {
+                    sqlx::query("UPDATE tasks SET parent_uuid = ? WHERE remote_id = ?")
+                        .bind(&local_parent_uuid)
+                        .bind(&task.id)
+                        .execute(&mut *tx)
+                        .await?;
+                }
+            }
         }
 
         tx.commit().await?;
 
-        // Store label relationships after transaction commits
-        for (task_id, label_names) in task_labels {
-            self.store_task_labels(&task_id, &label_names).await?;
+        // Clear and recreate label relationships
+        sqlx::query("DELETE FROM task_labels").execute(&self.pool).await?;
+        for (task_uuid, label_names) in task_labels {
+            self.store_task_labels(&task_uuid, &label_names).await?;
         }
         Ok(())
     }
@@ -234,22 +283,64 @@ impl LocalStorage {
     /// Store a single task in the database (for immediate insertion after API calls)
     pub async fn store_single_task(&self, task: Task) -> Result<()> {
         let label_names = task.labels.clone();
-        let local_task: LocalTask = task.into();
+        let mut local_task: LocalTask = task.clone().into();
 
         // Use transaction for atomic operation
         let mut tx = self.pool.begin().await?;
 
+        // Look up local project UUID from remote project_id
+        if let Some(local_project_uuid) = self.find_uuid_by_remote_id(&mut tx, "projects", &task.project_id).await? {
+            local_task.project_uuid = local_project_uuid;
+        }
+
+        // Look up local section UUID from remote section_id if present
+        if let Some(remote_section_id) = &task.section_id {
+            if let Some(local_section_uuid) =
+                self.find_uuid_by_remote_id(&mut tx, "sections", remote_section_id).await?
+            {
+                local_task.section_uuid = Some(local_section_uuid);
+            }
+        }
+
+        // Look up local parent UUID from remote parent_id if present
+        if let Some(remote_parent_id) = &task.parent_id {
+            if let Some(local_parent_uuid) = self.find_uuid_by_remote_id(&mut tx, "tasks", remote_parent_id).await? {
+                local_task.parent_uuid = Some(local_parent_uuid);
+            }
+        }
+
+        // Preserve existing UUID for this remote_id if present
+        if let Some(existing_uuid) = self.find_uuid_by_remote_id(&mut tx, "tasks", &task.id).await? {
+            local_task.uuid = existing_uuid;
+        }
+
         sqlx::query(
             r"
-            INSERT OR REPLACE INTO tasks (id, content, project_id, section_id, parent_id, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, description, is_completed, is_deleted)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (uuid, remote_id, content, project_uuid, section_uuid, parent_uuid, priority, order_index, due_date, due_datetime, is_recurring, deadline, duration, description, is_completed, is_deleted)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(remote_id) DO UPDATE SET
+                content = excluded.content,
+                project_uuid = excluded.project_uuid,
+                section_uuid = excluded.section_uuid,
+                parent_uuid = excluded.parent_uuid,
+                priority = excluded.priority,
+                order_index = excluded.order_index,
+                due_date = excluded.due_date,
+                due_datetime = excluded.due_datetime,
+                is_recurring = excluded.is_recurring,
+                deadline = excluded.deadline,
+                duration = excluded.duration,
+                description = excluded.description,
+                is_completed = excluded.is_completed,
+                is_deleted = excluded.is_deleted
             ",
         )
-        .bind(&local_task.id)
+        .bind(&local_task.uuid)
+        .bind(&local_task.remote_id)
         .bind(&local_task.content)
-        .bind(&local_task.project_id)
-        .bind(&local_task.section_id)
-        .bind(&local_task.parent_id)
+        .bind(&local_task.project_uuid)
+        .bind(&local_task.section_uuid)
+        .bind(&local_task.parent_uuid)
         .bind(local_task.priority)
         .bind(local_task.order_index)
         .bind(&local_task.due_date)
@@ -266,14 +357,14 @@ impl LocalStorage {
         tx.commit().await?;
 
         // Store label relationships after transaction commits
-        self.clear_task_labels(&local_task.id).await?;
-        self.store_task_labels(&local_task.id, &label_names).await?;
+        self.clear_task_labels(&local_task.uuid).await?;
+        self.store_task_labels(&local_task.uuid, &label_names).await?;
         Ok(())
     }
 
     /// Get tasks for a specific project from local storage
     pub async fn get_tasks_for_project(&self, project_id: &str) -> Result<Vec<TaskDisplay>> {
-        self.get_tasks_with_labels_joined("WHERE project_id = ?", "", &[project_id])
+        self.get_tasks_with_labels_joined("WHERE project_uuid = ?", "", &[project_id])
             .await
     }
 
@@ -340,13 +431,13 @@ impl LocalStorage {
 
     /// Get a single task by ID from local storage
     pub async fn get_task_by_id(&self, task_id: &str) -> Result<Option<TaskDisplay>> {
-        let tasks = self.get_tasks_with_labels_joined("WHERE id = ?", "", &[task_id]).await?;
+        let tasks = self.get_tasks_with_labels_joined("WHERE uuid = ?", "", &[task_id]).await?;
         Ok(tasks.into_iter().next())
     }
 
     /// Mark task as completed (soft completion)
     pub async fn mark_task_completed(&self, task_id: &str) -> Result<()> {
-        sqlx::query("UPDATE tasks SET is_completed = 1 WHERE id = ?")
+        sqlx::query("UPDATE tasks SET is_completed = 1 WHERE uuid = ?")
             .bind(task_id)
             .execute(&self.pool)
             .await?;
@@ -355,7 +446,7 @@ impl LocalStorage {
 
     /// Mark task as deleted (soft deletion)
     pub async fn mark_task_deleted(&self, task_id: &str) -> Result<()> {
-        sqlx::query("UPDATE tasks SET is_deleted = 1 WHERE id = ?")
+        sqlx::query("UPDATE tasks SET is_deleted = 1 WHERE uuid = ?")
             .bind(task_id)
             .execute(&self.pool)
             .await?;
@@ -364,7 +455,7 @@ impl LocalStorage {
 
     /// Restore a soft-deleted task
     pub async fn restore_task(&self, task_id: &str) -> Result<()> {
-        sqlx::query("UPDATE tasks SET is_deleted = 0, is_completed = 0 WHERE id = ?")
+        sqlx::query("UPDATE tasks SET is_deleted = 0, is_completed = 0 WHERE uuid = ?")
             .bind(task_id)
             .execute(&self.pool)
             .await?;
@@ -374,7 +465,7 @@ impl LocalStorage {
     /// Delete a task and its subtasks from local storage (hard delete)
     /// Thanks to CASCADE DELETE, subtasks are automatically removed
     pub async fn delete_task(&self, task_id: &str) -> Result<()> {
-        sqlx::query("DELETE FROM tasks WHERE id = ?")
+        sqlx::query("DELETE FROM tasks WHERE uuid = ?")
             .bind(task_id)
             .execute(&self.pool)
             .await?;
@@ -384,7 +475,7 @@ impl LocalStorage {
 
     /// Update a task's due date in local storage
     pub async fn update_task_due_date(&self, task_id: &str, due_date: Option<&str>) -> Result<()> {
-        sqlx::query("UPDATE tasks SET due_date = ? WHERE id = ?")
+        sqlx::query("UPDATE tasks SET due_date = ? WHERE uuid = ?")
             .bind(due_date)
             .bind(task_id)
             .execute(&self.pool)
@@ -395,7 +486,7 @@ impl LocalStorage {
 
     /// Update a task's priority in local storage
     pub async fn update_task_priority(&self, task_id: &str, priority: i32) -> Result<()> {
-        sqlx::query("UPDATE tasks SET priority = ? WHERE id = ?")
+        sqlx::query("UPDATE tasks SET priority = ? WHERE uuid = ?")
             .bind(priority)
             .bind(task_id)
             .execute(&self.pool)

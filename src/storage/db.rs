@@ -68,13 +68,14 @@ impl LocalStorage {
         sqlx::query(
             r"
             CREATE TABLE IF NOT EXISTS projects (
-                id TEXT PRIMARY KEY,
+                uuid TEXT PRIMARY KEY,
+                remote_id TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL,
                 color TEXT,
                 is_favorite BOOLEAN NOT NULL DEFAULT 0,
                 is_inbox_project BOOLEAN NOT NULL DEFAULT 0,
                 order_index INTEGER NOT NULL DEFAULT 0,
-                parent_id TEXT REFERENCES projects(id) ON DELETE CASCADE
+                parent_uuid TEXT REFERENCES projects(uuid) ON DELETE CASCADE
             )",
         )
         .execute(&self.pool)
@@ -84,9 +85,10 @@ impl LocalStorage {
         sqlx::query(
             r"
             CREATE TABLE IF NOT EXISTS sections (
-                id TEXT PRIMARY KEY,
+                uuid TEXT PRIMARY KEY,
+                remote_id TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL,
-                project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+                project_uuid TEXT NOT NULL REFERENCES projects(uuid) ON DELETE CASCADE,
                 order_index INTEGER NOT NULL DEFAULT 0
             )",
         )
@@ -97,12 +99,13 @@ impl LocalStorage {
         sqlx::query(
             r"
             CREATE TABLE IF NOT EXISTS tasks (
-                id TEXT PRIMARY KEY,
+                uuid TEXT PRIMARY KEY,
+                remote_id TEXT NOT NULL UNIQUE,
                 content TEXT NOT NULL,
                 description TEXT,
-                project_id TEXT NOT NULL,
-                section_id TEXT,
-                parent_id TEXT,
+                project_uuid TEXT NOT NULL,
+                section_uuid TEXT,
+                parent_uuid TEXT,
                 priority INTEGER NOT NULL DEFAULT 1,
                 order_index INTEGER NOT NULL DEFAULT 0,
                 due_date TEXT,
@@ -112,9 +115,9 @@ impl LocalStorage {
                 duration TEXT,
                 is_completed BOOLEAN NOT NULL DEFAULT 0,
                 is_deleted BOOLEAN NOT NULL DEFAULT 0,
-                FOREIGN KEY (parent_id) REFERENCES tasks(id) ON DELETE CASCADE,
-                FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-                FOREIGN KEY (section_id) REFERENCES sections(id) ON DELETE SET NULL
+                FOREIGN KEY (parent_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE,
+                FOREIGN KEY (project_uuid) REFERENCES projects(uuid) ON DELETE CASCADE,
+                FOREIGN KEY (section_uuid) REFERENCES sections(uuid) ON DELETE SET NULL
             )",
         )
         .execute(&self.pool)
@@ -124,7 +127,8 @@ impl LocalStorage {
         sqlx::query(
             r"
             CREATE TABLE IF NOT EXISTS labels (
-                id TEXT PRIMARY KEY,
+                uuid TEXT PRIMARY KEY,
+                remote_id TEXT NOT NULL UNIQUE,
                 name TEXT NOT NULL,
                 color TEXT NOT NULL,
                 order_index INTEGER NOT NULL DEFAULT 0,
@@ -138,59 +142,50 @@ impl LocalStorage {
         sqlx::query(
             r"
             CREATE TABLE IF NOT EXISTS task_labels (
-                task_id TEXT NOT NULL,
-                label_id TEXT NOT NULL,
-                PRIMARY KEY (task_id, label_id),
-                FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-                FOREIGN KEY (label_id) REFERENCES labels(id) ON DELETE CASCADE
+                task_uuid TEXT NOT NULL,
+                label_uuid TEXT NOT NULL,
+                PRIMARY KEY (task_uuid, label_uuid),
+                FOREIGN KEY (task_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE,
+                FOREIGN KEY (label_uuid) REFERENCES labels(uuid) ON DELETE CASCADE
             )",
         )
         .execute(&self.pool)
         .await?;
 
         // Create indexes for performance
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_task_labels_task_id ON task_labels(task_id)")
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_task_labels_task_uuid ON task_labels(task_uuid)")
             .execute(&self.pool)
             .await?;
 
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_task_labels_label_id ON task_labels(label_id)")
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_task_labels_label_uuid ON task_labels(label_uuid)")
             .execute(&self.pool)
             .await?;
 
         // Create indexes for tasks table
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_project_id ON tasks(project_id)")
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_project_uuid ON tasks(project_uuid)")
             .execute(&self.pool)
             .await?;
 
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_section_id ON tasks(section_id)")
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_section_uuid ON tasks(section_uuid)")
             .execute(&self.pool)
             .await?;
 
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_parent_id ON tasks(parent_id)")
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_parent_uuid ON tasks(parent_uuid)")
             .execute(&self.pool)
             .await?;
 
         Ok(())
     }
 
-    /// Check if the database has any data
-    pub async fn has_data(&self) -> Result<bool> {
-        let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM projects")
-            .fetch_one(&self.pool)
-            .await?;
-        Ok(count > 0)
-    }
-
-    /// Clear all data from the database
-    pub async fn clear_all_data(&self) -> Result<()> {
-        let mut tx = self.pool.begin().await?;
-        sqlx::query("DELETE FROM task_labels").execute(&mut *tx).await?;
-        sqlx::query("DELETE FROM tasks").execute(&mut *tx).await?;
-        sqlx::query("DELETE FROM sections").execute(&mut *tx).await?;
-        sqlx::query("DELETE FROM projects").execute(&mut *tx).await?;
-        sqlx::query("DELETE FROM labels").execute(&mut *tx).await?;
-        tx.commit().await?;
-
-        Ok(())
+    /// Generic helper to get local UUID from remote ID for any table
+    pub(crate) async fn find_uuid_by_remote_id(
+        &self,
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        table: &str,
+        remote_id: &str,
+    ) -> Result<Option<String>> {
+        let query = format!("SELECT uuid FROM {} WHERE remote_id = ?", table);
+        let uuid = sqlx::query_scalar(&query).bind(remote_id).fetch_optional(&mut **tx).await?;
+        Ok(uuid)
     }
 }
