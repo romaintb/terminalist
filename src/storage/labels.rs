@@ -6,7 +6,8 @@ use crate::todoist::Label;
 /// Local label representation with sync metadata
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct LocalLabel {
-    pub id: String,
+    pub uuid: String,
+    pub remote_id: String,
     pub name: String,
     pub color: String,
     pub order_index: i32,
@@ -21,7 +22,8 @@ pub struct LocalLabelColor {
 impl From<Label> for LocalLabel {
     fn from(label: Label) -> Self {
         Self {
-            id: label.id,
+            uuid: uuid::Uuid::new_v4().to_string(),
+            remote_id: label.id,
             name: label.name,
             color: label.color,
             order_index: label.order,
@@ -37,11 +39,12 @@ impl LocalStorage {
 
         sqlx::query(
             r"
-            INSERT OR REPLACE INTO labels (id, name, color, order_index, is_favorite)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT OR REPLACE INTO labels (uuid, remote_id, name, color, order_index, is_favorite)
+            VALUES (?, ?, ?, ?, ?, ?)
             ",
         )
-        .bind(&local_label.id)
+        .bind(&local_label.uuid)
+        .bind(&local_label.remote_id)
         .bind(&local_label.name)
         .bind(&local_label.color)
         .bind(local_label.order_index)
@@ -56,19 +59,22 @@ impl LocalStorage {
     pub async fn store_labels(&self, labels: Vec<Label>) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 
-        // Clear existing labels
-        sqlx::query("DELETE FROM labels").execute(&mut *tx).await?;
-
-        // Insert new labels
+        // Upsert labels to preserve existing UUIDs when remote_id matches
         for label in labels {
             let local_label: LocalLabel = label.into();
             sqlx::query(
                 r"
-                INSERT INTO labels (id, name, color, order_index, is_favorite)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO labels (uuid, remote_id, name, color, order_index, is_favorite)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(remote_id) DO UPDATE SET
+                    name = excluded.name,
+                    color = excluded.color,
+                    order_index = excluded.order_index,
+                    is_favorite = excluded.is_favorite
                 ",
             )
-            .bind(&local_label.id)
+            .bind(&local_label.uuid)
+            .bind(&local_label.remote_id)
             .bind(&local_label.name)
             .bind(&local_label.color)
             .bind(local_label.order_index)
@@ -84,7 +90,7 @@ impl LocalStorage {
     /// Get all labels from local storage
     pub async fn get_all_labels(&self) -> Result<Vec<LocalLabel>> {
         let labels = sqlx::query_as::<_, LocalLabel>(
-            "SELECT id, name, color, order_index, is_favorite FROM labels ORDER BY order_index ASC, name ASC",
+            "SELECT uuid, remote_id, name, color, order_index, is_favorite FROM labels ORDER BY order_index ASC, name ASC",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -94,7 +100,7 @@ impl LocalStorage {
 
     /// Update label name in local storage
     pub async fn update_label_name(&self, label_id: &str, name: &str) -> Result<()> {
-        sqlx::query("UPDATE labels SET name = ? WHERE id = ?")
+        sqlx::query("UPDATE labels SET name = ? WHERE uuid = ?")
             .bind(name)
             .bind(label_id)
             .execute(&self.pool)

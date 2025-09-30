@@ -6,18 +6,19 @@ use crate::todoist::{Section, SectionDisplay};
 /// Local section representation with sync metadata
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct LocalSection {
-    pub id: String,
+    pub uuid: String,
+    pub remote_id: String,
     pub name: String,
-    pub project_id: String,
+    pub project_uuid: String,
     pub order_index: i32,
 }
 
 impl From<LocalSection> for SectionDisplay {
     fn from(local: LocalSection) -> Self {
         Self {
-            id: local.id,
+            id: local.uuid,
             name: local.name,
-            project_id: local.project_id,
+            project_id: local.project_uuid,
             order: local.order_index,
         }
     }
@@ -26,9 +27,10 @@ impl From<LocalSection> for SectionDisplay {
 impl From<Section> for LocalSection {
     fn from(section: Section) -> Self {
         Self {
-            id: section.id,
+            uuid: uuid::Uuid::new_v4().to_string(),
+            remote_id: section.id,
             name: section.name,
-            project_id: section.project_id,
+            project_uuid: String::new(), // Will be resolved at storage layer
             order_index: section.order,
         }
     }
@@ -39,21 +41,32 @@ impl LocalStorage {
     pub async fn store_sections(&self, sections: Vec<Section>) -> Result<()> {
         let mut tx = self.pool.begin().await?;
 
-        // Clear existing sections
-        sqlx::query("DELETE FROM sections").execute(&mut *tx).await?;
-
-        // Insert new sections
+        // Upsert sections with mapped project_uuid
+        // This preserves existing UUIDs when remote_id matches
         for section in &sections {
-            let local_section: LocalSection = section.clone().into();
+            let mut local_section: LocalSection = section.clone().into();
+
+            // Look up local project UUID from remote project_id
+            if let Some(local_project_uuid) =
+                self.find_uuid_by_remote_id(&mut tx, "projects", &section.project_id).await?
+            {
+                local_section.project_uuid = local_project_uuid;
+            }
+
             sqlx::query(
                 r"
-                INSERT INTO sections (id, name, project_id, order_index)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO sections (uuid, remote_id, name, project_uuid, order_index)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(remote_id) DO UPDATE SET
+                    name = excluded.name,
+                    project_uuid = excluded.project_uuid,
+                    order_index = excluded.order_index
                 ",
             )
-            .bind(&local_section.id)
+            .bind(&local_section.uuid)
+            .bind(&local_section.remote_id)
             .bind(&local_section.name)
-            .bind(&local_section.project_id)
+            .bind(&local_section.project_uuid)
             .bind(local_section.order_index)
             .execute(&mut *tx)
             .await?;
@@ -66,7 +79,7 @@ impl LocalStorage {
     /// Get all sections from local storage
     pub async fn get_sections(&self) -> Result<Vec<SectionDisplay>> {
         let sections = sqlx::query_as::<_, LocalSection>(
-            "SELECT id, name, project_id, order_index FROM sections ORDER BY project_id, order_index, name",
+            "SELECT uuid, remote_id, name, project_uuid, order_index FROM sections ORDER BY project_uuid, order_index, name",
         )
         .fetch_all(&self.pool)
         .await?
@@ -80,7 +93,7 @@ impl LocalStorage {
     /// Get sections for a specific project from local storage
     pub async fn get_sections_for_project(&self, project_id: &str) -> Result<Vec<SectionDisplay>> {
         let sections = sqlx::query_as::<_, LocalSection>(
-            "SELECT id, name, project_id, order_index FROM sections WHERE project_id = ? ORDER BY order_index, name",
+            "SELECT uuid, remote_id, name, project_uuid, order_index FROM sections WHERE project_uuid = ? ORDER BY order_index, name",
         )
         .bind(project_id)
         .fetch_all(&self.pool)
