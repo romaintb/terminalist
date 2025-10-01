@@ -1,5 +1,5 @@
+use crate::entities::project;
 use crate::icons::IconService;
-use crate::todoist::ProjectDisplay;
 use crate::ui::layout::LayoutManager;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -13,7 +13,7 @@ pub fn render_task_dialog(
     area: Rect,
     _icons: &IconService,
     input_buffer: &str,
-    task_projects: &[&ProjectDisplay],
+    task_projects: &[&project::Model],
     selected_project_index: Option<usize>,
     is_editing: bool,
 ) {
@@ -118,7 +118,7 @@ pub fn render_task_creation_dialog(
     area: Rect,
     icons: &IconService,
     input_buffer: &str,
-    task_projects: &[&ProjectDisplay],
+    task_projects: &[&project::Model],
     selected_task_project_index: Option<usize>,
 ) {
     render_task_dialog(
@@ -137,7 +137,7 @@ pub fn render_task_edit_dialog(
     area: Rect,
     icons: &IconService,
     input_buffer: &str,
-    task_projects: &[&ProjectDisplay],
+    task_projects: &[&project::Model],
     selected_task_project_index: Option<usize>,
 ) {
     render_task_dialog(

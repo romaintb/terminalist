@@ -45,3 +45,6 @@ pub mod ui;
 
 /// Utility functions for date/time handling and other helpers
 pub mod utils;
+
+// Re-export entity models for convenient access
+pub use entities::{label, project, section, task, task_label};

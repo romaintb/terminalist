@@ -1,6 +1,6 @@
 use crate::config::DisplayConfig;
+use crate::entities::{project, task};
 use crate::icons::IconService;
-use crate::todoist::{ProjectDisplay, TaskDisplay};
 use crate::ui::components::badge::{create_priority_badge, create_task_badges};
 use crate::utils::datetime::{format_human_date, format_human_datetime};
 use ratatui::{
@@ -61,20 +61,22 @@ impl ListItem for TaskListItemType {
 /// A task item component
 #[derive(Debug, Clone)]
 pub struct TaskItem {
-    pub task: TaskDisplay,
+    pub task: task::Model,
     pub depth: usize,
     pub child_count: usize,
     pub icons: IconService,
-    pub projects: Vec<ProjectDisplay>,
+    pub projects: Vec<project::Model>,
+    pub labels: Vec<crate::entities::label::Model>,
 }
 
 impl TaskItem {
     pub fn new(
-        task: TaskDisplay,
+        task: task::Model,
         depth: usize,
         child_count: usize,
         icons: IconService,
-        projects: Vec<ProjectDisplay>,
+        projects: Vec<project::Model>,
+        labels: Vec<crate::entities::label::Model>,
     ) -> Self {
         Self {
             task,
@@ -82,6 +84,7 @@ impl TaskItem {
             child_count,
             icons,
             projects,
+            labels,
         }
     }
 
@@ -168,7 +171,7 @@ impl ListItem for TaskItem {
         }
 
         // Project display (with optional colors)
-        if let Some(project) = self.projects.iter().find(|p| p.id == self.task.project_id) {
+        if let Some(project) = self.projects.iter().find(|p| p.uuid == self.task.project_uuid) {
             line_spans.push(Span::raw(" "));
             let project_style = if display_config.show_project_colors {
                 // Use project color if available, otherwise cyan
@@ -180,7 +183,7 @@ impl ListItem for TaskItem {
         }
 
         // Due date/datetime display
-        if let Some(due_date) = &self.task.due {
+        if let Some(due_date) = &self.task.due_date {
             line_spans.push(Span::raw(" "));
 
             // Use datetime formatting if available, otherwise use date formatting
@@ -200,14 +203,14 @@ impl ListItem for TaskItem {
         if display_config.show_durations || display_config.show_labels {
             let metadata_badges = create_task_badges(
                 self.task.is_recurring,
-                self.task.due.is_some() || self.task.deadline.is_some(),
+                self.task.due_date.is_some() || self.task.deadline.is_some(),
                 if display_config.show_durations {
                     self.task.duration.as_deref()
                 } else {
                     None
                 },
                 if display_config.show_labels {
-                    self.task.labels.as_slice()
+                    &self.labels
                 } else {
                     &[]
                 },
@@ -220,16 +223,21 @@ impl ListItem for TaskItem {
         }
 
         // Add description excerpt if available and configured to show
-        if display_config.show_descriptions && !self.task.description.is_empty() {
-            // Get first line of description
-            let description_line = self.task.description.lines().next().unwrap_or("");
+        // Add description excerpt if available and configured to show
+        if display_config.show_descriptions {
+            if let Some(desc) = &self.task.description {
+                if !desc.is_empty() {
+                    // Get first line of description
+                    let description_line = desc.lines().next().unwrap_or("");
 
-            // Add the description with separator and grey styling
-            line_spans.push(Span::raw(" - "));
-            line_spans.push(Span::styled(
-                description_line.to_string(),
-                Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
-            ));
+                    // Add the description with separator and grey styling
+                    line_spans.push(Span::raw(" - "));
+                    line_spans.push(Span::styled(
+                        description_line.to_string(),
+                        Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+                    ));
+                }
+            }
         }
 
         RatatuiListItem::new(Line::from(line_spans))

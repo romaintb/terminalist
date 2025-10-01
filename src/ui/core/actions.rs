@@ -63,21 +63,21 @@ pub enum Action {
     SyncCompleted(SyncStatus),
     SyncFailed(String),
     InitialDataLoaded {
-        projects: Vec<crate::todoist::ProjectDisplay>,
-        labels: Vec<crate::todoist::LabelDisplay>,
-        sections: Vec<crate::todoist::SectionDisplay>,
-        tasks: Vec<crate::todoist::TaskDisplay>,
+        projects: Vec<crate::entities::project::Model>,
+        labels: Vec<crate::entities::label::Model>,
+        sections: Vec<crate::entities::section::Model>,
+        tasks: Vec<crate::entities::task::Model>,
     },
     DataLoaded {
-        projects: Vec<crate::todoist::ProjectDisplay>,
-        labels: Vec<crate::todoist::LabelDisplay>,
-        sections: Vec<crate::todoist::SectionDisplay>,
-        tasks: Vec<crate::todoist::TaskDisplay>,
+        projects: Vec<crate::entities::project::Model>,
+        labels: Vec<crate::entities::label::Model>,
+        sections: Vec<crate::entities::section::Model>,
+        tasks: Vec<crate::entities::task::Model>,
     },
     SearchTasks(String), // Query for task search
     SearchResultsLoaded {
         query: String,
-        results: Vec<crate::todoist::TaskDisplay>,
+        results: Vec<crate::entities::task::Model>,
     },
 
     // Data refresh after task operations

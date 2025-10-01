@@ -1,14 +1,12 @@
 use anyhow::Result;
-use sea_orm::{
-    ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbBackend, Schema, Statement,
-};
+use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbBackend, Schema, Statement};
 use std::time::Duration;
 
 use crate::entities::{label, project, section, task, task_label};
 
 /// Local storage manager for Todoist data
 pub struct LocalStorage {
-    pub(crate) conn: DatabaseConnection,
+    pub conn: DatabaseConnection,
 }
 
 impl LocalStorage {
@@ -59,9 +57,7 @@ impl LocalStorage {
         ];
 
         for statement in statements {
-            self.conn
-                .execute(backend.build(&statement))
-                .await?;
+            self.conn.execute(backend.build(&statement)).await?;
         }
 
         Ok(())

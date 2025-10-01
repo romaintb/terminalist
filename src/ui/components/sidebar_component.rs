@@ -4,8 +4,8 @@
 //! between different views (Today, Tomorrow, Upcoming) and browse projects and labels.
 //! It handles keyboard and mouse navigation with proper visual feedback.
 
+use crate::entities::{label, project};
 use crate::icons::IconService;
-use crate::todoist::{LabelDisplay, ProjectDisplay};
 use crate::ui::components::scrollbar_helper::ScrollbarHelper;
 use crate::ui::core::SidebarSelection;
 use crate::ui::core::{actions::Action, Component};
@@ -33,8 +33,8 @@ use ratatui::{
 /// - Icon support for better visual organization
 pub struct SidebarComponent {
     pub selection: SidebarSelection,
-    pub projects: Vec<ProjectDisplay>,
-    pub labels: Vec<LabelDisplay>,
+    pub projects: Vec<project::Model>,
+    pub labels: Vec<label::Model>,
     pub icons: IconService,
     list_state: ListState,
     scroll_position: usize, // Virtual scroll position for view
@@ -62,7 +62,7 @@ impl SidebarComponent {
         }
     }
 
-    pub fn update_data(&mut self, projects: Vec<ProjectDisplay>, labels: Vec<LabelDisplay>) {
+    pub fn update_data(&mut self, projects: Vec<project::Model>, labels: Vec<label::Model>) {
         self.projects = projects;
         self.labels = labels;
         // Reset scroll when data changes
@@ -212,8 +212,8 @@ impl SidebarComponent {
         }
     }
 
-    fn get_sorted_projects(&self) -> Vec<(usize, &ProjectDisplay)> {
-        let mut projects_with_indices: Vec<(usize, &ProjectDisplay)> = self.projects.iter().enumerate().collect();
+    fn get_sorted_projects(&self) -> Vec<(usize, &project::Model)> {
+        let mut projects_with_indices: Vec<(usize, &project::Model)> = self.projects.iter().enumerate().collect();
 
         // Sort projects hierarchically: root → parent → favorites → name
         projects_with_indices.sort_by(|(_, a_project), (_, b_project)| {
@@ -233,8 +233,8 @@ impl SidebarComponent {
             }
 
             // Same root, now sort by immediate parent to keep siblings together
-            let a_parent = &a_project.parent_id;
-            let b_parent = &b_project.parent_id;
+            let a_parent = &a_project.parent_uuid;
+            let b_parent = &b_project.parent_uuid;
             let parent_cmp = a_parent.cmp(b_parent);
             if parent_cmp != std::cmp::Ordering::Equal {
                 return parent_cmp;
@@ -252,23 +252,23 @@ impl SidebarComponent {
 
     /// Get the root project ID (top-level parent)
     /// Since Todoist only has parent/child, root is either the project itself or its parent
-    fn get_root_project_id(&self, project: &ProjectDisplay) -> String {
-        project.parent_id.clone().unwrap_or_else(|| project.id.clone())
+    fn get_root_project_id(&self, project: &project::Model) -> String {
+        project.parent_uuid.clone().unwrap_or_else(|| project.uuid.clone())
     }
 
     /// Get the root project (top-level parent) - always returns from self.projects
-    fn get_root_project(&self, project: &ProjectDisplay) -> &ProjectDisplay {
+    fn get_root_project(&self, project: &project::Model) -> &project::Model {
         let root_id = self.get_root_project_id(project);
         self.projects
             .iter()
-            .find(|p| p.id == root_id)
+            .find(|p| p.uuid == root_id)
             .expect("Root project should exist in projects list")
     }
 
     /// Calculate the tree depth of a project for indentation
     /// Since Todoist only has parent/child (no deeper nesting), depth is either 0 or 1
-    fn calculate_tree_depth(&self, project: &ProjectDisplay) -> usize {
-        if project.parent_id.is_some() {
+    fn calculate_tree_depth(&self, project: &project::Model) -> usize {
+        if project.parent_uuid.is_some() {
             1
         } else {
             0
@@ -481,7 +481,8 @@ impl Component for SidebarComponent {
 
             let depth = self.calculate_tree_depth(project);
             let tree_prefix = if depth > 0 {
-                let is_last = i + 1 == sorted_projects.len() || sorted_projects[i + 1].1.parent_id != project.parent_id;
+                let is_last =
+                    i + 1 == sorted_projects.len() || sorted_projects[i + 1].1.parent_uuid != project.parent_uuid;
                 if is_last {
                     "└─"
                 } else {

@@ -17,7 +17,7 @@
 
 use anyhow::{Context, Result};
 use std::env;
-use terminalist::{config, constants, icons, logger, storage, sync, todoist, ui, utils};
+use terminalist::{config, logger, sync, ui};
 
 /// Main entry point for the Terminalist application.
 ///

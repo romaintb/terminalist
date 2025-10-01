@@ -1,9 +1,8 @@
+use crate::entities::label;
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
 };
-
-use crate::todoist::LabelDisplay;
 
 /// Create badges with parentheses for duration
 #[must_use]
@@ -31,7 +30,7 @@ pub fn create_task_badges(
     is_recurring: bool,
     _has_deadline: bool,
     duration: Option<&str>,
-    labels: &[LabelDisplay],
+    labels: &[label::Model],
 ) -> Vec<Span<'static>> {
     let mut badges = Vec::new();
 

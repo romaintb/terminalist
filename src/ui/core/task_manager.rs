@@ -21,14 +21,14 @@ pub enum TaskResult {
     SyncFailed(String),
     TaskOperationCompleted(String),
     DataLoadCompleted {
-        projects: Vec<crate::todoist::ProjectDisplay>,
-        labels: Vec<crate::todoist::LabelDisplay>,
-        sections: Vec<crate::todoist::SectionDisplay>,
-        tasks: Vec<crate::todoist::TaskDisplay>,
+        projects: Vec<crate::entities::project::Model>,
+        labels: Vec<crate::entities::label::Model>,
+        sections: Vec<crate::entities::section::Model>,
+        tasks: Vec<crate::entities::task::Model>,
     },
     SearchCompleted {
         query: String,
-        results: Vec<crate::todoist::TaskDisplay>,
+        results: Vec<crate::entities::task::Model>,
     },
     Other(String),
 }
@@ -207,7 +207,7 @@ impl TaskManager {
                         SidebarSelection::Upcoming => sync_service.get_tasks_for_upcoming().await.unwrap_or_default(),
                         SidebarSelection::Project(index) => {
                             if let Some(project) = projects.get(index) {
-                                sync_service.get_tasks_for_project(&project.id).await.unwrap_or_default()
+                                sync_service.get_tasks_for_project(&project.uuid).await.unwrap_or_default()
                             } else {
                                 Vec::new()
                             }

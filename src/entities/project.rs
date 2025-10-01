@@ -22,11 +22,7 @@ pub enum Relation {
     Tasks,
     #[sea_orm(has_many = "super::section::Entity")]
     Sections,
-    #[sea_orm(
-        belongs_to = "Entity",
-        from = "Column::ParentUuid",
-        to = "Column::Uuid"
-    )]
+    #[sea_orm(belongs_to = "Entity", from = "Column::ParentUuid", to = "Column::Uuid")]
     Parent,
 }
 

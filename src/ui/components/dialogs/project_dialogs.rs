@@ -12,7 +12,7 @@ pub fn render_project_creation_dialog(
     area: Rect,
     _icons: &IconService,
     input_buffer: &str,
-    root_projects: &[&crate::todoist::ProjectDisplay],
+    root_projects: &[&crate::entities::project::Model],
     selected_parent_index: Option<usize>,
 ) {
     let dialog_area = LayoutManager::centered_rect_lines(65, 12, area);

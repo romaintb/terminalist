@@ -5,9 +5,9 @@
 //! label management, and system functions like search and debugging.
 
 use crate::config::DisplayConfig;
+use crate::entities::{label, project, task};
 use crate::icons::IconService;
 use crate::sync::SyncService;
-use crate::todoist::{LabelDisplay, ProjectDisplay, TaskDisplay};
 use crate::ui::components::task_list_item_component::{ListItem as TaskListItem, TaskItem};
 use crate::ui::core::{
     actions::{Action, DialogType},
@@ -43,9 +43,9 @@ pub struct DialogComponent {
     pub dialog_type: Option<DialogType>,
     pub input_buffer: String,
     pub cursor_position: usize,
-    pub projects: Vec<ProjectDisplay>,
-    pub labels: Vec<LabelDisplay>,
-    pub tasks: Vec<TaskDisplay>,
+    pub projects: Vec<project::Model>,
+    pub labels: Vec<label::Model>,
+    pub tasks: Vec<task::Model>,
     pub selected_project_index: usize,
     pub selected_parent_project_index: Option<usize>, // For project creation parent selection
     pub selected_task_project_index: Option<usize>,   // For task creation project selection (None = no project/inbox)
@@ -54,7 +54,7 @@ pub struct DialogComponent {
     pub scroll_offset: usize,
     pub scrollbar_state: ScrollbarState,
     // Task search state
-    pub search_results: Vec<TaskDisplay>,
+    pub search_results: Vec<task::Model>,
     pub sync_service: Option<SyncService>,
     pub display_config: DisplayConfig,
 }
@@ -90,16 +90,16 @@ impl DialogComponent {
         self.display_config = display_config;
     }
 
-    pub fn update_data(&mut self, projects: Vec<ProjectDisplay>, labels: Vec<LabelDisplay>) {
+    pub fn update_data(&mut self, projects: Vec<project::Model>, labels: Vec<label::Model>) {
         self.projects = projects;
         self.labels = labels;
     }
 
     pub fn update_data_with_tasks(
         &mut self,
-        projects: Vec<ProjectDisplay>,
-        labels: Vec<LabelDisplay>,
-        tasks: Vec<TaskDisplay>,
+        projects: Vec<project::Model>,
+        labels: Vec<label::Model>,
+        tasks: Vec<task::Model>,
     ) {
         self.projects = projects;
         self.labels = labels;
@@ -111,12 +111,12 @@ impl DialogComponent {
     }
 
     /// Get root projects (projects without a parent) for parent selection
-    pub fn get_root_projects(&self) -> Vec<&ProjectDisplay> {
-        self.projects.iter().filter(|project| project.parent_id.is_none()).collect()
+    pub fn get_root_projects(&self) -> Vec<&project::Model> {
+        self.projects.iter().filter(|project| project.parent_uuid.is_none()).collect()
     }
 
     /// Get all non-inbox projects for task creation (excludes inbox project)
-    pub fn get_task_projects(&self) -> Vec<&ProjectDisplay> {
+    pub fn get_task_projects(&self) -> Vec<&project::Model> {
         self.projects.iter().filter(|project| !project.is_inbox_project).collect()
     }
 
@@ -127,7 +127,7 @@ impl DialogComponent {
     }
 
     /// Update search results from database query results
-    pub fn update_search_results(&mut self, query: &str, results: Vec<TaskDisplay>) {
+    pub fn update_search_results(&mut self, query: &str, results: Vec<task::Model>) {
         // Only update if this is for the current query (avoid race conditions)
         if query == self.input_buffer {
             self.search_results = results;
@@ -146,7 +146,7 @@ impl DialogComponent {
                     let project_id = if let Some(task_index) = self.selected_task_project_index {
                         let task_projects = self.get_task_projects();
                         if task_index < task_projects.len() {
-                            Some(task_projects[task_index].id.clone())
+                            Some(task_projects[task_index].uuid.clone())
                         } else {
                             None // Task goes to inbox (no project)
                         }
@@ -182,7 +182,7 @@ impl DialogComponent {
                     let parent_id = if let Some(parent_index) = self.selected_parent_project_index {
                         let root_projects = self.get_root_projects();
                         if parent_index < root_projects.len() {
-                            Some(root_projects[parent_index].id.clone())
+                            Some(root_projects[parent_index].uuid.clone())
                         } else {
                             None
                         }
@@ -334,7 +334,7 @@ impl DialogComponent {
 
         // Find the current project index for the task being edited
         let current_project_index = if let Some(DialogType::TaskEdit { project_id, .. }) = &self.dialog_type {
-            task_projects.iter().position(|p| p.id == *project_id)
+            task_projects.iter().position(|p| p.uuid == *project_id)
         } else {
             None
         };
@@ -447,6 +447,9 @@ impl DialogComponent {
             .search_results
             .iter()
             .map(|task| {
+                // TODO: Load task-label relationships from database
+                let task_labels = Vec::new();
+
                 // Create TaskItem with the same formatting as main task list
                 let task_item = TaskItem::new(
                     task.clone(),
@@ -454,6 +457,7 @@ impl DialogComponent {
                     0, // child_count: 0 for search results
                     self.icons.clone(),
                     self.projects.clone(),
+                    task_labels,
                 );
 
                 // Use the same render method as main task list
@@ -717,7 +721,7 @@ impl Component for DialogComponent {
                         // Set the selected task project index if a default project is provided
                         if let Some(project_id) = default_project_id {
                             let task_projects = self.get_task_projects();
-                            if let Some(index) = task_projects.iter().position(|p| &p.id == project_id) {
+                            if let Some(index) = task_projects.iter().position(|p| &p.uuid == project_id) {
                                 self.selected_task_project_index = Some(index);
                             }
                         }
