@@ -1,191 +1,69 @@
 use anyhow::Result;
-use sqlx::{
-    sqlite::{SqliteConnectOptions, SqliteConnection, SqlitePool, SqlitePoolOptions},
-    Connection,
+use sea_orm::{
+    ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbBackend, Schema, Statement,
 };
-use std::str::FromStr;
+use std::time::Duration;
+
+use crate::entities::{label, project, section, task, task_label};
 
 /// Local storage manager for Todoist data
 pub struct LocalStorage {
-    pub(crate) pool: SqlitePool,
-    _anchor: SqliteConnection,
+    pub(crate) conn: DatabaseConnection,
 }
 
 impl LocalStorage {
-    /// Initialize the local storage with `SQLite` database
+    /// Initialize the local storage with SQLite database
     pub async fn new(debug_mode: bool) -> Result<Self> {
         let database_url = if debug_mode {
-            // File-backed database for debugging - ensure file exists
-            let db_path = "terminalist_debug.db";
-            if !std::path::Path::new(db_path).exists() {
-                std::fs::File::create(db_path)?;
-            }
-            format!("sqlite:{}", db_path)
+            // File-backed database for debugging
+            "sqlite:terminalist_debug.db?mode=rwc"
         } else {
             // In-memory database for normal operation
-            "sqlite:file:terminalist_memdb?mode=memory&cache=shared".to_string()
+            "sqlite::memory:"
         };
 
-        // Configure SQLite connection options with foreign keys enabled
-        let connect_options = SqliteConnectOptions::from_str(&database_url)?.foreign_keys(true);
-
-        let pool = SqlitePoolOptions::new()
+        let mut opt = ConnectOptions::new(database_url);
+        opt.max_connections(4)
             .min_connections(1)
-            .max_connections(4)
-            .idle_timeout(None) // avoid idle reaping
-            .max_lifetime(None) // avoid lifetime rotation
-            .connect_with(connect_options.clone())
-            .await?;
+            .connect_timeout(Duration::from_secs(8))
+            .idle_timeout(Duration::from_secs(3600))
+            .sqlx_logging(false);
 
-        // Anchor connection outside the pool
-        let anchor = SqliteConnection::connect_with(&connect_options).await?;
+        let conn = Database::connect(opt).await?;
 
-        let storage = LocalStorage { pool, _anchor: anchor };
+        // Enable foreign keys for SQLite
+        conn.execute(Statement::from_string(
+            DbBackend::Sqlite,
+            "PRAGMA foreign_keys = ON;".to_owned(),
+        ))
+        .await?;
+
+        let storage = LocalStorage { conn };
         storage.init_schema().await?;
-        storage.start_keepalive_task();
 
         Ok(storage)
     }
 
-    /// Start a background task to keep the database connection alive
-    fn start_keepalive_task(&self) {
-        let pool = self.pool.clone();
-        tokio::spawn(async move {
-            let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(60));
-
-            loop {
-                interval.tick().await;
-
-                // Execute a simple query to keep the connection alive
-                let _ = sqlx::query("SELECT 1").execute(&pool).await;
-            }
-        });
-    }
-
     /// Initialize database schema
     async fn init_schema(&self) -> Result<()> {
-        // Create projects table
-        sqlx::query(
-            r"
-            CREATE TABLE IF NOT EXISTS projects (
-                uuid TEXT PRIMARY KEY,
-                remote_id TEXT NOT NULL UNIQUE,
-                name TEXT NOT NULL,
-                color TEXT,
-                is_favorite BOOLEAN NOT NULL DEFAULT 0,
-                is_inbox_project BOOLEAN NOT NULL DEFAULT 0,
-                order_index INTEGER NOT NULL DEFAULT 0,
-                parent_uuid TEXT REFERENCES projects(uuid) ON DELETE CASCADE
-            )",
-        )
-        .execute(&self.pool)
-        .await?;
+        let backend = self.conn.get_database_backend();
+        let schema = Schema::new(backend);
 
-        // Create sections table
-        sqlx::query(
-            r"
-            CREATE TABLE IF NOT EXISTS sections (
-                uuid TEXT PRIMARY KEY,
-                remote_id TEXT NOT NULL UNIQUE,
-                name TEXT NOT NULL,
-                project_uuid TEXT NOT NULL REFERENCES projects(uuid) ON DELETE CASCADE,
-                order_index INTEGER NOT NULL DEFAULT 0
-            )",
-        )
-        .execute(&self.pool)
-        .await?;
+        // Create tables in the correct order (parent tables first)
+        let statements = vec![
+            schema.create_table_from_entity(project::Entity),
+            schema.create_table_from_entity(section::Entity),
+            schema.create_table_from_entity(label::Entity),
+            schema.create_table_from_entity(task::Entity),
+            schema.create_table_from_entity(task_label::Entity),
+        ];
 
-        // Create tasks table
-        sqlx::query(
-            r"
-            CREATE TABLE IF NOT EXISTS tasks (
-                uuid TEXT PRIMARY KEY,
-                remote_id TEXT NOT NULL UNIQUE,
-                content TEXT NOT NULL,
-                description TEXT,
-                project_uuid TEXT NOT NULL,
-                section_uuid TEXT,
-                parent_uuid TEXT,
-                priority INTEGER NOT NULL DEFAULT 1,
-                order_index INTEGER NOT NULL DEFAULT 0,
-                due_date TEXT,
-                due_datetime TEXT,
-                is_recurring BOOLEAN NOT NULL DEFAULT 0,
-                deadline TEXT,
-                duration TEXT,
-                is_completed BOOLEAN NOT NULL DEFAULT 0,
-                is_deleted BOOLEAN NOT NULL DEFAULT 0,
-                FOREIGN KEY (parent_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE,
-                FOREIGN KEY (project_uuid) REFERENCES projects(uuid) ON DELETE CASCADE,
-                FOREIGN KEY (section_uuid) REFERENCES sections(uuid) ON DELETE SET NULL
-            )",
-        )
-        .execute(&self.pool)
-        .await?;
-
-        // Create labels table
-        sqlx::query(
-            r"
-            CREATE TABLE IF NOT EXISTS labels (
-                uuid TEXT PRIMARY KEY,
-                remote_id TEXT NOT NULL UNIQUE,
-                name TEXT NOT NULL,
-                color TEXT NOT NULL,
-                order_index INTEGER NOT NULL DEFAULT 0,
-                is_favorite BOOLEAN NOT NULL DEFAULT 0
-            )",
-        )
-        .execute(&self.pool)
-        .await?;
-
-        // Create task_labels junction table for many-to-many relationship
-        sqlx::query(
-            r"
-            CREATE TABLE IF NOT EXISTS task_labels (
-                task_uuid TEXT NOT NULL,
-                label_uuid TEXT NOT NULL,
-                PRIMARY KEY (task_uuid, label_uuid),
-                FOREIGN KEY (task_uuid) REFERENCES tasks(uuid) ON DELETE CASCADE,
-                FOREIGN KEY (label_uuid) REFERENCES labels(uuid) ON DELETE CASCADE
-            )",
-        )
-        .execute(&self.pool)
-        .await?;
-
-        // Create indexes for performance
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_task_labels_task_uuid ON task_labels(task_uuid)")
-            .execute(&self.pool)
-            .await?;
-
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_task_labels_label_uuid ON task_labels(label_uuid)")
-            .execute(&self.pool)
-            .await?;
-
-        // Create indexes for tasks table
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_project_uuid ON tasks(project_uuid)")
-            .execute(&self.pool)
-            .await?;
-
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_section_uuid ON tasks(section_uuid)")
-            .execute(&self.pool)
-            .await?;
-
-        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_parent_uuid ON tasks(parent_uuid)")
-            .execute(&self.pool)
-            .await?;
+        for statement in statements {
+            self.conn
+                .execute(backend.build(&statement))
+                .await?;
+        }
 
         Ok(())
-    }
-
-    /// Generic helper to get local UUID from remote ID for any table
-    pub(crate) async fn find_uuid_by_remote_id(
-        &self,
-        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
-        table: &str,
-        remote_id: &str,
-    ) -> Result<Option<String>> {
-        let query = format!("SELECT uuid FROM {} WHERE remote_id = ?", table);
-        let uuid = sqlx::query_scalar(&query).bind(remote_id).fetch_optional(&mut **tx).await?;
-        Ok(uuid)
     }
 }

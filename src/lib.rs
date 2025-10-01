@@ -22,6 +22,9 @@ pub mod config;
 /// Application constants and default values
 pub mod constants;
 
+/// SeaORM entity models for database tables
+pub mod entities;
+
 /// Icon definitions for visual representation in the TUI
 pub mod icons;
 
