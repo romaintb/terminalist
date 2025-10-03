@@ -214,7 +214,7 @@ impl TaskManager {
                         }
                         SidebarSelection::Label(index) => {
                             if let Some(label) = labels.get(index) {
-                                sync_service.get_tasks_with_label(&label.name).await.unwrap_or_default()
+                                sync_service.get_tasks_with_label(label.uuid).await.unwrap_or_default()
                             } else {
                                 Vec::new()
                             }

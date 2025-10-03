@@ -14,7 +14,7 @@ use anyhow::Result;
 use log::{error, info};
 use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, IntoActiveModel, ModelTrait, QueryFilter, QueryOrder,
-    TransactionTrait,
+    QuerySelect, QueryTrait, TransactionTrait,
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -244,11 +244,24 @@ impl SyncService {
     }
 
     /// Get tasks with a specific label from local storage (fast)
-    pub async fn get_tasks_with_label(&self, label_name: &str) -> Result<Vec<task::Model>> {
-        // TODO: Implement label filtering - requires fetching labels per task
-        // For now, return empty list as a workaround
-        let _ = label_name;
-        Ok(Vec::new())
+    pub async fn get_tasks_with_label(&self, label_id: Uuid) -> Result<Vec<task::Model>> {
+        let storage = self.storage.lock().await;
+        let tasks = task::Entity::find()
+            .filter(
+                task::Column::Uuid.in_subquery(
+                    task_label::Entity::find()
+                        .filter(task_label::Column::LabelUuid.eq(label_id))
+                        .select_only()
+                        .column(task_label::Column::TaskUuid)
+                        .into_query(),
+                ),
+            )
+            .order_by_asc(task::Column::IsDeleted)
+            .order_by_asc(task::Column::IsCompleted)
+            .order_by_asc(task::Column::OrderIndex)
+            .all(&storage.conn)
+            .await?;
+        Ok(tasks)
     }
 
     /// Retrieves tasks for the "Today" view with business logic.
