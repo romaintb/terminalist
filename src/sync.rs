@@ -1401,25 +1401,9 @@ impl SyncService {
             // Store the new task (reuse the single task upsert logic)
             let txn = storage.conn.begin().await?;
 
-            let project_uuid = if let Some(project) = project::Entity::find()
-                .filter(project::Column::RemoteId.eq(&new_task.project_id))
-                .one(&txn)
-                .await?
-            {
-                project.uuid
-            } else {
-                new_task.project_id.clone()
-            };
+            let project_uuid = Self::lookup_project_uuid(&txn, &new_task.project_id, "task restore").await?;
 
-            let section_uuid = if let Some(remote_section_id) = &new_task.section_id {
-                section::Entity::find()
-                    .filter(section::Column::RemoteId.eq(remote_section_id))
-                    .one(&txn)
-                    .await?
-                    .map(|s| s.uuid)
-            } else {
-                None
-            };
+            let section_uuid = Self::lookup_section_uuid(&txn, new_task.section_id.as_ref()).await?;
 
             let parent_uuid = if let Some(remote_parent_id) = &new_task.parent_id {
                 task::Entity::find()
