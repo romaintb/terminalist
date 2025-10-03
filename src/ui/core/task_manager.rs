@@ -314,20 +314,3 @@ impl Drop for TaskManager {
         self.cancel_all_tasks();
     }
 }
-
-// Utility trait for future extensions
-#[allow(dead_code)]
-trait BackgroundTaskExt {
-    fn elapsed(&self) -> std::time::Duration;
-    fn is_long_running(&self) -> bool;
-}
-
-impl BackgroundTaskExt for BackgroundTask {
-    fn elapsed(&self) -> std::time::Duration {
-        self.started_at.elapsed()
-    }
-
-    fn is_long_running(&self) -> bool {
-        self.elapsed() > std::time::Duration::from_secs(30)
-    }
-}
