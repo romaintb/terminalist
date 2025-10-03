@@ -266,24 +266,9 @@ impl SyncService {
         let storage = self.storage.lock().await;
         let today = datetime::format_today();
 
-        // Get overdue tasks (deleted last, then active → completed within non-deleted)
-        let overdue_tasks = task::Entity::find()
-            .filter(task::Column::DueDate.is_not_null())
-            .filter(task::Column::DueDate.lt(&today))
-            .order_by_asc(task::Column::IsDeleted) // Deleted last
-            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active first, completed second
-            .order_by_asc(task::Column::DueDate)
-            .all(&storage.conn)
-            .await?;
-
-        // Get today's tasks (deleted last, then active → completed within non-deleted)
-        let today_tasks = task::Entity::find()
-            .filter(task::Column::DueDate.eq(&today))
-            .order_by_asc(task::Column::IsDeleted) // Deleted last
-            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active first, completed second
-            .order_by_asc(task::Column::OrderIndex)
-            .all(&storage.conn)
-            .await?;
+        // Get overdue tasks and today's tasks using entity scopes
+        let overdue_tasks = task::Entity::overdue(&today).all(&storage.conn).await?;
+        let today_tasks = task::Entity::due_today(&today).all(&storage.conn).await?;
 
         // UI business rule: show overdue first, then today
         let mut result = overdue_tasks;
@@ -331,32 +316,10 @@ impl SyncService {
         let today = datetime::format_today();
         let three_months_later = datetime::format_date_with_offset(90);
 
-        // Get overdue tasks (deleted last, then active → completed within non-deleted)
-        let overdue_tasks = task::Entity::find()
-            .filter(task::Column::DueDate.is_not_null())
-            .filter(task::Column::DueDate.lt(&today))
-            .order_by_asc(task::Column::IsDeleted) // Deleted last
-            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active first, completed second
-            .order_by_asc(task::Column::DueDate)
-            .all(&storage.conn)
-            .await?;
-
-        // Get today's tasks (deleted last, then active → completed within non-deleted)
-        let today_tasks = task::Entity::find()
-            .filter(task::Column::DueDate.eq(&today))
-            .order_by_asc(task::Column::IsDeleted) // Deleted last
-            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active first, completed second
-            .order_by_asc(task::Column::OrderIndex)
-            .all(&storage.conn)
-            .await?;
-
-        // Get future tasks (within next 3 months, deleted last, then active → completed)
-        let future_tasks = task::Entity::find()
-            .filter(task::Column::DueDate.gte(&today))
-            .filter(task::Column::DueDate.lt(&three_months_later))
-            .order_by_asc(task::Column::IsDeleted) // Deleted last
-            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active first, completed second
-            .order_by_asc(task::Column::DueDate)
+        // Get overdue, today's, and future tasks using entity scopes
+        let overdue_tasks = task::Entity::overdue(&today).all(&storage.conn).await?;
+        let today_tasks = task::Entity::due_today(&today).all(&storage.conn).await?;
+        let future_tasks = task::Entity::due_between(&today, &three_months_later)
             .all(&storage.conn)
             .await?;
 

@@ -1,4 +1,5 @@
 use sea_orm::entity::prelude::*;
+use sea_orm::QueryOrder;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -72,3 +73,37 @@ impl Related<super::label::Entity> for Entity {
 }
 
 impl ActiveModelBehavior for ActiveModel {}
+
+impl Entity {
+    /// Scope for overdue tasks (due before today)
+    /// Orders by: deleted status, completion status, due date
+    pub fn overdue(today: &str) -> Select<Entity> {
+        Self::find()
+            .filter(Column::DueDate.is_not_null())
+            .filter(Column::DueDate.lt(today))
+            .order_by_asc(Column::IsDeleted)
+            .order_by_asc(Column::IsCompleted)
+            .order_by_asc(Column::DueDate)
+    }
+
+    /// Scope for tasks due today
+    /// Orders by: deleted status, completion status, order index
+    pub fn due_today(today: &str) -> Select<Entity> {
+        Self::find()
+            .filter(Column::DueDate.eq(today))
+            .order_by_asc(Column::IsDeleted)
+            .order_by_asc(Column::IsCompleted)
+            .order_by_asc(Column::OrderIndex)
+    }
+
+    /// Scope for tasks due in a date range
+    /// Orders by: deleted status, completion status, due date
+    pub fn due_between(start: &str, end: &str) -> Select<Entity> {
+        Self::find()
+            .filter(Column::DueDate.gte(start))
+            .filter(Column::DueDate.lt(end))
+            .order_by_asc(Column::IsDeleted)
+            .order_by_asc(Column::IsCompleted)
+            .order_by_asc(Column::DueDate)
+    }
+}
