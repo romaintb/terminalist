@@ -5,9 +5,9 @@
 //! label management, and system functions like search and debugging.
 
 use crate::config::DisplayConfig;
+use crate::entities::{label, project, task};
 use crate::icons::IconService;
 use crate::sync::SyncService;
-use crate::todoist::{LabelDisplay, ProjectDisplay, TaskDisplay};
 use crate::ui::components::task_list_item_component::{ListItem as TaskListItem, TaskItem};
 use crate::ui::core::{
     actions::{Action, DialogType},
@@ -15,6 +15,7 @@ use crate::ui::core::{
 };
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{layout::Rect, widgets::ScrollbarState, Frame};
+use uuid::Uuid;
 
 use crate::ui::components::dialogs::{label_dialogs, project_dialogs, scroll_behavior, system_dialogs, task_dialogs};
 
@@ -43,18 +44,20 @@ pub struct DialogComponent {
     pub dialog_type: Option<DialogType>,
     pub input_buffer: String,
     pub cursor_position: usize,
-    pub projects: Vec<ProjectDisplay>,
-    pub labels: Vec<LabelDisplay>,
-    pub tasks: Vec<TaskDisplay>,
+    pub projects: Vec<project::Model>,
+    pub labels: Vec<label::Model>,
+    pub tasks: Vec<task::Model>,
     pub selected_project_index: usize,
     pub selected_parent_project_index: Option<usize>, // For project creation parent selection
     pub selected_task_project_index: Option<usize>,   // For task creation project selection (None = no project/inbox)
+    pub selected_task_project_uuid: Option<Uuid>,     // Store the actual UUID to avoid index issues
+    pub task_project_explicitly_selected: bool,       // Track if user explicitly selected a project via Tab
     pub icons: IconService,
     // Scrolling support for long content dialogs
     pub scroll_offset: usize,
     pub scrollbar_state: ScrollbarState,
     // Task search state
-    pub search_results: Vec<TaskDisplay>,
+    pub search_results: Vec<task::Model>,
     pub sync_service: Option<SyncService>,
     pub display_config: DisplayConfig,
 }
@@ -77,6 +80,8 @@ impl DialogComponent {
             selected_project_index: 0,
             selected_parent_project_index: None,
             selected_task_project_index: None, // Default to "None" for tasks (no project)
+            selected_task_project_uuid: None,  // No project selected initially
+            task_project_explicitly_selected: false, // User hasn't used Tab yet
             icons: IconService::default(),
             scroll_offset: 0,
             scrollbar_state: ScrollbarState::new(0),
@@ -90,16 +95,16 @@ impl DialogComponent {
         self.display_config = display_config;
     }
 
-    pub fn update_data(&mut self, projects: Vec<ProjectDisplay>, labels: Vec<LabelDisplay>) {
+    pub fn update_data(&mut self, projects: Vec<project::Model>, labels: Vec<label::Model>) {
         self.projects = projects;
         self.labels = labels;
     }
 
     pub fn update_data_with_tasks(
         &mut self,
-        projects: Vec<ProjectDisplay>,
-        labels: Vec<LabelDisplay>,
-        tasks: Vec<TaskDisplay>,
+        projects: Vec<project::Model>,
+        labels: Vec<label::Model>,
+        tasks: Vec<task::Model>,
     ) {
         self.projects = projects;
         self.labels = labels;
@@ -111,12 +116,12 @@ impl DialogComponent {
     }
 
     /// Get root projects (projects without a parent) for parent selection
-    pub fn get_root_projects(&self) -> Vec<&ProjectDisplay> {
-        self.projects.iter().filter(|project| project.parent_id.is_none()).collect()
+    pub fn get_root_projects(&self) -> Vec<&project::Model> {
+        self.projects.iter().filter(|project| project.parent_uuid.is_none()).collect()
     }
 
     /// Get all non-inbox projects for task creation (excludes inbox project)
-    pub fn get_task_projects(&self) -> Vec<&ProjectDisplay> {
+    pub fn get_task_projects(&self) -> Vec<&project::Model> {
         self.projects.iter().filter(|project| !project.is_inbox_project).collect()
     }
 
@@ -127,7 +132,7 @@ impl DialogComponent {
     }
 
     /// Update search results from database query results
-    pub fn update_search_results(&mut self, query: &str, results: Vec<TaskDisplay>) {
+    pub fn update_search_results(&mut self, query: &str, results: Vec<task::Model>) {
         // Only update if this is for the current query (avoid race conditions)
         if query == self.input_buffer {
             self.search_results = results;
@@ -140,24 +145,33 @@ impl DialogComponent {
 
     fn handle_submit(&mut self) -> Action {
         match &self.dialog_type {
-            Some(DialogType::TaskCreation { default_project_id }) => {
+            Some(DialogType::TaskCreation { default_project_uuid }) => {
                 if !self.input_buffer.is_empty() {
-                    // Use the user's selection first, fallback to default project ID if no selection made
-                    let project_id = if let Some(task_index) = self.selected_task_project_index {
-                        let task_projects = self.get_task_projects();
-                        if task_index < task_projects.len() {
-                            Some(task_projects[task_index].id.clone())
-                        } else {
-                            None // Task goes to inbox (no project)
-                        }
+                    // Determine the project UUID based on whether user explicitly selected via Tab
+                    let project_uuid = if self.task_project_explicitly_selected {
+                        // User pressed Tab - use their selection (could be None for Inbox or Some(uuid) for a project)
+                        self.selected_task_project_uuid
                     } else {
-                        // If no user selection, use the default project ID or None
-                        default_project_id.clone()
+                        // User didn't press Tab - use default project
+                        *default_project_uuid
                     };
+
+                    // Debug logging
+                    if let Some(ref pid) = project_uuid {
+                        let proj_name = self
+                            .projects
+                            .iter()
+                            .find(|p| &p.uuid == pid)
+                            .map(|p| p.name.as_str())
+                            .unwrap_or("unknown");
+                        log::info!("Creating task in project: {} ({})", proj_name, pid);
+                    } else {
+                        log::info!("Creating task in inbox (no project)");
+                    }
 
                     let action = Action::CreateTask {
                         content: self.input_buffer.clone(),
-                        project_id,
+                        project_uuid,
                     };
                     self.clear_dialog();
                     action
@@ -165,10 +179,10 @@ impl DialogComponent {
                     Action::None
                 }
             }
-            Some(DialogType::TaskEdit { task_id, .. }) => {
+            Some(DialogType::TaskEdit { task_uuid, .. }) => {
                 if !self.input_buffer.is_empty() {
                     let action = Action::EditTask {
-                        id: task_id.clone(),
+                        task_uuid: *task_uuid,
                         content: self.input_buffer.clone(),
                     };
                     self.clear_dialog();
@@ -179,10 +193,10 @@ impl DialogComponent {
             }
             Some(DialogType::ProjectCreation) => {
                 if !self.input_buffer.is_empty() {
-                    let parent_id = if let Some(parent_index) = self.selected_parent_project_index {
+                    let parent_uuid = if let Some(parent_index) = self.selected_parent_project_index {
                         let root_projects = self.get_root_projects();
                         if parent_index < root_projects.len() {
-                            Some(root_projects[parent_index].id.clone())
+                            Some(root_projects[parent_index].uuid)
                         } else {
                             None
                         }
@@ -192,7 +206,7 @@ impl DialogComponent {
 
                     let action = Action::CreateProject {
                         name: self.input_buffer.clone(),
-                        parent_id,
+                        parent_uuid,
                     };
                     self.clear_dialog();
                     action
@@ -200,10 +214,10 @@ impl DialogComponent {
                     Action::None
                 }
             }
-            Some(DialogType::ProjectEdit { project_id, .. }) => {
+            Some(DialogType::ProjectEdit { project_uuid, .. }) => {
                 if !self.input_buffer.is_empty() {
                     let action = Action::EditProject {
-                        id: project_id.clone(),
+                        project_uuid: *project_uuid,
                         name: self.input_buffer.clone(),
                     };
                     self.clear_dialog();
@@ -223,10 +237,10 @@ impl DialogComponent {
                     Action::None
                 }
             }
-            Some(DialogType::LabelEdit { label_id, .. }) => {
+            Some(DialogType::LabelEdit { label_uuid, .. }) => {
                 if !self.input_buffer.is_empty() {
                     let action = Action::EditLabel {
-                        id: label_id.clone(),
+                        label_uuid: *label_uuid,
                         name: self.input_buffer.clone(),
                     };
                     self.clear_dialog();
@@ -235,19 +249,19 @@ impl DialogComponent {
                     Action::None
                 }
             }
-            Some(DialogType::DeleteConfirmation { item_type, item_id }) => match item_type.as_str() {
+            Some(DialogType::DeleteConfirmation { item_type, item_uuid }) => match item_type.as_str() {
                 "task" => {
-                    let action = Action::DeleteTask(item_id.clone());
+                    let action = Action::DeleteTask(item_uuid.to_string());
                     self.clear_dialog();
                     action
                 }
                 "project" => {
-                    let action = Action::DeleteProject(item_id.clone());
+                    let action = Action::DeleteProject(*item_uuid);
                     self.clear_dialog();
                     action
                 }
                 "label" => {
-                    let action = Action::DeleteLabel(item_id.clone());
+                    let action = Action::DeleteLabel(*item_uuid);
                     self.clear_dialog();
                     action
                 }
@@ -264,6 +278,8 @@ impl DialogComponent {
         self.selected_project_index = 0;
         self.selected_parent_project_index = None;
         self.selected_task_project_index = None; // Reset to "None" for task creation
+        self.selected_task_project_uuid = None; // Reset stored UUID
+        self.task_project_explicitly_selected = false; // Reset selection flag
         self.scroll_offset = 0;
         self.scrollbar_state = ScrollbarState::new(0);
         self.search_results.clear();
@@ -333,8 +349,8 @@ impl DialogComponent {
         let task_projects = self.get_task_projects();
 
         // Find the current project index for the task being edited
-        let current_project_index = if let Some(DialogType::TaskEdit { project_id, .. }) = &self.dialog_type {
-            task_projects.iter().position(|p| p.id == *project_id)
+        let current_project_index = if let Some(DialogType::TaskEdit { project_uuid, .. }) = &self.dialog_type {
+            task_projects.iter().position(|p| p.uuid == *project_uuid)
         } else {
             None
         };
@@ -447,6 +463,9 @@ impl DialogComponent {
             .search_results
             .iter()
             .map(|task| {
+                // TODO: Load task-label relationships from database
+                let task_labels = Vec::new();
+
                 // Create TaskItem with the same formatting as main task list
                 let task_item = TaskItem::new(
                     task.clone(),
@@ -454,6 +473,7 @@ impl DialogComponent {
                     0, // child_count: 0 for search results
                     self.icons.clone(),
                     self.projects.clone(),
+                    task_labels,
                 );
 
                 // Use the same render method as main task list
@@ -655,13 +675,39 @@ impl Component for DialogComponent {
                         if matches!(self.dialog_type, Some(DialogType::TaskCreation { .. })) {
                             let task_projects = self.get_task_projects();
                             if !task_projects.is_empty() {
+                                // Clone needed data to avoid borrow issues
+                                let projects_data: Vec<(Uuid, String)> =
+                                    task_projects.iter().map(|p| (p.uuid, p.name.clone())).collect();
+
+                                // Mark that user has explicitly selected a project via Tab
+                                self.task_project_explicitly_selected = true;
+
                                 self.selected_task_project_index = match self.selected_task_project_index {
-                                    None => Some(0), // First tab: select first project
+                                    None => {
+                                        // First tab: select first project
+                                        self.selected_task_project_uuid = Some(projects_data[0].0);
+                                        log::info!(
+                                            "Tab: Selected project {} ({})",
+                                            projects_data[0].1,
+                                            projects_data[0].0
+                                        );
+                                        Some(0)
+                                    }
                                     Some(index) => {
-                                        let next_index = (index + 1) % (task_projects.len() + 1);
-                                        if next_index == task_projects.len() {
-                                            None // Cycle back to "None" option
+                                        let next_index = (index + 1) % (projects_data.len() + 1);
+                                        if next_index == projects_data.len() {
+                                            // Cycle back to "None" option (inbox)
+                                            self.selected_task_project_uuid = None;
+                                            log::info!("Tab: Selected inbox (no project)");
+                                            None
                                         } else {
+                                            // Select the project at next_index
+                                            self.selected_task_project_uuid = Some(projects_data[next_index].0);
+                                            log::info!(
+                                                "Tab: Selected project {} ({})",
+                                                projects_data[next_index].1,
+                                                projects_data[next_index].0
+                                            );
                                             Some(next_index)
                                         }
                                     }
@@ -711,15 +757,25 @@ impl Component for DialogComponent {
                         self.input_buffer = name.clone();
                         self.cursor_position = name.len();
                     }
-                    DialogType::TaskCreation { default_project_id } => {
+                    DialogType::TaskCreation { default_project_uuid } => {
                         self.input_buffer.clear();
                         self.cursor_position = 0;
-                        // Set the selected task project index if a default project is provided
-                        if let Some(project_id) = default_project_id {
+                        // Set the selected task project index and UUID if a default project is provided
+                        if let Some(project_uuid) = default_project_uuid {
                             let task_projects = self.get_task_projects();
-                            if let Some(index) = task_projects.iter().position(|p| &p.id == project_id) {
+                            if let Some(index) = task_projects.iter().position(|p| &p.uuid == project_uuid) {
                                 self.selected_task_project_index = Some(index);
+                                self.selected_task_project_uuid = Some(*project_uuid);
+                                let proj_name = self
+                                    .projects
+                                    .iter()
+                                    .find(|p| &p.uuid == project_uuid)
+                                    .map(|p| p.name.as_str())
+                                    .unwrap_or("unknown");
+                                log::info!("Dialog opened with default project: {} ({})", proj_name, project_uuid);
                             }
+                        } else {
+                            log::info!("Dialog opened with no default project (inbox)");
                         }
                     }
                     DialogType::TaskSearch => {

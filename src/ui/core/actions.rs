@@ -1,4 +1,5 @@
 use crate::sync::SyncStatus;
+use uuid::Uuid;
 
 /// Represents the currently selected item in the sidebar
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -22,16 +23,16 @@ pub enum Action {
     CompleteTask(String),
     DeleteTask(String),
     CyclePriority(String),
-    SetTaskDueToday(String),
-    SetTaskDueTomorrow(String),
-    SetTaskDueNextWeek(String),
-    SetTaskDueWeekEnd(String),
+    SetTaskDueToday(Uuid),
+    SetTaskDueTomorrow(Uuid),
+    SetTaskDueNextWeek(Uuid),
+    SetTaskDueWeekEnd(Uuid),
     CreateTask {
         content: String,
-        project_id: Option<String>,
+        project_uuid: Option<Uuid>,
     },
     EditTask {
-        id: String,
+        task_uuid: Uuid,
         content: String,
     },
     RestoreTask(String),
@@ -39,23 +40,23 @@ pub enum Action {
     // Project operations
     CreateProject {
         name: String,
-        parent_id: Option<String>,
+        parent_uuid: Option<Uuid>,
     },
     EditProject {
-        id: String,
+        project_uuid: Uuid,
         name: String,
     },
-    DeleteProject(String),
+    DeleteProject(Uuid),
 
     // Label operations
     CreateLabel {
         name: String,
     },
     EditLabel {
-        id: String,
+        label_uuid: Uuid,
         name: String,
     },
-    DeleteLabel(String),
+    DeleteLabel(Uuid),
 
     // Sync operations
     StartSync,
@@ -63,21 +64,21 @@ pub enum Action {
     SyncCompleted(SyncStatus),
     SyncFailed(String),
     InitialDataLoaded {
-        projects: Vec<crate::todoist::ProjectDisplay>,
-        labels: Vec<crate::todoist::LabelDisplay>,
-        sections: Vec<crate::todoist::SectionDisplay>,
-        tasks: Vec<crate::todoist::TaskDisplay>,
+        projects: Vec<crate::entities::project::Model>,
+        labels: Vec<crate::entities::label::Model>,
+        sections: Vec<crate::entities::section::Model>,
+        tasks: Vec<crate::entities::task::Model>,
     },
     DataLoaded {
-        projects: Vec<crate::todoist::ProjectDisplay>,
-        labels: Vec<crate::todoist::LabelDisplay>,
-        sections: Vec<crate::todoist::SectionDisplay>,
-        tasks: Vec<crate::todoist::TaskDisplay>,
+        projects: Vec<crate::entities::project::Model>,
+        labels: Vec<crate::entities::label::Model>,
+        sections: Vec<crate::entities::section::Model>,
+        tasks: Vec<crate::entities::task::Model>,
     },
     SearchTasks(String), // Query for task search
     SearchResultsLoaded {
         query: String,
-        results: Vec<crate::todoist::TaskDisplay>,
+        results: Vec<crate::entities::task::Model>,
     },
 
     // Data refresh after task operations
@@ -101,26 +102,26 @@ pub enum Action {
 #[derive(Debug, Clone)]
 pub enum DialogType {
     TaskCreation {
-        default_project_id: Option<String>,
+        default_project_uuid: Option<Uuid>,
     },
     TaskEdit {
-        task_id: String,
+        task_uuid: Uuid,
         content: String,
-        project_id: String,
+        project_uuid: Uuid,
     },
     ProjectCreation,
     ProjectEdit {
-        project_id: String,
+        project_uuid: Uuid,
         name: String,
     },
     LabelCreation,
     LabelEdit {
-        label_id: String,
+        label_uuid: Uuid,
         name: String,
     },
     DeleteConfirmation {
         item_type: String,
-        item_id: String,
+        item_uuid: Uuid,
     },
     Error(String),
     Info(String),

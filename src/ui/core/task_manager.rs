@@ -21,14 +21,14 @@ pub enum TaskResult {
     SyncFailed(String),
     TaskOperationCompleted(String),
     DataLoadCompleted {
-        projects: Vec<crate::todoist::ProjectDisplay>,
-        labels: Vec<crate::todoist::LabelDisplay>,
-        sections: Vec<crate::todoist::SectionDisplay>,
-        tasks: Vec<crate::todoist::TaskDisplay>,
+        projects: Vec<crate::entities::project::Model>,
+        labels: Vec<crate::entities::label::Model>,
+        sections: Vec<crate::entities::section::Model>,
+        tasks: Vec<crate::entities::task::Model>,
     },
     SearchCompleted {
         query: String,
-        results: Vec<crate::todoist::TaskDisplay>,
+        results: Vec<crate::entities::task::Model>,
     },
     Other(String),
 }
@@ -207,14 +207,14 @@ impl TaskManager {
                         SidebarSelection::Upcoming => sync_service.get_tasks_for_upcoming().await.unwrap_or_default(),
                         SidebarSelection::Project(index) => {
                             if let Some(project) = projects.get(index) {
-                                sync_service.get_tasks_for_project(&project.id).await.unwrap_or_default()
+                                sync_service.get_tasks_for_project(&project.uuid).await.unwrap_or_default()
                             } else {
                                 Vec::new()
                             }
                         }
                         SidebarSelection::Label(index) => {
                             if let Some(label) = labels.get(index) {
-                                sync_service.get_tasks_with_label(&label.name).await.unwrap_or_default()
+                                sync_service.get_tasks_with_label(label.uuid).await.unwrap_or_default()
                             } else {
                                 Vec::new()
                             }
@@ -312,22 +312,5 @@ impl Drop for TaskManager {
     fn drop(&mut self) {
         // Cancel all tasks when the manager is dropped
         self.cancel_all_tasks();
-    }
-}
-
-// Utility trait for future extensions
-#[allow(dead_code)]
-trait BackgroundTaskExt {
-    fn elapsed(&self) -> std::time::Duration;
-    fn is_long_running(&self) -> bool;
-}
-
-impl BackgroundTaskExt for BackgroundTask {
-    fn elapsed(&self) -> std::time::Duration {
-        self.started_at.elapsed()
-    }
-
-    fn is_long_running(&self) -> bool {
-        self.elapsed() > std::time::Duration::from_secs(30)
     }
 }

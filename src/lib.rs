@@ -22,6 +22,9 @@ pub mod config;
 /// Application constants and default values
 pub mod constants;
 
+/// SeaORM entity models for database tables
+pub mod entities;
+
 /// Icon definitions for visual representation in the TUI
 pub mod icons;
 
@@ -42,3 +45,6 @@ pub mod ui;
 
 /// Utility functions for date/time handling and other helpers
 pub mod utils;
+
+// Re-export entity models for convenient access
+pub use entities::{label, project, section, task, task_label};

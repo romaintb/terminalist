@@ -6,8 +6,8 @@
 
 use crate::config::DisplayConfig;
 use crate::constants::{HEADER_OVERDUE, HEADER_TODAY, HEADER_TOMORROW};
+use crate::entities::{label, project, section, task};
 use crate::icons::IconService;
-use crate::todoist::{LabelDisplay, ProjectDisplay, SectionDisplay, TaskDisplay};
 use crate::ui::components::scrollbar_helper::ScrollbarHelper;
 use crate::ui::components::task_list_item_component::{ListItem, TaskItem, TaskListItemType};
 use crate::ui::core::SidebarSelection;
@@ -24,6 +24,7 @@ use ratatui::{
     widgets::{block::BorderType, Block, Borders, List, ListItem as RatatuiListItem, ListState},
     Frame,
 };
+use uuid::Uuid;
 
 /// Main task list component that displays tasks in various view modes.
 ///
@@ -41,12 +42,12 @@ pub struct TaskListComponent {
     pub selected_index: usize,
     pub list_state: ListState,
     pub sidebar_selection: SidebarSelection,
-    pub sections: Vec<SectionDisplay>,
-    pub projects: Vec<ProjectDisplay>,
-    pub labels: Vec<LabelDisplay>,
+    pub sections: Vec<section::Model>,
+    pub projects: Vec<project::Model>,
+    pub labels: Vec<label::Model>,
     pub icons: IconService,
     // Keep raw task data for building items
-    pub tasks: Vec<TaskDisplay>,
+    pub tasks: Vec<task::Model>,
     pub display_config: DisplayConfig,
     scrollbar_helper: ScrollbarHelper,
 }
@@ -80,10 +81,10 @@ impl TaskListComponent {
 
     pub fn update_data(
         &mut self,
-        tasks: Vec<TaskDisplay>,
-        sections: Vec<SectionDisplay>,
-        projects: Vec<ProjectDisplay>,
-        labels: Vec<LabelDisplay>,
+        tasks: Vec<task::Model>,
+        sections: Vec<section::Model>,
+        projects: Vec<project::Model>,
+        labels: Vec<label::Model>,
         sidebar_selection: SidebarSelection,
     ) {
         self.tasks = tasks;
@@ -112,7 +113,7 @@ impl TaskListComponent {
             SidebarSelection::Upcoming => self.build_upcoming_items(),
             SidebarSelection::Project(index) => {
                 if let Some(project) = self.projects.get(*index) {
-                    let project_id = project.id.clone();
+                    let project_id = project.uuid;
                     self.build_project_items(&project_id);
                 } else {
                     self.build_simple_items();
@@ -120,7 +121,7 @@ impl TaskListComponent {
             }
             SidebarSelection::Label(index) => {
                 if let Some(label) = self.labels.get(*index) {
-                    let label_id = label.id.clone();
+                    let label_id = label.uuid;
                     self.build_label_items(&label_id);
                 } else {
                     self.build_simple_items();
@@ -138,8 +139,8 @@ impl TaskListComponent {
         let mut today_tasks = Vec::new();
 
         // Separate tasks by date (only root tasks - subtasks will be added recursively)
-        for task in self.tasks.iter().filter(|t| t.parent_id.is_none()) {
-            if let Some(due_date_str) = &task.due {
+        for task in self.tasks.iter().filter(|t| t.parent_uuid.is_none()) {
+            if let Some(due_date_str) = &task.due_date {
                 if let Ok(due_date) = datetime::parse_date(due_date_str) {
                     if due_date < now {
                         overdue_tasks.push(task.clone());
@@ -190,12 +191,12 @@ impl TaskListComponent {
         let tomorrow = today + Duration::days(1);
 
         // Filter for root tasks due tomorrow
-        let tasks: Vec<TaskDisplay> = self
+        let tasks: Vec<task::Model> = self
             .tasks
             .iter()
-            .filter(|t| t.parent_id.is_none())
+            .filter(|t| t.parent_uuid.is_none())
             .filter(|t| {
-                if let Some(due_date_str) = &t.due {
+                if let Some(due_date_str) = &t.due_date {
                     if let Ok(due_date) = datetime::parse_date(due_date_str) {
                         due_date == tomorrow
                     } else {
@@ -222,11 +223,11 @@ impl TaskListComponent {
 
         let today = chrono::Local::now().date_naive();
         let mut overdue_tasks = Vec::new();
-        let mut future_tasks_by_date: BTreeMap<chrono::NaiveDate, Vec<TaskDisplay>> = BTreeMap::new();
+        let mut future_tasks_by_date: BTreeMap<chrono::NaiveDate, Vec<task::Model>> = BTreeMap::new();
 
         // Group tasks by date (only root tasks - subtasks will be added recursively)
-        for task in self.tasks.iter().filter(|t| t.parent_id.is_none()) {
-            if let Some(due_date_str) = &task.due {
+        for task in self.tasks.iter().filter(|t| t.parent_uuid.is_none()) {
+            if let Some(due_date_str) = &task.due_date {
                 if let Ok(due_date) = datetime::parse_date(due_date_str) {
                     if due_date < today {
                         overdue_tasks.push(task.clone());
@@ -274,7 +275,7 @@ impl TaskListComponent {
     }
 
     /// Build items for Project view (with section headers)
-    fn build_project_items(&mut self, project_id: &str) {
+    fn build_project_items(&mut self, project_id: &Uuid) {
         use crate::ui::components::task_list_item_component::{HeaderItem, SeparatorItem};
         use std::collections::HashMap;
 
@@ -282,15 +283,15 @@ impl TaskListComponent {
         let project_sections: Vec<_> = self
             .sections
             .iter()
-            .filter(|section| section.project_id == *project_id)
+            .filter(|section| &section.project_uuid == project_id)
             .cloned()
             .collect();
 
         // Group tasks by section (only root tasks - subtasks will be added recursively)
-        let mut tasks_by_section: HashMap<Option<String>, Vec<TaskDisplay>> = HashMap::new();
-        for task in self.tasks.iter().filter(|t| t.parent_id.is_none()) {
-            if task.project_id == *project_id {
-                tasks_by_section.entry(task.section_id.clone()).or_default().push(task.clone());
+        let mut tasks_by_section: HashMap<Option<Uuid>, Vec<task::Model>> = HashMap::new();
+        for task in self.tasks.iter().filter(|t| t.parent_uuid.is_none()) {
+            if &task.project_uuid == project_id {
+                tasks_by_section.entry(task.section_uuid).or_default().push(task.clone());
             }
         }
 
@@ -303,7 +304,7 @@ impl TaskListComponent {
 
         // Add sections with their tasks
         for section in project_sections {
-            if let Some(section_tasks) = tasks_by_section.get(&Some(section.id.clone())) {
+            if let Some(section_tasks) = tasks_by_section.get(&Some(section.uuid)) {
                 // Add separator before section
                 if !self.items.is_empty() {
                     self.items.push(TaskListItemType::Separator(SeparatorItem::new(0)));
@@ -321,12 +322,12 @@ impl TaskListComponent {
     }
 
     /// Build items for Label view
-    fn build_label_items(&mut self, label_id: &str) {
+    fn build_label_items(&mut self, _label_id: &Uuid) {
         // Filter tasks that have the specific label (only root tasks - subtasks will be added recursively)
-        let filtered_tasks: Vec<TaskDisplay> = self
+        let filtered_tasks: Vec<task::Model> = self
             .tasks
             .iter()
-            .filter(|task| task.parent_id.is_none() && task.labels.iter().any(|label| label.id == *label_id))
+            .filter(|task| task.parent_uuid.is_none()) // TODO: Add label filtering
             .cloned()
             .collect();
 
@@ -338,7 +339,7 @@ impl TaskListComponent {
     /// Build simple items (no sectioning)
     fn build_simple_items(&mut self) {
         // SQL already provides proper ordering (completion status -> priority -> order_index)
-        let root_tasks: Vec<TaskDisplay> = self.tasks.iter().filter(|t| t.parent_id.is_none()).cloned().collect();
+        let root_tasks: Vec<task::Model> = self.tasks.iter().filter(|t| t.parent_uuid.is_none()).cloned().collect();
 
         // Add each root task and its children recursively
         for task in root_tasks {
@@ -347,9 +348,13 @@ impl TaskListComponent {
     }
 
     /// Recursively add a task and its children to the items list
-    fn add_task_and_children_to_items(&mut self, task: TaskDisplay, depth: usize) {
+    fn add_task_and_children_to_items(&mut self, task: task::Model, depth: usize) {
         // Calculate child count
-        let child_count = self.get_child_task_count(&task.id);
+        let child_count = self.get_child_task_count(&task.uuid);
+
+        // TODO: Load task-label relationships from database to populate labels
+        // For now, we pass an empty vec - labels need to be loaded via task_labels join
+        let task_labels = Vec::new();
 
         // Create and add the task item
         let task_item = TaskItem::new(
@@ -358,15 +363,16 @@ impl TaskListComponent {
             child_count,
             self.icons.clone(),
             self.projects.clone(),
+            task_labels,
         );
         self.items.push(TaskListItemType::Task(Box::new(task_item)));
 
         // Find and add children
-        let task_id = task.id.clone();
-        let children: Vec<TaskDisplay> = self
+        let task_id = task.uuid;
+        let children: Vec<task::Model> = self
             .tasks
             .iter()
-            .filter(|t| t.parent_id.as_ref() == Some(&task_id))
+            .filter(|t| t.parent_uuid.as_ref() == Some(&task_id))
             .cloned()
             .collect();
 
@@ -436,7 +442,7 @@ impl TaskListComponent {
         None
     }
 
-    pub fn get_selected_task(&self) -> Option<&TaskDisplay> {
+    pub fn get_selected_task(&self) -> Option<&task::Model> {
         // Find the currently selected task item
         if let Some(physical_index) = self.logical_to_physical_index(self.selected_index) {
             if let Some(TaskListItemType::Task(task_item)) = self.items.get(physical_index) {
@@ -492,8 +498,8 @@ impl TaskListComponent {
     }
 
     /// Get child task count for a parent task
-    fn get_child_task_count(&self, parent_id: &str) -> usize {
-        self.tasks.iter().filter(|t| t.parent_id.as_deref() == Some(parent_id)).count()
+    fn get_child_task_count(&self, parent_id: &Uuid) -> usize {
+        self.tasks.iter().filter(|t| t.parent_uuid.as_ref() == Some(parent_id)).count()
     }
 
     /// Create the list items for rendering
@@ -544,9 +550,9 @@ impl Component for TaskListComponent {
                 if let Some(task) = self.get_selected_task() {
                     // Smart toggle: restore if deleted/completed, otherwise complete
                     if task.is_deleted || task.is_completed {
-                        Action::RestoreTask(task.id.clone())
+                        Action::RestoreTask(task.uuid.to_string())
                     } else {
-                        Action::CompleteTask(task.id.clone())
+                        Action::CompleteTask(task.uuid.to_string())
                     }
                 } else {
                     Action::None
@@ -554,18 +560,18 @@ impl Component for TaskListComponent {
             }
             KeyCode::Char('a') => {
                 // When viewing a specific project, preselect it as the default project
-                let default_project_id = match &self.sidebar_selection {
-                    SidebarSelection::Project(index) => self.projects.get(*index).map(|p| p.id.clone()),
+                let default_project_uuid = match &self.sidebar_selection {
+                    SidebarSelection::Project(index) => self.projects.get(*index).map(|p| p.uuid),
                     _ => None,
                 };
-                Action::ShowDialog(DialogType::TaskCreation { default_project_id })
+                Action::ShowDialog(DialogType::TaskCreation { default_project_uuid })
             }
             KeyCode::Char('e') => {
                 if let Some(task) = self.get_selected_task() {
                     Action::ShowDialog(DialogType::TaskEdit {
-                        task_id: task.id.clone(),
+                        task_uuid: task.uuid,
                         content: task.content.clone(),
-                        project_id: task.project_id.clone(),
+                        project_uuid: task.project_uuid,
                     })
                 } else {
                     Action::None
@@ -575,11 +581,11 @@ impl Component for TaskListComponent {
                 if let Some(task) = self.get_selected_task() {
                     // If task is already deleted, restore it; otherwise show delete confirmation
                     if task.is_deleted {
-                        Action::RestoreTask(task.id.clone())
+                        Action::RestoreTask(task.uuid.to_string())
                     } else {
                         Action::ShowDialog(DialogType::DeleteConfirmation {
                             item_type: "task".to_string(),
-                            item_id: task.id.clone(),
+                            item_uuid: task.uuid,
                         })
                     }
                 } else {
@@ -588,7 +594,7 @@ impl Component for TaskListComponent {
             }
             KeyCode::Char('p') => {
                 if let Some(task) = self.get_selected_task() {
-                    Action::CyclePriority(task.id.clone())
+                    Action::CyclePriority(task.uuid.to_string())
                 } else {
                     Action::None
                 }

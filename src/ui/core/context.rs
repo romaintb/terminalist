@@ -1,14 +1,14 @@
 use crate::{
+    entities::{label, project, section},
     icons::IconService,
     sync::SyncService,
-    todoist::{LabelDisplay, ProjectDisplay, SectionDisplay},
 };
 
 pub struct AppContext {
     pub sync_service: SyncService,
-    pub projects: Vec<ProjectDisplay>,
-    pub labels: Vec<LabelDisplay>,
-    pub sections: Vec<SectionDisplay>,
+    pub projects: Vec<project::Model>,
+    pub labels: Vec<label::Model>,
+    pub sections: Vec<section::Model>,
     pub icons: IconService,
 }
 

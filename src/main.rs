@@ -15,18 +15,9 @@
 //!
 //! * `TODOIST_API_TOKEN` - Your Todoist API token (required)
 
-pub mod config;
-pub mod constants;
-pub mod icons;
-pub mod logger;
-pub mod storage;
-pub mod sync;
-pub mod todoist;
-pub mod ui;
-pub mod utils;
-
 use anyhow::{Context, Result};
 use std::env;
+use terminalist::{config, logger, sync, ui};
 
 /// Main entry point for the Terminalist application.
 ///
