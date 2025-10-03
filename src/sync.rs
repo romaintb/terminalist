@@ -501,7 +501,12 @@ impl SyncService {
         {
             project.uuid
         } else {
-            api_task.project_id.clone() // Fallback
+            // Project doesn't exist locally - fail fast instead of using remote ID
+            // which would violate foreign key constraints
+            return Err(anyhow::anyhow!(
+                "Project with remote_id {} not found locally. Please sync projects first.",
+                api_task.project_id
+            ));
         };
 
         // Look up local section UUID from remote section_id if present
@@ -1095,7 +1100,12 @@ impl SyncService {
             {
                 project.uuid
             } else {
-                api_task.project_id.clone() // Fallback
+                // Project doesn't exist locally - fail fast instead of using remote ID
+                // which would violate foreign key constraints
+                return Err(anyhow::anyhow!(
+                    "Project with remote_id {} not found locally during task batch sync. Please sync projects first.",
+                    api_task.project_id
+                ));
             };
 
             // Look up local section UUID from remote section_id if present
@@ -1237,7 +1247,12 @@ impl SyncService {
             {
                 project.uuid
             } else {
-                api_section.project_id.clone() // Fallback
+                // Project doesn't exist locally - fail fast instead of using remote ID
+                // which would violate foreign key constraints
+                return Err(anyhow::anyhow!(
+                    "Project with remote_id {} not found locally during section sync. Please sync projects first.",
+                    api_section.project_id
+                ));
             };
 
             let local_section = section::ActiveModel {
