@@ -15,6 +15,7 @@ use crate::ui::core::{
 };
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{layout::Rect, widgets::ScrollbarState, Frame};
+use uuid::Uuid;
 
 use crate::ui::components::dialogs::{label_dialogs, project_dialogs, scroll_behavior, system_dialogs, task_dialogs};
 
@@ -49,7 +50,7 @@ pub struct DialogComponent {
     pub selected_project_index: usize,
     pub selected_parent_project_index: Option<usize>, // For project creation parent selection
     pub selected_task_project_index: Option<usize>,   // For task creation project selection (None = no project/inbox)
-    pub selected_task_project_uuid: Option<String>,   // Store the actual UUID to avoid index issues
+    pub selected_task_project_uuid: Option<Uuid>,   // Store the actual UUID to avoid index issues
     pub task_project_explicitly_selected: bool,       // Track if user explicitly selected a project via Tab
     pub icons: IconService,
     // Scrolling support for long content dialogs
@@ -144,19 +145,19 @@ impl DialogComponent {
 
     fn handle_submit(&mut self) -> Action {
         match &self.dialog_type {
-            Some(DialogType::TaskCreation { default_project_id }) => {
+            Some(DialogType::TaskCreation { default_project_uuid }) => {
                 if !self.input_buffer.is_empty() {
-                    // Determine the project ID based on whether user explicitly selected via Tab
-                    let project_id = if self.task_project_explicitly_selected {
+                    // Determine the project UUID based on whether user explicitly selected via Tab
+                    let project_uuid = if self.task_project_explicitly_selected {
                         // User pressed Tab - use their selection (could be None for Inbox or Some(uuid) for a project)
                         self.selected_task_project_uuid.clone()
                     } else {
                         // User didn't press Tab - use default project
-                        default_project_id.clone()
+                        default_project_uuid.clone()
                     };
 
                     // Debug logging
-                    if let Some(ref pid) = project_id {
+                    if let Some(ref pid) = project_uuid {
                         let proj_name = self.projects.iter()
                             .find(|p| &p.uuid == pid)
                             .map(|p| p.name.as_str())
@@ -168,7 +169,7 @@ impl DialogComponent {
 
                     let action = Action::CreateTask {
                         content: self.input_buffer.clone(),
-                        project_id,
+                        project_uuid,
                     };
                     self.clear_dialog();
                     action
@@ -176,10 +177,10 @@ impl DialogComponent {
                     Action::None
                 }
             }
-            Some(DialogType::TaskEdit { task_id, .. }) => {
+            Some(DialogType::TaskEdit { task_uuid, .. }) => {
                 if !self.input_buffer.is_empty() {
                     let action = Action::EditTask {
-                        id: task_id.clone(),
+                        task_uuid: *task_uuid,
                         content: self.input_buffer.clone(),
                     };
                     self.clear_dialog();
@@ -190,10 +191,10 @@ impl DialogComponent {
             }
             Some(DialogType::ProjectCreation) => {
                 if !self.input_buffer.is_empty() {
-                    let parent_id = if let Some(parent_index) = self.selected_parent_project_index {
+                    let parent_uuid = if let Some(parent_index) = self.selected_parent_project_index {
                         let root_projects = self.get_root_projects();
                         if parent_index < root_projects.len() {
-                            Some(root_projects[parent_index].uuid.clone())
+                            Some(root_projects[parent_index].uuid)
                         } else {
                             None
                         }
@@ -203,7 +204,7 @@ impl DialogComponent {
 
                     let action = Action::CreateProject {
                         name: self.input_buffer.clone(),
-                        parent_id,
+                        parent_uuid,
                     };
                     self.clear_dialog();
                     action
@@ -211,10 +212,10 @@ impl DialogComponent {
                     Action::None
                 }
             }
-            Some(DialogType::ProjectEdit { project_id, .. }) => {
+            Some(DialogType::ProjectEdit { project_uuid, .. }) => {
                 if !self.input_buffer.is_empty() {
                     let action = Action::EditProject {
-                        id: project_id.clone(),
+                        project_uuid: *project_uuid,
                         name: self.input_buffer.clone(),
                     };
                     self.clear_dialog();
@@ -234,10 +235,10 @@ impl DialogComponent {
                     Action::None
                 }
             }
-            Some(DialogType::LabelEdit { label_id, .. }) => {
+            Some(DialogType::LabelEdit { label_uuid, .. }) => {
                 if !self.input_buffer.is_empty() {
                     let action = Action::EditLabel {
-                        id: label_id.clone(),
+                        label_uuid: *label_uuid,
                         name: self.input_buffer.clone(),
                     };
                     self.clear_dialog();
@@ -246,19 +247,19 @@ impl DialogComponent {
                     Action::None
                 }
             }
-            Some(DialogType::DeleteConfirmation { item_type, item_id }) => match item_type.as_str() {
+            Some(DialogType::DeleteConfirmation { item_type, item_uuid }) => match item_type.as_str() {
                 "task" => {
-                    let action = Action::DeleteTask(item_id.clone());
+                    let action = Action::DeleteTask(item_uuid.to_string());
                     self.clear_dialog();
                     action
                 }
                 "project" => {
-                    let action = Action::DeleteProject(item_id.clone());
+                    let action = Action::DeleteProject(*item_uuid);
                     self.clear_dialog();
                     action
                 }
                 "label" => {
-                    let action = Action::DeleteLabel(item_id.clone());
+                    let action = Action::DeleteLabel(*item_uuid);
                     self.clear_dialog();
                     action
                 }
@@ -346,8 +347,8 @@ impl DialogComponent {
         let task_projects = self.get_task_projects();
 
         // Find the current project index for the task being edited
-        let current_project_index = if let Some(DialogType::TaskEdit { project_id, .. }) = &self.dialog_type {
-            task_projects.iter().position(|p| p.uuid == *project_id)
+        let current_project_index = if let Some(DialogType::TaskEdit { project_uuid, .. }) = &self.dialog_type {
+            task_projects.iter().position(|p| p.uuid == *project_uuid)
         } else {
             None
         };
@@ -673,8 +674,8 @@ impl Component for DialogComponent {
                             let task_projects = self.get_task_projects();
                             if !task_projects.is_empty() {
                                 // Clone needed data to avoid borrow issues
-                                let projects_data: Vec<(String, String)> = task_projects.iter()
-                                    .map(|p| (p.uuid.clone(), p.name.clone()))
+                                let projects_data: Vec<(Uuid, String)> = task_projects.iter()
+                                    .map(|p| (p.uuid, p.name.clone()))
                                     .collect();
 
                                 // Mark that user has explicitly selected a project via Tab
@@ -683,7 +684,7 @@ impl Component for DialogComponent {
                                 self.selected_task_project_index = match self.selected_task_project_index {
                                     None => {
                                         // First tab: select first project
-                                        self.selected_task_project_uuid = Some(projects_data[0].0.clone());
+                                        self.selected_task_project_uuid = Some(projects_data[0].0);
                                         log::info!("Tab: Selected project {} ({})", projects_data[0].1, projects_data[0].0);
                                         Some(0)
                                     }
@@ -696,7 +697,7 @@ impl Component for DialogComponent {
                                             None
                                         } else {
                                             // Select the project at next_index
-                                            self.selected_task_project_uuid = Some(projects_data[next_index].0.clone());
+                                            self.selected_task_project_uuid = Some(projects_data[next_index].0);
                                             log::info!("Tab: Selected project {} ({})", projects_data[next_index].1, projects_data[next_index].0);
                                             Some(next_index)
                                         }
@@ -747,20 +748,20 @@ impl Component for DialogComponent {
                         self.input_buffer = name.clone();
                         self.cursor_position = name.len();
                     }
-                    DialogType::TaskCreation { default_project_id } => {
+                    DialogType::TaskCreation { default_project_uuid } => {
                         self.input_buffer.clear();
                         self.cursor_position = 0;
                         // Set the selected task project index and UUID if a default project is provided
-                        if let Some(project_id) = default_project_id {
+                        if let Some(project_uuid) = default_project_uuid {
                             let task_projects = self.get_task_projects();
-                            if let Some(index) = task_projects.iter().position(|p| &p.uuid == project_id) {
+                            if let Some(index) = task_projects.iter().position(|p| &p.uuid == project_uuid) {
                                 self.selected_task_project_index = Some(index);
-                                self.selected_task_project_uuid = Some(project_id.clone());
+                                self.selected_task_project_uuid = Some(*project_uuid);
                                 let proj_name = self.projects.iter()
-                                    .find(|p| &p.uuid == project_id)
+                                    .find(|p| &p.uuid == project_uuid)
                                     .map(|p| p.name.as_str())
                                     .unwrap_or("unknown");
-                                log::info!("Dialog opened with default project: {} ({})", proj_name, project_id);
+                                log::info!("Dialog opened with default project: {} ({})", proj_name, project_uuid);
                             }
                         } else {
                             log::info!("Dialog opened with no default project (inbox)");

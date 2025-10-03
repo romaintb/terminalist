@@ -24,6 +24,7 @@ use ratatui::{
     widgets::{block::BorderType, Block, Borders, List, ListItem as RatatuiListItem, ListState},
     Frame,
 };
+use uuid::Uuid;
 
 /// Main task list component that displays tasks in various view modes.
 ///
@@ -274,7 +275,7 @@ impl TaskListComponent {
     }
 
     /// Build items for Project view (with section headers)
-    fn build_project_items(&mut self, project_id: &str) {
+    fn build_project_items(&mut self, project_id: &Uuid) {
         use crate::ui::components::task_list_item_component::{HeaderItem, SeparatorItem};
         use std::collections::HashMap;
 
@@ -282,14 +283,14 @@ impl TaskListComponent {
         let project_sections: Vec<_> = self
             .sections
             .iter()
-            .filter(|section| section.project_uuid == *project_id)
+            .filter(|section| &section.project_uuid == project_id)
             .cloned()
             .collect();
 
         // Group tasks by section (only root tasks - subtasks will be added recursively)
-        let mut tasks_by_section: HashMap<Option<String>, Vec<task::Model>> = HashMap::new();
+        let mut tasks_by_section: HashMap<Option<Uuid>, Vec<task::Model>> = HashMap::new();
         for task in self.tasks.iter().filter(|t| t.parent_uuid.is_none()) {
-            if task.project_uuid == *project_id {
+            if &task.project_uuid == project_id {
                 tasks_by_section
                     .entry(task.section_uuid.clone())
                     .or_default()
@@ -324,7 +325,7 @@ impl TaskListComponent {
     }
 
     /// Build items for Label view
-    fn build_label_items(&mut self, _label_id: &str) {
+    fn build_label_items(&mut self, _label_id: &Uuid) {
         // Filter tasks that have the specific label (only root tasks - subtasks will be added recursively)
         let filtered_tasks: Vec<task::Model> = self
             .tasks
@@ -500,10 +501,10 @@ impl TaskListComponent {
     }
 
     /// Get child task count for a parent task
-    fn get_child_task_count(&self, parent_id: &str) -> usize {
+    fn get_child_task_count(&self, parent_id: &Uuid) -> usize {
         self.tasks
             .iter()
-            .filter(|t| t.parent_uuid.as_deref() == Some(parent_id))
+            .filter(|t| t.parent_uuid.as_ref() == Some(parent_id))
             .count()
     }
 
@@ -555,9 +556,9 @@ impl Component for TaskListComponent {
                 if let Some(task) = self.get_selected_task() {
                     // Smart toggle: restore if deleted/completed, otherwise complete
                     if task.is_deleted || task.is_completed {
-                        Action::RestoreTask(task.uuid.clone())
+                        Action::RestoreTask(task.uuid.to_string())
                     } else {
-                        Action::CompleteTask(task.uuid.clone())
+                        Action::CompleteTask(task.uuid.to_string())
                     }
                 } else {
                     Action::None
@@ -565,18 +566,18 @@ impl Component for TaskListComponent {
             }
             KeyCode::Char('a') => {
                 // When viewing a specific project, preselect it as the default project
-                let default_project_id = match &self.sidebar_selection {
+                let default_project_uuid = match &self.sidebar_selection {
                     SidebarSelection::Project(index) => self.projects.get(*index).map(|p| p.uuid.clone()),
                     _ => None,
                 };
-                Action::ShowDialog(DialogType::TaskCreation { default_project_id })
+                Action::ShowDialog(DialogType::TaskCreation { default_project_uuid })
             }
             KeyCode::Char('e') => {
                 if let Some(task) = self.get_selected_task() {
                     Action::ShowDialog(DialogType::TaskEdit {
-                        task_id: task.uuid.clone(),
+                        task_uuid: task.uuid.clone(),
                         content: task.content.clone(),
-                        project_id: task.project_uuid.clone(),
+                        project_uuid: task.project_uuid.clone(),
                     })
                 } else {
                     Action::None
@@ -586,11 +587,11 @@ impl Component for TaskListComponent {
                 if let Some(task) = self.get_selected_task() {
                     // If task is already deleted, restore it; otherwise show delete confirmation
                     if task.is_deleted {
-                        Action::RestoreTask(task.uuid.clone())
+                        Action::RestoreTask(task.uuid.to_string())
                     } else {
                         Action::ShowDialog(DialogType::DeleteConfirmation {
                             item_type: "task".to_string(),
-                            item_id: task.uuid.clone(),
+                            item_uuid: task.uuid.clone(),
                         })
                     }
                 } else {
@@ -599,7 +600,7 @@ impl Component for TaskListComponent {
             }
             KeyCode::Char('p') => {
                 if let Some(task) = self.get_selected_task() {
-                    Action::CyclePriority(task.uuid.clone())
+                    Action::CyclePriority(task.uuid.to_string())
                 } else {
                     Action::None
                 }

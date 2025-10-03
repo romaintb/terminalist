@@ -1,15 +1,16 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "sections")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub uuid: String,
+    pub uuid: Uuid,
     #[sea_orm(unique)]
     pub remote_id: String,
     pub name: String,
-    pub project_uuid: String,
+    pub project_uuid: Uuid,
     pub order_index: i32,
 }
 

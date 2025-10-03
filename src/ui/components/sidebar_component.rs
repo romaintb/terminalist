@@ -17,6 +17,7 @@ use ratatui::{
     widgets::{block::BorderType, Block, Borders, List, ListItem, ListState},
     Frame,
 };
+use uuid::Uuid;
 
 /// Navigation sidebar component for switching between views, projects, and labels.
 ///
@@ -252,8 +253,8 @@ impl SidebarComponent {
 
     /// Get the root project ID (top-level parent)
     /// Since Todoist only has parent/child, root is either the project itself or its parent
-    fn get_root_project_id(&self, project: &project::Model) -> String {
-        project.parent_uuid.clone().unwrap_or_else(|| project.uuid.clone())
+    fn get_root_project_id(&self, project: &project::Model) -> Uuid {
+        project.parent_uuid.unwrap_or(project.uuid)
     }
 
     /// Get the root project (top-level parent) - always returns from self.projects

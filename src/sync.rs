@@ -18,6 +18,7 @@ use sea_orm::{
 };
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 use crate::entities::{label, project, section, task, task_label};
 use crate::storage::LocalStorage;
@@ -149,10 +150,10 @@ impl SyncService {
     ///
     /// # Errors
     /// Returns an error if local storage access fails
-    pub async fn get_tasks_for_project(&self, project_id: &str) -> Result<Vec<task::Model>> {
+    pub async fn get_tasks_for_project(&self, project_id: &Uuid) -> Result<Vec<task::Model>> {
         let storage = self.storage.lock().await;
         let tasks = task::Entity::find()
-            .filter(task::Column::ProjectUuid.eq(project_id))
+            .filter(task::Column::ProjectUuid.eq(*project_id))
             .order_by_asc(task::Column::IsDeleted)    // Deleted (true) last
             .order_by_asc(task::Column::IsCompleted)  // Within non-deleted: active (false) first, completed (true) second
             .order_by_asc(task::Column::OrderIndex)
@@ -374,10 +375,10 @@ impl SyncService {
     }
 
     /// Get a single task by ID from local storage (fast)
-    pub async fn get_task_by_id(&self, task_id: &str) -> Result<Option<task::Model>> {
+    pub async fn get_task_by_id(&self, task_id: &Uuid) -> Result<Option<task::Model>> {
         let storage = self.storage.lock().await;
         let task = task::Entity::find()
-            .filter(task::Column::Uuid.eq(task_id))
+            .filter(task::Column::Uuid.eq(*task_id))
             .one(&storage.conn)
             .await?;
         Ok(task)
@@ -410,11 +411,11 @@ impl SyncService {
     ///
     /// # Errors
     /// Returns an error if the API call fails or local storage update fails
-    pub async fn create_project(&self, name: &str, parent_uuid: Option<&str>) -> Result<()> {
+    pub async fn create_project(&self, name: &str, parent_uuid: Option<Uuid>) -> Result<()> {
         // Look up remote_id for parent project if provided
         let remote_parent_id = if let Some(uuid) = parent_uuid {
             let storage = self.storage.lock().await;
-            let remote_id = Self::lookup_project_remote_id(&storage.conn, uuid).await?;
+            let remote_id = Self::lookup_project_remote_id(&storage.conn, &uuid).await?;
             drop(storage);
             Some(remote_id)
         } else {
@@ -436,14 +437,14 @@ impl SyncService {
 
         // Upsert the project
         let local_project = project::ActiveModel {
-            uuid: ActiveValue::Set(uuid::Uuid::new_v4().to_string()),
+            uuid: ActiveValue::Set(Uuid::new_v4()),
             remote_id: ActiveValue::Set(api_project.id),
             name: ActiveValue::Set(api_project.name),
             color: ActiveValue::Set(api_project.color),
             is_favorite: ActiveValue::Set(api_project.is_favorite),
             is_inbox_project: ActiveValue::Set(api_project.is_inbox_project),
             order_index: ActiveValue::Set(api_project.order),
-            parent_uuid: ActiveValue::Set(parent_uuid.map(|s| s.to_string())),
+            parent_uuid: ActiveValue::Set(parent_uuid),
         };
 
         use sea_orm::sea_query::OnConflict;
@@ -476,11 +477,11 @@ impl SyncService {
     ///
     /// # Errors
     /// Returns an error if the API call fails or local storage update fails
-    pub async fn create_task(&self, content: &str, project_uuid: Option<&str>) -> Result<()> {
+    pub async fn create_task(&self, content: &str, project_uuid: Option<Uuid>) -> Result<()> {
         // Look up remote_id for project if provided
         let remote_project_id = if let Some(uuid) = project_uuid {
             let storage = self.storage.lock().await;
-            let remote_id = Self::lookup_project_remote_id(&storage.conn, uuid).await?;
+            let remote_id = Self::lookup_project_remote_id(&storage.conn, &uuid).await?;
             drop(storage);
             Some(remote_id)
         } else {
@@ -538,7 +539,7 @@ impl SyncService {
         });
 
         let local_task = task::ActiveModel {
-            uuid: ActiveValue::Set(uuid::Uuid::new_v4().to_string()),
+            uuid: ActiveValue::Set(Uuid::new_v4()),
             remote_id: ActiveValue::Set(api_task.id),
             content: ActiveValue::Set(api_task.content),
             description: ActiveValue::Set(Some(api_task.description)),
@@ -614,7 +615,7 @@ impl SyncService {
         let storage = self.storage.lock().await;
 
         let local_label = label::ActiveModel {
-            uuid: ActiveValue::Set(uuid::Uuid::new_v4().to_string()),
+            uuid: ActiveValue::Set(Uuid::new_v4()),
             remote_id: ActiveValue::Set(api_label.id),
             name: ActiveValue::Set(api_label.name),
             color: ActiveValue::Set(api_label.color),
@@ -640,7 +641,7 @@ impl SyncService {
     }
 
     /// Update label content (name only for now)
-    pub async fn update_label_content(&self, label_uuid: &str, name: &str) -> Result<()> {
+    pub async fn update_label_content(&self, label_uuid: &Uuid, name: &str) -> Result<()> {
         info!("API: Updating label name for UUID {} to '{}'", label_uuid, name);
 
         // Look up the label's remote_id for API call
@@ -663,7 +664,7 @@ impl SyncService {
         let storage = self.storage.lock().await;
 
         let label = label::Entity::find()
-            .filter(label::Column::Uuid.eq(label_uuid))
+            .filter(label::Column::Uuid.eq(*label_uuid))
             .one(&storage.conn)
             .await?;
 
@@ -677,7 +678,7 @@ impl SyncService {
     }
 
     /// Delete a label
-    pub async fn delete_label(&self, label_uuid: &str) -> Result<()> {
+    pub async fn delete_label(&self, label_uuid: &Uuid) -> Result<()> {
         // Look up the label's remote_id for API call
         let storage = self.storage.lock().await;
         let remote_id = Self::lookup_label_remote_id(&storage.conn, label_uuid).await?;
@@ -691,7 +692,7 @@ impl SyncService {
     }
 
     /// Update project content (name only for now)
-    pub async fn update_project_content(&self, project_uuid: &str, name: &str) -> Result<()> {
+    pub async fn update_project_content(&self, project_uuid: &Uuid, name: &str) -> Result<()> {
         info!("API: Updating project name for UUID {} to '{}'", project_uuid, name);
 
         // Look up the project's remote_id for API call
@@ -717,7 +718,7 @@ impl SyncService {
         let storage = self.storage.lock().await;
 
         let project = project::Entity::find()
-            .filter(project::Column::Uuid.eq(project_uuid))
+            .filter(project::Column::Uuid.eq(*project_uuid))
             .one(&storage.conn)
             .await?;
 
@@ -731,7 +732,7 @@ impl SyncService {
     }
 
     /// Update task content
-    pub async fn update_task_content(&self, task_uuid: &str, content: &str) -> Result<()> {
+    pub async fn update_task_content(&self, task_uuid: &Uuid, content: &str) -> Result<()> {
         // Look up the task's remote_id for API call
         let storage = self.storage.lock().await;
         let remote_id = Self::lookup_task_remote_id(&storage.conn, task_uuid).await?;
@@ -760,7 +761,7 @@ impl SyncService {
     }
 
     /// Update task due date
-    pub async fn update_task_due_date(&self, task_uuid: &str, due_date: Option<&str>) -> Result<()> {
+    pub async fn update_task_due_date(&self, task_uuid: &Uuid, due_date: Option<&str>) -> Result<()> {
         info!("API: Updating task due date for UUID {} to {:?}", task_uuid, due_date);
 
         // Look up the task's remote_id for API call
@@ -790,7 +791,7 @@ impl SyncService {
         let storage = self.storage.lock().await;
 
         let task = task::Entity::find()
-            .filter(task::Column::Uuid.eq(task_uuid))
+            .filter(task::Column::Uuid.eq(*task_uuid))
             .one(&storage.conn)
             .await?;
 
@@ -805,7 +806,7 @@ impl SyncService {
     }
 
     /// Update task priority
-    pub async fn update_task_priority(&self, task_uuid: &str, priority: i32) -> Result<()> {
+    pub async fn update_task_priority(&self, task_uuid: &Uuid, priority: i32) -> Result<()> {
         info!("API: Updating task priority for UUID {} to {}", task_uuid, priority);
 
         // Look up the task's remote_id for API call
@@ -835,7 +836,7 @@ impl SyncService {
         let storage = self.storage.lock().await;
 
         let task = task::Entity::find()
-            .filter(task::Column::Uuid.eq(task_uuid))
+            .filter(task::Column::Uuid.eq(*task_uuid))
             .one(&storage.conn)
             .await?;
 
@@ -850,7 +851,7 @@ impl SyncService {
     }
 
     /// Delete a project
-    pub async fn delete_project(&self, project_uuid: &str) -> Result<()> {
+    pub async fn delete_project(&self, project_uuid: &Uuid) -> Result<()> {
         // Look up the project's remote_id for API call
         let storage = self.storage.lock().await;
         let remote_id = Self::lookup_project_remote_id(&storage.conn, project_uuid).await?;
@@ -863,7 +864,7 @@ impl SyncService {
         let storage = self.storage.lock().await;
 
         if let Some(project) = project::Entity::find()
-            .filter(project::Column::Uuid.eq(project_uuid))
+            .filter(project::Column::Uuid.eq(*project_uuid))
             .one(&storage.conn)
             .await?
         {
@@ -1032,10 +1033,10 @@ impl SyncService {
     /// Returns error if task with given UUID doesn't exist locally
     async fn lookup_task_remote_id(
         conn: &sea_orm::DatabaseConnection,
-        task_uuid: &str,
+        task_uuid: &Uuid,
     ) -> Result<String> {
         task::Entity::find()
-            .filter(task::Column::Uuid.eq(task_uuid))
+            .filter(task::Column::Uuid.eq(*task_uuid))
             .one(conn)
             .await?
             .map(|t| t.remote_id)
@@ -1055,10 +1056,10 @@ impl SyncService {
     /// Returns error if project with given UUID doesn't exist locally
     async fn lookup_project_remote_id(
         conn: &sea_orm::DatabaseConnection,
-        project_uuid: &str,
+        project_uuid: &Uuid,
     ) -> Result<String> {
         project::Entity::find()
-            .filter(project::Column::Uuid.eq(project_uuid))
+            .filter(project::Column::Uuid.eq(*project_uuid))
             .one(conn)
             .await?
             .map(|p| p.remote_id)
@@ -1078,10 +1079,10 @@ impl SyncService {
     /// Returns error if label with given UUID doesn't exist locally
     async fn lookup_label_remote_id(
         conn: &sea_orm::DatabaseConnection,
-        label_uuid: &str,
+        label_uuid: &Uuid,
     ) -> Result<String> {
         label::Entity::find()
-            .filter(label::Column::Uuid.eq(label_uuid))
+            .filter(label::Column::Uuid.eq(*label_uuid))
             .one(conn)
             .await?
             .map(|l| l.remote_id)
@@ -1104,7 +1105,7 @@ impl SyncService {
         txn: &sea_orm::DatabaseTransaction,
         remote_project_id: &str,
         context: &str,
-    ) -> Result<String> {
+    ) -> Result<Uuid> {
         if let Some(project) = project::Entity::find()
             .filter(project::Column::RemoteId.eq(remote_project_id))
             .one(txn)
@@ -1134,7 +1135,7 @@ impl SyncService {
     async fn lookup_section_uuid(
         txn: &sea_orm::DatabaseTransaction,
         remote_section_id: Option<&String>,
-    ) -> Result<Option<String>> {
+    ) -> Result<Option<Uuid>> {
         if let Some(remote_id) = remote_section_id {
             let section_uuid = section::Entity::find()
                 .filter(section::Column::RemoteId.eq(remote_id))
@@ -1156,7 +1157,7 @@ impl SyncService {
         // First pass: Upsert all projects without parent_uuid relationships
         for api_project in projects {
             let local_project = project::ActiveModel {
-                uuid: ActiveValue::Set(uuid::Uuid::new_v4().to_string()),
+                uuid: ActiveValue::Set(Uuid::new_v4()),
                 remote_id: ActiveValue::Set(api_project.id.clone()),
                 name: ActiveValue::Set(api_project.name.clone()),
                 color: ActiveValue::Set(api_project.color.clone()),
@@ -1215,7 +1216,7 @@ impl SyncService {
 
         for api_label in labels {
             let local_label = label::ActiveModel {
-                uuid: ActiveValue::Set(uuid::Uuid::new_v4().to_string()),
+                uuid: ActiveValue::Set(Uuid::new_v4()),
                 remote_id: ActiveValue::Set(api_label.id.clone()),
                 name: ActiveValue::Set(api_label.name.clone()),
                 color: ActiveValue::Set(api_label.color.clone()),
@@ -1248,7 +1249,7 @@ impl SyncService {
         let txn = storage.conn.begin().await?;
 
         // Track task labels for later processing
-        let mut task_labels_map: Vec<(String, Vec<String>)> = Vec::new();
+        let mut task_labels_map: Vec<(Uuid, Vec<String>)> = Vec::new();
 
         // First pass: Upsert all tasks without parent_uuid relationships
         for api_task in tasks {
@@ -1274,7 +1275,7 @@ impl SyncService {
             });
 
             let local_task = task::ActiveModel {
-                uuid: ActiveValue::Set(uuid::Uuid::new_v4().to_string()),
+                uuid: ActiveValue::Set(Uuid::new_v4()),
                 remote_id: ActiveValue::Set(api_task.id.clone()),
                 content: ActiveValue::Set(api_task.content.clone()),
                 description: ActiveValue::Set(Some(api_task.description.clone())),
@@ -1394,7 +1395,7 @@ impl SyncService {
             let project_uuid = Self::lookup_project_uuid(&txn, &api_section.project_id, "section sync").await?;
 
             let local_section = section::ActiveModel {
-                uuid: ActiveValue::Set(uuid::Uuid::new_v4().to_string()),
+                uuid: ActiveValue::Set(Uuid::new_v4()),
                 remote_id: ActiveValue::Set(api_section.id.clone()),
                 name: ActiveValue::Set(api_section.name.clone()),
                 project_uuid: ActiveValue::Set(project_uuid),
@@ -1430,7 +1431,7 @@ impl SyncService {
     ///
     /// # Errors
     /// Returns an error if the API call fails or local storage update fails
-    pub async fn complete_task(&self, task_uuid: &str) -> Result<()> {
+    pub async fn complete_task(&self, task_uuid: &Uuid) -> Result<()> {
         // Look up the task's remote_id for API call
         let storage = self.storage.lock().await;
         let remote_id = Self::lookup_task_remote_id(&storage.conn, task_uuid).await?;
@@ -1443,7 +1444,7 @@ impl SyncService {
         let storage = self.storage.lock().await;
 
         let task = task::Entity::find()
-            .filter(task::Column::Uuid.eq(task_uuid))
+            .filter(task::Column::Uuid.eq(*task_uuid))
             .one(&storage.conn)
             .await?;
 
@@ -1466,7 +1467,7 @@ impl SyncService {
     ///
     /// # Errors
     /// Returns an error if the API call fails or local storage update fails
-    pub async fn delete_task(&self, task_uuid: &str) -> Result<()> {
+    pub async fn delete_task(&self, task_uuid: &Uuid) -> Result<()> {
         // Look up the task's remote_id for API call
         let storage = self.storage.lock().await;
         let remote_id = Self::lookup_task_remote_id(&storage.conn, task_uuid).await?;
@@ -1479,7 +1480,7 @@ impl SyncService {
         let storage = self.storage.lock().await;
 
         let task = task::Entity::find()
-            .filter(task::Column::Uuid.eq(task_uuid))
+            .filter(task::Column::Uuid.eq(*task_uuid))
             .one(&storage.conn)
             .await?;
 
@@ -1494,26 +1495,44 @@ impl SyncService {
 
     /// Restore a soft-deleted or completed task via the Todoist API and locally
     /// For completed tasks, reopens them. For deleted tasks, recreates them via API.
-    pub async fn restore_task(&self, task_id: &str) -> Result<()> {
+    pub async fn restore_task(&self, task_id: &Uuid) -> Result<()> {
         // First, get the task from local storage to check its state
         let storage = self.storage.lock().await;
         let task = task::Entity::find()
-            .filter(task::Column::Uuid.eq(task_id))
+            .filter(task::Column::Uuid.eq(*task_id))
             .one(&storage.conn)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Task not found in local storage: {}", task_id))?;
 
         if task.is_deleted {
             // For deleted tasks, we need to recreate them via API
+            // Look up remote IDs before dropping storage lock
+            let remote_project_id = Self::lookup_project_remote_id(&storage.conn, &task.project_uuid).await?;
+            let remote_section_id = if let Some(section_uuid) = &task.section_uuid {
+                // Look up the section's remote_id directly
+                let section = section::Entity::find()
+                    .filter(section::Column::Uuid.eq(*section_uuid))
+                    .one(&storage.conn)
+                    .await?;
+                section.map(|s| s.remote_id)
+            } else {
+                None
+            };
+            let remote_parent_id = if let Some(parent_uuid) = &task.parent_uuid {
+                Some(Self::lookup_task_remote_id(&storage.conn, parent_uuid).await?)
+            } else {
+                None
+            };
+
             drop(storage); // Release the lock before API call
 
             // Create the task again via API
             let task_args = todoist_api::CreateTaskArgs {
                 content: task.content.clone(),
                 description: task.description.clone().filter(|d| !d.is_empty()),
-                project_id: Some(task.project_uuid.clone()),
-                section_id: task.section_uuid.clone(),
-                parent_id: task.parent_uuid.clone(),
+                project_id: Some(remote_project_id),
+                section_id: remote_section_id,
+                parent_id: remote_parent_id,
                 order: None,
                 labels: None, // TODO: Fetch task labels from storage
                 priority: Some(task.priority),
@@ -1535,7 +1554,7 @@ impl SyncService {
 
             // Hard delete the old soft-deleted task
             if let Some(old_task) = task::Entity::find()
-                .filter(task::Column::Uuid.eq(task_id))
+                .filter(task::Column::Uuid.eq(*task_id))
                 .one(&storage.conn)
                 .await?
             {
@@ -1567,7 +1586,7 @@ impl SyncService {
             });
 
             let local_task = task::ActiveModel {
-                uuid: ActiveValue::Set(uuid::Uuid::new_v4().to_string()),
+                uuid: ActiveValue::Set(Uuid::new_v4()),
                 remote_id: ActiveValue::Set(new_task.id),
                 content: ActiveValue::Set(new_task.content),
                 description: ActiveValue::Set(Some(new_task.description)),
@@ -1612,14 +1631,15 @@ impl SyncService {
             txn.commit().await?;
         } else {
             // For completed tasks, just reopen them
+            let remote_id = task.remote_id.clone();
             drop(storage); // Release the lock before API call
-            self.todoist.reopen_task(task_id).await?;
+            self.todoist.reopen_task(&remote_id).await?;
 
             // Clear local completion flag
             let storage = self.storage.lock().await;
 
             let task = task::Entity::find()
-                .filter(task::Column::Uuid.eq(task_id))
+                .filter(task::Column::Uuid.eq(*task_id))
                 .one(&storage.conn)
                 .await?;
 
