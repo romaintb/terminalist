@@ -8,27 +8,32 @@ use ratatui::{
     Frame,
 };
 
+/// Configuration for a scrollable message dialog
+struct ScrollableDialogConfig {
+    title: String,
+    color: Color,
+    width_percent: u16,
+    height_lines: u16,
+}
+
 /// Helper function to render a scrollable message dialog with consistent styling
 fn render_scrollable_message_dialog(
     f: &mut Frame,
     area: Rect,
-    title: String,
-    color: Color,
+    config: ScrollableDialogConfig,
     message: &str,
-    width_percent: u16,
-    height_lines: u16,
     scroll_offset: usize,
     scrollbar_state: &mut ScrollbarState,
 ) {
-    let dialog_area = LayoutManager::centered_rect_lines(width_percent, height_lines, area);
+    let dialog_area = LayoutManager::centered_rect_lines(config.width_percent, config.height_lines, area);
     f.render_widget(Clear, dialog_area);
 
     let instructions = "Press any key to continue • j/k to scroll if needed";
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .title(title)
-        .style(Style::default().fg(color));
+        .title(config.title)
+        .style(Style::default().fg(config.color));
 
     let content_area = Rect::new(
         dialog_area.x + 1,
@@ -153,8 +158,13 @@ pub fn render_info_dialog(
     scroll_offset: usize,
     scrollbar_state: &mut ScrollbarState,
 ) {
-    let title = format!("{} Info", icons.info());
-    render_scrollable_message_dialog(f, area, title, Color::Blue, message, 60, 10, scroll_offset, scrollbar_state);
+    let config = ScrollableDialogConfig {
+        title: format!("{} Info", icons.info()),
+        color: Color::Blue,
+        width_percent: 60,
+        height_lines: 10,
+    };
+    render_scrollable_message_dialog(f, area, config, message, scroll_offset, scrollbar_state);
 }
 
 pub fn render_error_dialog(
@@ -165,8 +175,13 @@ pub fn render_error_dialog(
     scroll_offset: usize,
     scrollbar_state: &mut ScrollbarState,
 ) {
-    let title = format!("{} Error", icons.warning());
-    render_scrollable_message_dialog(f, area, title, Color::Red, message, 70, 12, scroll_offset, scrollbar_state);
+    let config = ScrollableDialogConfig {
+        title: format!("{} Error", icons.warning()),
+        color: Color::Red,
+        width_percent: 70,
+        height_lines: 12,
+    };
+    render_scrollable_message_dialog(f, area, config, message, scroll_offset, scrollbar_state);
 }
 
 pub fn render_help_dialog(f: &mut Frame, area: Rect, scroll_offset: usize, scrollbar_state: &mut ScrollbarState) {

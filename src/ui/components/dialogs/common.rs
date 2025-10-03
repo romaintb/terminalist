@@ -41,9 +41,7 @@ pub fn create_selection_paragraph(value: String, field_title: &str) -> Paragraph
         .title_style(Style::default().fg(Color::White))
         .style(Style::default().fg(Color::Gray));
 
-    Paragraph::new(value)
-        .block(block)
-        .style(Style::default().fg(Color::White))
+    Paragraph::new(value).block(block).style(Style::default().fg(Color::White))
 }
 
 /// Instruction shortcut definition: (key, color, description)
