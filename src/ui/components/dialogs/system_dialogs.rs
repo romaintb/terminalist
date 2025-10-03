@@ -8,6 +8,87 @@ use ratatui::{
     Frame,
 };
 
+/// Helper function to render a scrollable message dialog with consistent styling
+fn render_scrollable_message_dialog(
+    f: &mut Frame,
+    area: Rect,
+    title: String,
+    color: Color,
+    message: &str,
+    width_percent: u16,
+    height_lines: u16,
+    scroll_offset: usize,
+    scrollbar_state: &mut ScrollbarState,
+) {
+    let dialog_area = LayoutManager::centered_rect_lines(width_percent, height_lines, area);
+    f.render_widget(Clear, dialog_area);
+
+    let instructions = "Press any key to continue • j/k to scroll if needed";
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(title)
+        .style(Style::default().fg(color));
+
+    let content_area = Rect::new(
+        dialog_area.x + 1,
+        dialog_area.y + 1,
+        dialog_area.width.saturating_sub(2),
+        dialog_area.height.saturating_sub(4),
+    );
+
+    let instructions_area = Rect::new(
+        dialog_area.x + 1,
+        dialog_area.y + dialog_area.height.saturating_sub(2),
+        dialog_area.width.saturating_sub(2),
+        1,
+    );
+
+    let lines: Vec<&str> = message.lines().collect();
+    let total_lines = lines.len();
+    let visible_height = content_area.height as usize;
+
+    let message_text = if total_lines > visible_height {
+        let max_scroll = total_lines.saturating_sub(visible_height);
+        let clamped_offset = scroll_offset.min(max_scroll);
+
+        *scrollbar_state = scrollbar_state
+            .content_length(total_lines)
+            .viewport_content_length(visible_height)
+            .position(clamped_offset);
+
+        let visible_lines: Vec<&str> = lines.iter().skip(clamped_offset).take(visible_height).copied().collect();
+        visible_lines.join("\n")
+    } else {
+        message.to_string()
+    };
+
+    let message_paragraph = Paragraph::new(message_text)
+        .style(Style::default().fg(Color::White))
+        .alignment(Alignment::Left)
+        .wrap(ratatui::widgets::Wrap { trim: true });
+
+    let instructions_paragraph = Paragraph::new(instructions)
+        .style(Style::default().fg(Color::Gray))
+        .alignment(Alignment::Center);
+
+    f.render_widget(block, dialog_area);
+    f.render_widget(message_paragraph, content_area);
+    f.render_widget(instructions_paragraph, instructions_area);
+
+    if total_lines > visible_height {
+        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(Some("↑"))
+            .end_symbol(Some("↓"))
+            .track_symbol(Some("│"))
+            .thumb_symbol("▐")
+            .style(Style::default().fg(Color::Gray))
+            .thumb_style(Style::default().fg(Color::White));
+
+        f.render_stateful_widget(scrollbar, content_area, scrollbar_state);
+    }
+}
+
 pub fn render_delete_confirmation_dialog(f: &mut Frame, area: Rect, icons: &IconService, item_type: &str) {
     let dialog_area = LayoutManager::centered_rect_lines(60, 8, area);
     f.render_widget(Clear, dialog_area);
@@ -72,74 +153,8 @@ pub fn render_info_dialog(
     scroll_offset: usize,
     scrollbar_state: &mut ScrollbarState,
 ) {
-    let dialog_area = LayoutManager::centered_rect_lines(60, 10, area);
-    f.render_widget(Clear, dialog_area);
-
     let title = format!("{} Info", icons.info());
-    let instructions = "Press any key to continue • j/k to scroll if needed";
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(title)
-        .style(Style::default().fg(Color::Blue));
-
-    let content_area = Rect::new(
-        dialog_area.x + 1,
-        dialog_area.y + 1,
-        dialog_area.width.saturating_sub(2),
-        dialog_area.height.saturating_sub(4),
-    );
-
-    let instructions_area = Rect::new(
-        dialog_area.x + 1,
-        dialog_area.y + dialog_area.height.saturating_sub(2),
-        dialog_area.width.saturating_sub(2),
-        1,
-    );
-
-    let lines: Vec<&str> = message.lines().collect();
-    let total_lines = lines.len();
-    let visible_height = content_area.height as usize;
-
-    let message_text = if total_lines > visible_height {
-        let max_scroll = total_lines.saturating_sub(visible_height);
-        let clamped_offset = scroll_offset.min(max_scroll);
-
-        *scrollbar_state = scrollbar_state
-            .content_length(total_lines)
-            .viewport_content_length(visible_height)
-            .position(clamped_offset);
-
-        let visible_lines: Vec<&str> = lines.iter().skip(clamped_offset).take(visible_height).copied().collect();
-        visible_lines.join("\n")
-    } else {
-        message.to_string()
-    };
-
-    let message_paragraph = Paragraph::new(message_text)
-        .style(Style::default().fg(Color::White))
-        .alignment(Alignment::Left)
-        .wrap(ratatui::widgets::Wrap { trim: true });
-
-    let instructions_paragraph = Paragraph::new(instructions)
-        .style(Style::default().fg(Color::Gray))
-        .alignment(Alignment::Center);
-
-    f.render_widget(block, dialog_area);
-    f.render_widget(message_paragraph, content_area);
-    f.render_widget(instructions_paragraph, instructions_area);
-
-    if total_lines > visible_height {
-        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("↑"))
-            .end_symbol(Some("↓"))
-            .track_symbol(Some("│"))
-            .thumb_symbol("▐")
-            .style(Style::default().fg(Color::Gray))
-            .thumb_style(Style::default().fg(Color::White));
-
-        f.render_stateful_widget(scrollbar, content_area, scrollbar_state);
-    }
+    render_scrollable_message_dialog(f, area, title, Color::Blue, message, 60, 10, scroll_offset, scrollbar_state);
 }
 
 pub fn render_error_dialog(
@@ -150,74 +165,8 @@ pub fn render_error_dialog(
     scroll_offset: usize,
     scrollbar_state: &mut ScrollbarState,
 ) {
-    let dialog_area = LayoutManager::centered_rect_lines(70, 12, area);
-    f.render_widget(Clear, dialog_area);
-
     let title = format!("{} Error", icons.warning());
-    let instructions = "Press any key to continue • j/k to scroll if needed";
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(title)
-        .style(Style::default().fg(Color::Red));
-
-    let content_area = Rect::new(
-        dialog_area.x + 1,
-        dialog_area.y + 1,
-        dialog_area.width.saturating_sub(2),
-        dialog_area.height.saturating_sub(4),
-    );
-
-    let instructions_area = Rect::new(
-        dialog_area.x + 1,
-        dialog_area.y + dialog_area.height.saturating_sub(2),
-        dialog_area.width.saturating_sub(2),
-        1,
-    );
-
-    let lines: Vec<&str> = message.lines().collect();
-    let total_lines = lines.len();
-    let visible_height = content_area.height as usize;
-
-    let message_text = if total_lines > visible_height {
-        let max_scroll = total_lines.saturating_sub(visible_height);
-        let clamped_offset = scroll_offset.min(max_scroll);
-
-        *scrollbar_state = scrollbar_state
-            .content_length(total_lines)
-            .viewport_content_length(visible_height)
-            .position(clamped_offset);
-
-        let visible_lines: Vec<&str> = lines.iter().skip(clamped_offset).take(visible_height).copied().collect();
-        visible_lines.join("\n")
-    } else {
-        message.to_string()
-    };
-
-    let message_paragraph = Paragraph::new(message_text)
-        .style(Style::default().fg(Color::White))
-        .alignment(Alignment::Left)
-        .wrap(ratatui::widgets::Wrap { trim: true });
-
-    let instructions_paragraph = Paragraph::new(instructions)
-        .style(Style::default().fg(Color::Gray))
-        .alignment(Alignment::Center);
-
-    f.render_widget(block, dialog_area);
-    f.render_widget(message_paragraph, content_area);
-    f.render_widget(instructions_paragraph, instructions_area);
-
-    if total_lines > visible_height {
-        let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
-            .begin_symbol(Some("↑"))
-            .end_symbol(Some("↓"))
-            .track_symbol(Some("│"))
-            .thumb_symbol("▐")
-            .style(Style::default().fg(Color::Gray))
-            .thumb_style(Style::default().fg(Color::White));
-
-        f.render_stateful_widget(scrollbar, content_area, scrollbar_state);
-    }
+    render_scrollable_message_dialog(f, area, title, Color::Red, message, 70, 12, scroll_offset, scrollbar_state);
 }
 
 pub fn render_help_dialog(f: &mut Frame, area: Rect, scroll_offset: usize, scrollbar_state: &mut ScrollbarState) {
