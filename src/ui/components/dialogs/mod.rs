@@ -1,3 +1,5 @@
+mod common;
+
 pub mod label_dialogs;
 pub mod project_dialogs;
 pub mod scroll_behavior;

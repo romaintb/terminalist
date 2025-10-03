@@ -1,10 +1,11 @@
+use super::common::{self, shortcuts};
 use crate::entities::project;
 use crate::icons::IconService;
 use crate::ui::layout::LayoutManager;
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    widgets::{Block, BorderType, Borders, Clear, Paragraph},
+    layout::{Constraint, Direction, Layout, Rect},
+    style::Color,
+    widgets::Clear,
     Frame,
 };
 
@@ -18,18 +19,10 @@ pub fn render_task_dialog(
     is_editing: bool,
 ) {
     let title = if is_editing { "Edit Task" } else { "New Task" };
-    let dialog_height = 12;
-
-    let dialog_area = LayoutManager::centered_rect_lines(65, dialog_height, area);
+    let dialog_area = LayoutManager::centered_rect_lines(65, 12, area);
     f.render_widget(Clear, dialog_area);
 
-    // Main dialog block with rounded borders and cyan theme
-    let main_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(title)
-        .title_style(Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
-        .style(Style::default().fg(Color::Cyan));
+    let main_block = common::create_dialog_block(title, Color::Cyan);
 
     // Create layout for content
     let inner_area = main_block.inner(dialog_area);
@@ -44,20 +37,7 @@ pub fn render_task_dialog(
         ])
         .split(inner_area);
 
-    // Task content input field with visual cursor
-    let cursor_char = "█";
-    let input_display = format!("{}{}", input_buffer, cursor_char);
-
-    let input_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Task Content ")
-        .title_style(Style::default().fg(Color::White))
-        .style(Style::default().fg(Color::Gray));
-
-    let input_paragraph = Paragraph::new(input_display)
-        .block(input_block)
-        .style(Style::default().fg(Color::White));
+    let input_paragraph = common::create_input_paragraph(input_buffer, "Task Content");
 
     // Project selection field
     let project_name = match selected_project_index {
@@ -71,44 +51,29 @@ pub fn render_task_dialog(
         }
     };
 
-    let project_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Project ")
-        .title_style(Style::default().fg(Color::White))
-        .style(Style::default().fg(Color::Gray));
+    let project_paragraph = common::create_selection_paragraph(project_name, "Project");
 
-    let project_paragraph = Paragraph::new(project_name)
-        .block(project_block)
-        .style(Style::default().fg(Color::White));
+    // Instructions based on mode
+    let action = if is_editing {
+        ("Enter", Color::Green, " Save Task")
+    } else {
+        ("Enter", Color::Green, " Create Task")
+    };
+
+    let instructions = [
+        action,
+        shortcuts::SEPARATOR,
+        shortcuts::TAB_SELECT,
+        (" Project", Color::Gray, ""),
+        shortcuts::SEPARATOR,
+        shortcuts::ESC_CANCEL,
+    ];
+    let instructions_paragraph = common::create_instructions_paragraph(&instructions);
 
     // Render all components
     f.render_widget(main_block, dialog_area);
     f.render_widget(input_paragraph, chunks[0]);
     f.render_widget(project_paragraph, chunks[1]);
-
-    // Enhanced instructions with color-coded shortcuts
-    let action_text = if is_editing { " Save Task" } else { " Create Task" };
-    let instructions = vec![
-        ("Enter", Color::Green, action_text),
-        (" • ", Color::Gray, ""),
-        ("Tab", Color::Cyan, " Select Project"),
-        (" • ", Color::Gray, ""),
-        ("Esc", Color::Red, " Cancel"),
-    ];
-
-    let mut instruction_text = Vec::new();
-    for (key, color, desc) in instructions {
-        instruction_text.push(ratatui::text::Span::styled(
-            key,
-            Style::default().fg(color).add_modifier(Modifier::BOLD),
-        ));
-        instruction_text.push(ratatui::text::Span::styled(desc, Style::default().fg(Color::Gray)));
-    }
-
-    let instructions_paragraph =
-        Paragraph::new(ratatui::text::Line::from(instruction_text)).alignment(Alignment::Center);
-
     f.render_widget(instructions_paragraph, chunks[3]);
 }
 
