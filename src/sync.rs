@@ -1233,8 +1233,17 @@ impl SyncService {
                             task_uuid: ActiveValue::Set(task_uuid.clone()),
                             label_uuid: ActiveValue::Set(label.uuid),
                         };
-                        task_label::Entity::insert(task_label_relation).exec(&txn).await.ok();
-                        // Ignore duplicate key errors
+                        task_label::Entity::insert(task_label_relation)
+                            .on_conflict(
+                                sea_orm::sea_query::OnConflict::columns([
+                                    task_label::Column::TaskUuid,
+                                    task_label::Column::LabelUuid,
+                                ])
+                                .do_nothing()
+                                .to_owned(),
+                            )
+                            .exec(&txn)
+                            .await?;
                     }
                 }
             }
