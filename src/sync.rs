@@ -1216,11 +1216,6 @@ impl SyncService {
             }
         }
 
-        txn.commit().await?;
-
-        // Clear and recreate label relationships
-        let txn = storage.conn.begin().await?;
-
         // Delete all existing task-label relationships
         task_label::Entity::delete_many().exec(&txn).await?;
 

@@ -209,11 +209,7 @@ impl ListItem for TaskItem {
                 } else {
                     None
                 },
-                if display_config.show_labels {
-                    &self.labels
-                } else {
-                    &[]
-                },
+                if display_config.show_labels { &self.labels } else { &[] },
             );
 
             for badge in metadata_badges {
