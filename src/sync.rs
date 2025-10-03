@@ -154,8 +154,8 @@ impl SyncService {
         let storage = self.storage.lock().await;
         let tasks = task::Entity::find()
             .filter(task::Column::ProjectUuid.eq(*project_id))
-            .order_by_asc(task::Column::IsDeleted)    // Deleted (true) last
-            .order_by_asc(task::Column::IsCompleted)  // Within non-deleted: active (false) first, completed (true) second
+            .order_by_asc(task::Column::IsDeleted) // Deleted (true) last
+            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active (false) first, completed (true) second
             .order_by_asc(task::Column::OrderIndex)
             .all(&storage.conn)
             .await?;
@@ -175,7 +175,7 @@ impl SyncService {
     pub async fn get_all_tasks(&self) -> Result<Vec<task::Model>> {
         let storage = self.storage.lock().await;
         let tasks = task::Entity::find()
-            .order_by_asc(task::Column::IsDeleted)  // Non-deleted (false) first, deleted (true) last
+            .order_by_asc(task::Column::IsDeleted) // Non-deleted (false) first, deleted (true) last
             .order_by_asc(task::Column::OrderIndex)
             .all(&storage.conn)
             .await?;
@@ -204,8 +204,8 @@ impl SyncService {
                     .like(format!("%{}%", query))
                     .or(Expr::col(task::Column::Description).like(format!("%{}%", query))),
             )
-            .order_by_asc(task::Column::IsDeleted)    // Deleted (true) last
-            .order_by_asc(task::Column::IsCompleted)  // Within non-deleted: active (false) first, completed (true) second
+            .order_by_asc(task::Column::IsDeleted) // Deleted (true) last
+            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active (false) first, completed (true) second
             .order_by_asc(task::Column::OrderIndex)
             .all(&storage.conn)
             .await?;
@@ -233,10 +233,10 @@ impl SyncService {
     }
 
     /// Get sections for a project from local storage (fast)
-    pub async fn get_sections_for_project(&self, project_id: &str) -> Result<Vec<section::Model>> {
+    pub async fn get_sections_for_project(&self, project_uuid: &Uuid) -> Result<Vec<section::Model>> {
         let storage = self.storage.lock().await;
         let sections = section::Entity::find()
-            .filter(section::Column::ProjectUuid.eq(project_id))
+            .filter(section::Column::ProjectUuid.eq(*project_uuid))
             .order_by_asc(section::Column::OrderIndex)
             .all(&storage.conn)
             .await?;
@@ -270,8 +270,8 @@ impl SyncService {
         let overdue_tasks = task::Entity::find()
             .filter(task::Column::DueDate.is_not_null())
             .filter(task::Column::DueDate.lt(&today))
-            .order_by_asc(task::Column::IsDeleted)    // Deleted last
-            .order_by_asc(task::Column::IsCompleted)  // Within non-deleted: active first, completed second
+            .order_by_asc(task::Column::IsDeleted) // Deleted last
+            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active first, completed second
             .order_by_asc(task::Column::DueDate)
             .all(&storage.conn)
             .await?;
@@ -279,8 +279,8 @@ impl SyncService {
         // Get today's tasks (deleted last, then active → completed within non-deleted)
         let today_tasks = task::Entity::find()
             .filter(task::Column::DueDate.eq(&today))
-            .order_by_asc(task::Column::IsDeleted)    // Deleted last
-            .order_by_asc(task::Column::IsCompleted)  // Within non-deleted: active first, completed second
+            .order_by_asc(task::Column::IsDeleted) // Deleted last
+            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active first, completed second
             .order_by_asc(task::Column::OrderIndex)
             .all(&storage.conn)
             .await?;
@@ -307,8 +307,8 @@ impl SyncService {
 
         let tasks = task::Entity::find()
             .filter(task::Column::DueDate.eq(&tomorrow))
-            .order_by_asc(task::Column::IsDeleted)    // Deleted (true) last
-            .order_by_asc(task::Column::IsCompleted)  // Within non-deleted: active (false) first, completed (true) second
+            .order_by_asc(task::Column::IsDeleted) // Deleted (true) last
+            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active (false) first, completed (true) second
             .order_by_asc(task::Column::OrderIndex)
             .all(&storage.conn)
             .await?;
@@ -335,8 +335,8 @@ impl SyncService {
         let overdue_tasks = task::Entity::find()
             .filter(task::Column::DueDate.is_not_null())
             .filter(task::Column::DueDate.lt(&today))
-            .order_by_asc(task::Column::IsDeleted)    // Deleted last
-            .order_by_asc(task::Column::IsCompleted)  // Within non-deleted: active first, completed second
+            .order_by_asc(task::Column::IsDeleted) // Deleted last
+            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active first, completed second
             .order_by_asc(task::Column::DueDate)
             .all(&storage.conn)
             .await?;
@@ -344,8 +344,8 @@ impl SyncService {
         // Get today's tasks (deleted last, then active → completed within non-deleted)
         let today_tasks = task::Entity::find()
             .filter(task::Column::DueDate.eq(&today))
-            .order_by_asc(task::Column::IsDeleted)    // Deleted last
-            .order_by_asc(task::Column::IsCompleted)  // Within non-deleted: active first, completed second
+            .order_by_asc(task::Column::IsDeleted) // Deleted last
+            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active first, completed second
             .order_by_asc(task::Column::OrderIndex)
             .all(&storage.conn)
             .await?;
@@ -354,8 +354,8 @@ impl SyncService {
         let future_tasks = task::Entity::find()
             .filter(task::Column::DueDate.gte(&today))
             .filter(task::Column::DueDate.lt(&three_months_later))
-            .order_by_asc(task::Column::IsDeleted)    // Deleted last
-            .order_by_asc(task::Column::IsCompleted)  // Within non-deleted: active first, completed second
+            .order_by_asc(task::Column::IsDeleted) // Deleted last
+            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active first, completed second
             .order_by_asc(task::Column::DueDate)
             .all(&storage.conn)
             .await?;
@@ -660,7 +660,10 @@ impl SyncService {
         let _label = self.todoist.update_label(&remote_id, &label_args).await?;
 
         // Update local storage immediately after successful API call
-        info!("Storage: Updating local label name for UUID {} to '{}'", label_uuid, name);
+        info!(
+            "Storage: Updating local label name for UUID {} to '{}'",
+            label_uuid, name
+        );
         let storage = self.storage.lock().await;
 
         let label = label::Entity::find()
@@ -1031,10 +1034,7 @@ impl SyncService {
     ///
     /// # Errors
     /// Returns error if task with given UUID doesn't exist locally
-    async fn lookup_task_remote_id(
-        conn: &sea_orm::DatabaseConnection,
-        task_uuid: &Uuid,
-    ) -> Result<String> {
+    async fn lookup_task_remote_id(conn: &sea_orm::DatabaseConnection, task_uuid: &Uuid) -> Result<String> {
         task::Entity::find()
             .filter(task::Column::Uuid.eq(*task_uuid))
             .one(conn)
@@ -1054,10 +1054,7 @@ impl SyncService {
     ///
     /// # Errors
     /// Returns error if project with given UUID doesn't exist locally
-    async fn lookup_project_remote_id(
-        conn: &sea_orm::DatabaseConnection,
-        project_uuid: &Uuid,
-    ) -> Result<String> {
+    async fn lookup_project_remote_id(conn: &sea_orm::DatabaseConnection, project_uuid: &Uuid) -> Result<String> {
         project::Entity::find()
             .filter(project::Column::Uuid.eq(*project_uuid))
             .one(conn)
@@ -1077,10 +1074,7 @@ impl SyncService {
     ///
     /// # Errors
     /// Returns error if label with given UUID doesn't exist locally
-    async fn lookup_label_remote_id(
-        conn: &sea_orm::DatabaseConnection,
-        label_uuid: &Uuid,
-    ) -> Result<String> {
+    async fn lookup_label_remote_id(conn: &sea_orm::DatabaseConnection, label_uuid: &Uuid) -> Result<String> {
         label::Entity::find()
             .filter(label::Column::Uuid.eq(*label_uuid))
             .one(conn)
@@ -1361,7 +1355,7 @@ impl SyncService {
                         .await?
                     {
                         let task_label_relation = task_label::ActiveModel {
-                            task_uuid: ActiveValue::Set(task_uuid.clone()),
+                            task_uuid: ActiveValue::Set(task_uuid),
                             label_uuid: ActiveValue::Set(label.uuid),
                         };
                         task_label::Entity::insert(task_label_relation)

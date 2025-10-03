@@ -505,7 +505,7 @@ impl AppComponent {
 
                 // Format task info to include both content and project_uuid
                 let task_info = match project_uuid {
-                    Some(pid) => format!("{}|{}", content, pid.to_string()),
+                    Some(pid) => format!("{}|{}", content, pid),
                     None => content,
                 };
                 self.spawn_task_operation("Create task".to_string(), task_info);
@@ -545,7 +545,10 @@ impl AppComponent {
                             task_id, task.content, task.priority, new_priority
                         );
                         info!("Task: Cycling priority for task {}", task_desc);
-                        self.spawn_task_operation("Cycle priority".to_string(), format!("{}|{}", task_id, new_priority));
+                        self.spawn_task_operation(
+                            "Cycle priority".to_string(),
+                            format!("{}|{}", task_id, new_priority),
+                        );
                     } else {
                         info!("Task: Cannot cycle priority - task {} not found", task_id);
                     }
@@ -606,7 +609,10 @@ impl AppComponent {
                     format!("ID {} [unknown]", task_id)
                 };
                 info!("Task: Setting due date to next week for task {}", task_desc);
-                self.spawn_task_operation("Set task due next week".to_string(), format!("{}|next_week", task_id_str));
+                self.spawn_task_operation(
+                    "Set task due next week".to_string(),
+                    format!("{}|next_week", task_id_str),
+                );
                 Action::None
             }
             Action::SetTaskDueWeekEnd(task_id) => {
@@ -624,7 +630,7 @@ impl AppComponent {
             }
             Action::EditTask { task_uuid, content } => {
                 info!("Task: Editing task UUID {} with new content '{}'", task_uuid, content);
-                self.spawn_task_operation("Edit task".to_string(), format!("{}: {}", task_uuid.to_string(), content));
+                self.spawn_task_operation("Edit task".to_string(), format!("{}: {}", task_uuid, content));
                 Action::None
             }
             Action::RestoreTask(task_id) => {
@@ -641,7 +647,7 @@ impl AppComponent {
 
                 // Format project info to include both name and parent_uuid
                 let project_info = match parent_uuid {
-                    Some(pid) => format!("{}|{}", name, pid.to_string()),
+                    Some(pid) => format!("{}|{}", name, pid),
                     None => name,
                 };
                 self.spawn_task_operation("Create project".to_string(), project_info);
@@ -682,7 +688,7 @@ impl AppComponent {
                     format!("UUID {} [unknown] -> '{}'", project_uuid, name)
                 };
                 info!("Project: Editing project {}", project_desc);
-                self.spawn_task_operation("Edit project".to_string(), format!("{}: {}", project_uuid.to_string(), name));
+                self.spawn_task_operation("Edit project".to_string(), format!("{}: {}", project_uuid, name));
                 Action::None
             }
             Action::EditLabel { label_uuid, name } => {
@@ -693,7 +699,7 @@ impl AppComponent {
                     format!("UUID {} [unknown] -> '{}'", label_uuid, name)
                 };
                 info!("Label: Editing label {}", label_desc);
-                self.spawn_task_operation("Edit label".to_string(), format!("{}: {}", label_uuid.to_string(), name));
+                self.spawn_task_operation("Edit label".to_string(), format!("{}: {}", label_uuid, name));
                 Action::None
             }
             Action::InitialDataLoaded {
@@ -825,24 +831,20 @@ impl AppComponent {
         let _task_id = self.task_manager.spawn_task_operation(
             move || async move {
                 let result = match op_name.as_str() {
-                    "Complete task" => {
-                        match Uuid::parse_str(&task_info) {
-                            Ok(task_uuid) => match sync_service.complete_task(&task_uuid).await {
-                                Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_COMPLETED, task_info)),
-                                Err(e) => Err(format!("{}: {}", ERROR_TASK_COMPLETION_FAILED, e)),
-                            },
-                            Err(e) => Err(format!("Invalid task UUID: {}", e)),
-                        }
-                    }
-                    "Delete task" => {
-                        match Uuid::parse_str(&task_info) {
-                            Ok(task_uuid) => match sync_service.delete_task(&task_uuid).await {
-                                Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_DELETED, task_info)),
-                                Err(e) => Err(format!("{}: {}", ERROR_TASK_DELETE_FAILED, e)),
-                            },
-                            Err(e) => Err(format!("Invalid task UUID: {}", e)),
-                        }
-                    }
+                    "Complete task" => match Uuid::parse_str(&task_info) {
+                        Ok(task_uuid) => match sync_service.complete_task(&task_uuid).await {
+                            Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_COMPLETED, task_info)),
+                            Err(e) => Err(format!("{}: {}", ERROR_TASK_COMPLETION_FAILED, e)),
+                        },
+                        Err(e) => Err(format!("Invalid task UUID: {}", e)),
+                    },
+                    "Delete task" => match Uuid::parse_str(&task_info) {
+                        Ok(task_uuid) => match sync_service.delete_task(&task_uuid).await {
+                            Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_DELETED, task_info)),
+                            Err(e) => Err(format!("{}: {}", ERROR_TASK_DELETE_FAILED, e)),
+                        },
+                        Err(e) => Err(format!("Invalid task UUID: {}", e)),
+                    },
                     "Cycle priority" => {
                         // task_info format: "task_id|new_priority"
                         if let Some((task_id_str, priority_str)) = task_info.split_once('|') {
@@ -850,7 +852,10 @@ impl AppComponent {
                                 Ok(task_uuid) => {
                                     if let Ok(priority) = priority_str.parse::<i32>() {
                                         match sync_service.update_task_priority(&task_uuid, priority).await {
-                                            Ok(()) => Ok(format!("{}{}: {}", SUCCESS_TASK_PRIORITY_UPDATED, priority, task_id_str)),
+                                            Ok(()) => Ok(format!(
+                                                "{}{}: {}",
+                                                SUCCESS_TASK_PRIORITY_UPDATED, priority, task_id_str
+                                            )),
                                             Err(e) => Err(format!("{}: {}", ERROR_TASK_PRIORITY_FAILED, e)),
                                         }
                                     } else {
@@ -922,9 +927,11 @@ impl AppComponent {
                             match Uuid::parse_str(task_id_str) {
                                 Ok(task_uuid) => {
                                     let today = chrono::Local::now().date_naive();
-                                    let next_saturday = crate::utils::datetime::next_weekday(today, chrono::Weekday::Sat);
+                                    let next_saturday =
+                                        crate::utils::datetime::next_weekday(today, chrono::Weekday::Sat);
                                     let next_saturday_str = crate::utils::datetime::format_ymd(next_saturday);
-                                    match sync_service.update_task_due_date(&task_uuid, Some(&next_saturday_str)).await {
+                                    match sync_service.update_task_due_date(&task_uuid, Some(&next_saturday_str)).await
+                                    {
                                         Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_DUE_SATURDAY, task_id_str)),
                                         Err(e) => Err(format!("{}: {}", ERROR_TASK_DUE_DATE_FAILED, e)),
                                     }
@@ -968,15 +975,13 @@ impl AppComponent {
                             Err(ERROR_INVALID_TASK_EDIT_FORMAT.to_string())
                         }
                     }
-                    "Restore task" => {
-                        match Uuid::parse_str(&task_info) {
-                            Ok(task_uuid) => match sync_service.restore_task(&task_uuid).await {
-                                Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_RESTORED, task_info)),
-                                Err(e) => Err(format!("{}: {}", ERROR_TASK_RESTORE_FAILED, e)),
-                            },
-                            Err(e) => Err(format!("Invalid task UUID: {}", e)),
-                        }
-                    }
+                    "Restore task" => match Uuid::parse_str(&task_info) {
+                        Ok(task_uuid) => match sync_service.restore_task(&task_uuid).await {
+                            Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_RESTORED, task_info)),
+                            Err(e) => Err(format!("{}: {}", ERROR_TASK_RESTORE_FAILED, e)),
+                        },
+                        Err(e) => Err(format!("Invalid task UUID: {}", e)),
+                    },
                     "Create project" => {
                         // project_info format: "name|parent_id" or just "name" for root project
                         if let Some((name, parent_id_str)) = task_info.split_once('|') {
@@ -1024,10 +1029,12 @@ impl AppComponent {
                         // task_info format: "project_id: new_name"
                         if let Some((project_id_str, name)) = task_info.split_once(": ") {
                             match Uuid::parse_str(project_id_str) {
-                                Ok(project_uuid) => match sync_service.update_project_content(&project_uuid, name).await {
-                                    Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_UPDATED, project_id_str)),
-                                    Err(e) => Err(format!("{}: {}", ERROR_PROJECT_UPDATE_FAILED, e)),
-                                },
+                                Ok(project_uuid) => {
+                                    match sync_service.update_project_content(&project_uuid, name).await {
+                                        Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_UPDATED, project_id_str)),
+                                        Err(e) => Err(format!("{}: {}", ERROR_PROJECT_UPDATE_FAILED, e)),
+                                    }
+                                }
                                 Err(e) => Err(format!("Invalid project UUID: {}", e)),
                             }
                         } else {

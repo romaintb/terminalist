@@ -50,7 +50,7 @@ pub struct DialogComponent {
     pub selected_project_index: usize,
     pub selected_parent_project_index: Option<usize>, // For project creation parent selection
     pub selected_task_project_index: Option<usize>,   // For task creation project selection (None = no project/inbox)
-    pub selected_task_project_uuid: Option<Uuid>,   // Store the actual UUID to avoid index issues
+    pub selected_task_project_uuid: Option<Uuid>,     // Store the actual UUID to avoid index issues
     pub task_project_explicitly_selected: bool,       // Track if user explicitly selected a project via Tab
     pub icons: IconService,
     // Scrolling support for long content dialogs
@@ -150,15 +150,17 @@ impl DialogComponent {
                     // Determine the project UUID based on whether user explicitly selected via Tab
                     let project_uuid = if self.task_project_explicitly_selected {
                         // User pressed Tab - use their selection (could be None for Inbox or Some(uuid) for a project)
-                        self.selected_task_project_uuid.clone()
+                        self.selected_task_project_uuid
                     } else {
                         // User didn't press Tab - use default project
-                        default_project_uuid.clone()
+                        *default_project_uuid
                     };
 
                     // Debug logging
                     if let Some(ref pid) = project_uuid {
-                        let proj_name = self.projects.iter()
+                        let proj_name = self
+                            .projects
+                            .iter()
                             .find(|p| &p.uuid == pid)
                             .map(|p| p.name.as_str())
                             .unwrap_or("unknown");
@@ -276,7 +278,7 @@ impl DialogComponent {
         self.selected_project_index = 0;
         self.selected_parent_project_index = None;
         self.selected_task_project_index = None; // Reset to "None" for task creation
-        self.selected_task_project_uuid = None;  // Reset stored UUID
+        self.selected_task_project_uuid = None; // Reset stored UUID
         self.task_project_explicitly_selected = false; // Reset selection flag
         self.scroll_offset = 0;
         self.scrollbar_state = ScrollbarState::new(0);
@@ -674,9 +676,8 @@ impl Component for DialogComponent {
                             let task_projects = self.get_task_projects();
                             if !task_projects.is_empty() {
                                 // Clone needed data to avoid borrow issues
-                                let projects_data: Vec<(Uuid, String)> = task_projects.iter()
-                                    .map(|p| (p.uuid, p.name.clone()))
-                                    .collect();
+                                let projects_data: Vec<(Uuid, String)> =
+                                    task_projects.iter().map(|p| (p.uuid, p.name.clone())).collect();
 
                                 // Mark that user has explicitly selected a project via Tab
                                 self.task_project_explicitly_selected = true;
@@ -685,7 +686,11 @@ impl Component for DialogComponent {
                                     None => {
                                         // First tab: select first project
                                         self.selected_task_project_uuid = Some(projects_data[0].0);
-                                        log::info!("Tab: Selected project {} ({})", projects_data[0].1, projects_data[0].0);
+                                        log::info!(
+                                            "Tab: Selected project {} ({})",
+                                            projects_data[0].1,
+                                            projects_data[0].0
+                                        );
                                         Some(0)
                                     }
                                     Some(index) => {
@@ -698,7 +703,11 @@ impl Component for DialogComponent {
                                         } else {
                                             // Select the project at next_index
                                             self.selected_task_project_uuid = Some(projects_data[next_index].0);
-                                            log::info!("Tab: Selected project {} ({})", projects_data[next_index].1, projects_data[next_index].0);
+                                            log::info!(
+                                                "Tab: Selected project {} ({})",
+                                                projects_data[next_index].1,
+                                                projects_data[next_index].0
+                                            );
                                             Some(next_index)
                                         }
                                     }
@@ -757,7 +766,9 @@ impl Component for DialogComponent {
                             if let Some(index) = task_projects.iter().position(|p| &p.uuid == project_uuid) {
                                 self.selected_task_project_index = Some(index);
                                 self.selected_task_project_uuid = Some(*project_uuid);
-                                let proj_name = self.projects.iter()
+                                let proj_name = self
+                                    .projects
+                                    .iter()
                                     .find(|p| &p.uuid == project_uuid)
                                     .map(|p| p.name.as_str())
                                     .unwrap_or("unknown");

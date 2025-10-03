@@ -113,7 +113,7 @@ impl TaskListComponent {
             SidebarSelection::Upcoming => self.build_upcoming_items(),
             SidebarSelection::Project(index) => {
                 if let Some(project) = self.projects.get(*index) {
-                    let project_id = project.uuid.clone();
+                    let project_id = project.uuid;
                     self.build_project_items(&project_id);
                 } else {
                     self.build_simple_items();
@@ -121,7 +121,7 @@ impl TaskListComponent {
             }
             SidebarSelection::Label(index) => {
                 if let Some(label) = self.labels.get(*index) {
-                    let label_id = label.uuid.clone();
+                    let label_id = label.uuid;
                     self.build_label_items(&label_id);
                 } else {
                     self.build_simple_items();
@@ -291,10 +291,7 @@ impl TaskListComponent {
         let mut tasks_by_section: HashMap<Option<Uuid>, Vec<task::Model>> = HashMap::new();
         for task in self.tasks.iter().filter(|t| t.parent_uuid.is_none()) {
             if &task.project_uuid == project_id {
-                tasks_by_section
-                    .entry(task.section_uuid.clone())
-                    .or_default()
-                    .push(task.clone());
+                tasks_by_section.entry(task.section_uuid).or_default().push(task.clone());
             }
         }
 
@@ -307,7 +304,7 @@ impl TaskListComponent {
 
         // Add sections with their tasks
         for section in project_sections {
-            if let Some(section_tasks) = tasks_by_section.get(&Some(section.uuid.clone())) {
+            if let Some(section_tasks) = tasks_by_section.get(&Some(section.uuid)) {
                 // Add separator before section
                 if !self.items.is_empty() {
                     self.items.push(TaskListItemType::Separator(SeparatorItem::new(0)));
@@ -371,7 +368,7 @@ impl TaskListComponent {
         self.items.push(TaskListItemType::Task(Box::new(task_item)));
 
         // Find and add children
-        let task_id = task.uuid.clone();
+        let task_id = task.uuid;
         let children: Vec<task::Model> = self
             .tasks
             .iter()
@@ -502,10 +499,7 @@ impl TaskListComponent {
 
     /// Get child task count for a parent task
     fn get_child_task_count(&self, parent_id: &Uuid) -> usize {
-        self.tasks
-            .iter()
-            .filter(|t| t.parent_uuid.as_ref() == Some(parent_id))
-            .count()
+        self.tasks.iter().filter(|t| t.parent_uuid.as_ref() == Some(parent_id)).count()
     }
 
     /// Create the list items for rendering
@@ -567,7 +561,7 @@ impl Component for TaskListComponent {
             KeyCode::Char('a') => {
                 // When viewing a specific project, preselect it as the default project
                 let default_project_uuid = match &self.sidebar_selection {
-                    SidebarSelection::Project(index) => self.projects.get(*index).map(|p| p.uuid.clone()),
+                    SidebarSelection::Project(index) => self.projects.get(*index).map(|p| p.uuid),
                     _ => None,
                 };
                 Action::ShowDialog(DialogType::TaskCreation { default_project_uuid })
@@ -575,9 +569,9 @@ impl Component for TaskListComponent {
             KeyCode::Char('e') => {
                 if let Some(task) = self.get_selected_task() {
                     Action::ShowDialog(DialogType::TaskEdit {
-                        task_uuid: task.uuid.clone(),
+                        task_uuid: task.uuid,
                         content: task.content.clone(),
-                        project_uuid: task.project_uuid.clone(),
+                        project_uuid: task.project_uuid,
                     })
                 } else {
                     Action::None
@@ -591,7 +585,7 @@ impl Component for TaskListComponent {
                     } else {
                         Action::ShowDialog(DialogType::DeleteConfirmation {
                             item_type: "task".to_string(),
-                            item_uuid: task.uuid.clone(),
+                            item_uuid: task.uuid,
                         })
                     }
                 } else {
