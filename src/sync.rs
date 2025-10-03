@@ -494,31 +494,10 @@ impl SyncService {
         let txn = storage.conn.begin().await?;
 
         // Look up local project UUID from remote project_id
-        let project_uuid = if let Some(project) = project::Entity::find()
-            .filter(project::Column::RemoteId.eq(&api_task.project_id))
-            .one(&txn)
-            .await?
-        {
-            project.uuid
-        } else {
-            // Project doesn't exist locally - fail fast instead of using remote ID
-            // which would violate foreign key constraints
-            return Err(anyhow::anyhow!(
-                "Project with remote_id {} not found locally. Please sync projects first.",
-                api_task.project_id
-            ));
-        };
+        let project_uuid = Self::lookup_project_uuid(&txn, &api_task.project_id, "task creation").await?;
 
         // Look up local section UUID from remote section_id if present
-        let section_uuid = if let Some(remote_section_id) = &api_task.section_id {
-            section::Entity::find()
-                .filter(section::Column::RemoteId.eq(remote_section_id))
-                .one(&txn)
-                .await?
-                .map(|s| s.uuid)
-        } else {
-            None
-        };
+        let section_uuid = Self::lookup_section_uuid(&txn, api_task.section_id.as_ref()).await?;
 
         // Look up local parent UUID from remote parent_id if present
         let parent_uuid = if let Some(remote_parent_id) = &api_task.parent_id {
@@ -985,6 +964,65 @@ impl SyncService {
         Ok(SyncStatus::Success)
     }
 
+    /// Look up local project UUID from remote project_id.
+    ///
+    /// # Arguments
+    /// * `txn` - Database transaction
+    /// * `remote_project_id` - Remote project ID from Todoist API
+    /// * `context` - Context string for error message (e.g., "task creation", "section sync")
+    ///
+    /// # Returns
+    /// Local project UUID
+    ///
+    /// # Errors
+    /// Returns error if project with given remote_id doesn't exist locally
+    async fn lookup_project_uuid(
+        txn: &sea_orm::DatabaseTransaction,
+        remote_project_id: &str,
+        context: &str,
+    ) -> Result<String> {
+        if let Some(project) = project::Entity::find()
+            .filter(project::Column::RemoteId.eq(remote_project_id))
+            .one(txn)
+            .await?
+        {
+            Ok(project.uuid)
+        } else {
+            Err(anyhow::anyhow!(
+                "Project with remote_id {} not found locally during {}. Please sync projects first.",
+                remote_project_id,
+                context
+            ))
+        }
+    }
+
+    /// Look up local section UUID from remote section_id.
+    ///
+    /// # Arguments
+    /// * `txn` - Database transaction
+    /// * `remote_section_id` - Remote section ID from Todoist API
+    ///
+    /// # Returns
+    /// Optional local section UUID (None if section_id is not provided)
+    ///
+    /// # Errors
+    /// Returns error if database query fails
+    async fn lookup_section_uuid(
+        txn: &sea_orm::DatabaseTransaction,
+        remote_section_id: Option<&String>,
+    ) -> Result<Option<String>> {
+        if let Some(remote_id) = remote_section_id {
+            let section_uuid = section::Entity::find()
+                .filter(section::Column::RemoteId.eq(remote_id))
+                .one(txn)
+                .await?
+                .map(|s| s.uuid);
+            Ok(section_uuid)
+        } else {
+            Ok(None)
+        }
+    }
+
     /// Store projects in batch
     async fn store_projects_batch(&self, storage: &LocalStorage, projects: &[todoist_api::Project]) -> Result<()> {
         use sea_orm::sea_query::OnConflict;
@@ -1093,31 +1131,10 @@ impl SyncService {
             let label_names = api_task.labels.clone();
 
             // Look up local project UUID from remote project_id
-            let project_uuid = if let Some(project) = project::Entity::find()
-                .filter(project::Column::RemoteId.eq(&api_task.project_id))
-                .one(&txn)
-                .await?
-            {
-                project.uuid
-            } else {
-                // Project doesn't exist locally - fail fast instead of using remote ID
-                // which would violate foreign key constraints
-                return Err(anyhow::anyhow!(
-                    "Project with remote_id {} not found locally during task batch sync. Please sync projects first.",
-                    api_task.project_id
-                ));
-            };
+            let project_uuid = Self::lookup_project_uuid(&txn, &api_task.project_id, "task batch sync").await?;
 
             // Look up local section UUID from remote section_id if present
-            let section_uuid = if let Some(remote_section_id) = &api_task.section_id {
-                section::Entity::find()
-                    .filter(section::Column::RemoteId.eq(remote_section_id))
-                    .one(&txn)
-                    .await?
-                    .map(|s| s.uuid)
-            } else {
-                None
-            };
+            let section_uuid = Self::lookup_section_uuid(&txn, api_task.section_id.as_ref()).await?;
 
             let duration_string = api_task.duration.as_ref().map(|d| match d.unit.as_str() {
                 "minute" => format!("{}m", d.amount),
@@ -1240,20 +1257,7 @@ impl SyncService {
 
         for api_section in sections {
             // Look up local project UUID from remote project_id
-            let project_uuid = if let Some(project) = project::Entity::find()
-                .filter(project::Column::RemoteId.eq(&api_section.project_id))
-                .one(&txn)
-                .await?
-            {
-                project.uuid
-            } else {
-                // Project doesn't exist locally - fail fast instead of using remote ID
-                // which would violate foreign key constraints
-                return Err(anyhow::anyhow!(
-                    "Project with remote_id {} not found locally during section sync. Please sync projects first.",
-                    api_section.project_id
-                ));
-            };
+            let project_uuid = Self::lookup_project_uuid(&txn, &api_section.project_id, "section sync").await?;
 
             let local_section = section::ActiveModel {
                 uuid: ActiveValue::Set(uuid::Uuid::new_v4().to_string()),
