@@ -735,7 +735,24 @@ impl SyncService {
         };
         let _task = self.todoist.update_task(&remote_id, &task_args).await?;
 
-        // The UI will handle the sync separately to ensure proper error handling
+        // Update local storage immediately after successful API call
+        info!(
+            "Storage: Updating local task content for UUID {} to '{}'",
+            task_uuid, content
+        );
+        let storage = self.storage.lock().await;
+
+        let task = task::Entity::find()
+            .filter(task::Column::Uuid.eq(*task_uuid))
+            .one(&storage.conn)
+            .await?;
+
+        if let Some(task) = task {
+            let mut active_model: task::ActiveModel = task.into_active_model();
+            active_model.content = ActiveValue::Set(content.to_string());
+            active_model.update(&storage.conn).await?;
+        }
+
         Ok(())
     }
 

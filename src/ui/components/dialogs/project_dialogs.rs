@@ -1,9 +1,10 @@
+use super::common::{self, shortcuts};
 use crate::icons::IconService;
 use crate::ui::layout::LayoutManager;
 use ratatui::{
-    layout::{Alignment, Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
-    widgets::{Block, BorderType, Borders, Clear, Paragraph},
+    layout::{Constraint, Direction, Layout, Rect},
+    style::Color,
+    widgets::Clear,
     Frame,
 };
 
@@ -18,14 +19,7 @@ pub fn render_project_creation_dialog(
     let dialog_area = LayoutManager::centered_rect_lines(65, 12, area);
     f.render_widget(Clear, dialog_area);
 
-    // Main dialog block with rounded borders and magenta theme
-    let title = "New Project".to_string();
-    let main_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(title)
-        .title_style(Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD))
-        .style(Style::default().fg(Color::Magenta));
+    let main_block = common::create_dialog_block("New Project", Color::Magenta);
 
     // Create layout for content
     let inner_area = main_block.inner(dialog_area);
@@ -40,20 +34,7 @@ pub fn render_project_creation_dialog(
         ])
         .split(inner_area);
 
-    // Input field with visual cursor
-    let cursor_char = "█";
-    let input_display = format!("{}{}", input_buffer, cursor_char);
-
-    let input_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Project Name ")
-        .title_style(Style::default().fg(Color::White))
-        .style(Style::default().fg(Color::Gray));
-
-    let input_paragraph = Paragraph::new(input_display)
-        .block(input_block)
-        .style(Style::default().fg(Color::White));
+    let input_paragraph = common::create_input_paragraph(input_buffer, "Project Name");
 
     // Parent project selection field
     let parent_project_name = match selected_parent_index {
@@ -67,37 +48,17 @@ pub fn render_project_creation_dialog(
         }
     };
 
-    let parent_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Parent Project ")
-        .title_style(Style::default().fg(Color::White))
-        .style(Style::default().fg(Color::Gray));
+    let parent_paragraph = common::create_selection_paragraph(parent_project_name, "Parent Project");
 
-    let parent_paragraph = Paragraph::new(parent_project_name)
-        .block(parent_block)
-        .style(Style::default().fg(Color::White));
-
-    // Enhanced instructions with color-coded shortcuts
-    let instructions = vec![
+    let instructions = [
         ("Enter", Color::Green, " Create Project"),
-        (" • ", Color::Gray, ""),
-        ("Tab", Color::Cyan, " Select Parent"),
-        (" • ", Color::Gray, ""),
-        ("Esc", Color::Red, " Cancel"),
+        shortcuts::SEPARATOR,
+        shortcuts::TAB_SELECT,
+        (" Parent", Color::Gray, ""),
+        shortcuts::SEPARATOR,
+        shortcuts::ESC_CANCEL,
     ];
-
-    let mut instruction_text = Vec::new();
-    for (key, color, desc) in instructions {
-        instruction_text.push(ratatui::text::Span::styled(
-            key,
-            Style::default().fg(color).add_modifier(Modifier::BOLD),
-        ));
-        instruction_text.push(ratatui::text::Span::styled(desc, Style::default().fg(Color::Gray)));
-    }
-
-    let instructions_paragraph =
-        Paragraph::new(ratatui::text::Line::from(instruction_text)).alignment(Alignment::Center);
+    let instructions_paragraph = common::create_instructions_paragraph(&instructions);
 
     // Render all components
     f.render_widget(main_block, dialog_area);
@@ -110,14 +71,7 @@ pub fn render_project_edit_dialog(f: &mut Frame, area: Rect, _icons: &IconServic
     let dialog_area = LayoutManager::centered_rect_lines(65, 9, area);
     f.render_widget(Clear, dialog_area);
 
-    // Main dialog block with rounded borders and yellow theme for edit
-    let title = "Edit Project".to_string();
-    let main_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(title)
-        .title_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
-        .style(Style::default().fg(Color::Yellow));
+    let main_block = common::create_dialog_block("Edit Project", Color::Yellow);
 
     // Create layout for content
     let inner_area = main_block.inner(dialog_area);
@@ -131,39 +85,14 @@ pub fn render_project_edit_dialog(f: &mut Frame, area: Rect, _icons: &IconServic
         ])
         .split(inner_area);
 
-    // Input field with visual cursor
-    let cursor_char = "█";
-    let input_display = format!("{}{}", input_buffer, cursor_char);
+    let input_paragraph = common::create_input_paragraph(input_buffer, "Project Name");
 
-    let input_block = Block::default()
-        .borders(Borders::ALL)
-        .border_type(BorderType::Rounded)
-        .title(" Project Name ")
-        .title_style(Style::default().fg(Color::White))
-        .style(Style::default().fg(Color::Gray));
-
-    let input_paragraph = Paragraph::new(input_display)
-        .block(input_block)
-        .style(Style::default().fg(Color::White));
-
-    // Enhanced instructions with color-coded shortcuts
-    let instructions = vec![
+    let instructions = [
         ("Enter", Color::Green, " Save Changes"),
-        (" • ", Color::Gray, ""),
-        ("Esc", Color::Red, " Cancel"),
+        shortcuts::SEPARATOR,
+        shortcuts::ESC_CANCEL,
     ];
-
-    let mut instruction_text = Vec::new();
-    for (key, color, desc) in instructions {
-        instruction_text.push(ratatui::text::Span::styled(
-            key,
-            Style::default().fg(color).add_modifier(Modifier::BOLD),
-        ));
-        instruction_text.push(ratatui::text::Span::styled(desc, Style::default().fg(Color::Gray)));
-    }
-
-    let instructions_paragraph =
-        Paragraph::new(ratatui::text::Line::from(instruction_text)).alignment(Alignment::Center);
+    let instructions_paragraph = common::create_instructions_paragraph(&instructions);
 
     // Render all components
     f.render_widget(main_block, dialog_area);
