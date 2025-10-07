@@ -40,10 +40,7 @@ impl TaskRepository {
     where
         C: ConnectionTrait,
     {
-        Ok(task::Entity::find()
-            .filter(task::Column::Uuid.eq(*uuid))
-            .one(conn)
-            .await?)
+        Ok(task::Entity::find().filter(task::Column::Uuid.eq(*uuid)).one(conn).await?)
     }
 
     /// Get a single task by remote_id.
@@ -140,19 +137,13 @@ impl TaskRepository {
     }
 
     /// Get tasks for the "Upcoming" view (overdue + today + next 3 months).
-    pub async fn get_for_upcoming<C>(
-        conn: &C,
-        today: &str,
-        three_months_later: &str,
-    ) -> Result<Vec<task::Model>>
+    pub async fn get_for_upcoming<C>(conn: &C, today: &str, three_months_later: &str) -> Result<Vec<task::Model>>
     where
         C: ConnectionTrait,
     {
         let overdue_tasks = task::Entity::overdue(today).all(conn).await?;
         let today_tasks = task::Entity::due_today(today).all(conn).await?;
-        let future_tasks = task::Entity::due_between(today, three_months_later)
-            .all(conn)
-            .await?;
+        let future_tasks = task::Entity::due_between(today, three_months_later).all(conn).await?;
 
         let mut result = overdue_tasks;
         result.extend(today_tasks);

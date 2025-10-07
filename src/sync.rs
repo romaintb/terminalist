@@ -121,7 +121,8 @@ impl SyncService {
         }
 
         // Create Todoist backend instance
-        let backend: Box<dyn crate::backend::Backend> = Box::new(crate::backend::todoist::TodoistBackend::new(api_token));
+        let backend: Box<dyn crate::backend::Backend> =
+            Box::new(crate::backend::todoist::TodoistBackend::new(api_token));
 
         Ok(Self {
             backend: Arc::new(backend),
@@ -329,7 +330,10 @@ impl SyncService {
             color: None,
             is_favorite: None,
         };
-        let backend_project = self.backend.create_project(project_args).await
+        let backend_project = self
+            .backend
+            .create_project(project_args)
+            .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
         // Store the created project in local database immediately for UI refresh
@@ -399,7 +403,10 @@ impl SyncService {
             duration: None,
             labels: Vec::new(),
         };
-        let backend_task = self.backend.create_task(task_args).await
+        let backend_task = self
+            .backend
+            .create_task(task_args)
+            .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
         // Store the created task in local database immediately for UI refresh
@@ -489,7 +496,10 @@ impl SyncService {
             color: color.map(std::string::ToString::to_string),
             is_favorite: None,
         };
-        let api_label = self.backend.create_label(label_args).await
+        let api_label = self
+            .backend
+            .create_label(label_args)
+            .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
         // Store the created label in local database immediately for UI refresh
@@ -536,7 +546,10 @@ impl SyncService {
             color: None,
             is_favorite: None,
         };
-        let _label = self.backend.update_label(&remote_id, label_args).await
+        let _label = self
+            .backend
+            .update_label(&remote_id, label_args)
+            .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
         // Update local storage immediately after successful backend call
@@ -561,7 +574,9 @@ impl SyncService {
         let remote_id = self.get_label_remote_id(label_uuid).await?;
 
         // Delete label via backend
-        self.backend.delete_label(&remote_id).await
+        self.backend
+            .delete_label(&remote_id)
+            .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
         // Note: Local storage deletion will be handled by the next sync
@@ -581,7 +596,10 @@ impl SyncService {
             color: None,
             is_favorite: None,
         };
-        let _project = self.backend.update_project(&remote_id, project_args).await
+        let _project = self
+            .backend
+            .update_project(&remote_id, project_args)
+            .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
         // Update local storage immediately after successful backend call
@@ -618,7 +636,10 @@ impl SyncService {
             duration: None,
             labels: None,
         };
-        let _task = self.backend.update_task(&remote_id, task_args).await
+        let _task = self
+            .backend
+            .update_task(&remote_id, task_args)
+            .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
         // Update local storage immediately after successful backend call
@@ -639,7 +660,10 @@ impl SyncService {
 
     /// Update task due date
     pub async fn update_task_due_date(&self, task_uuid: &Uuid, due_date: Option<&str>) -> Result<()> {
-        info!("Backend: Updating task due date for UUID {} to {:?}", task_uuid, due_date);
+        info!(
+            "Backend: Updating task due date for UUID {} to {:?}",
+            task_uuid, due_date
+        );
 
         // Look up the task's remote_id for backend call
         let remote_id = self.get_task_remote_id(task_uuid).await?;
@@ -657,7 +681,10 @@ impl SyncService {
             duration: None,
             labels: None,
         };
-        let _task = self.backend.update_task(&remote_id, task_args).await
+        let _task = self
+            .backend
+            .update_task(&remote_id, task_args)
+            .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
         // Then update local storage
@@ -693,7 +720,10 @@ impl SyncService {
             duration: None,
             labels: None,
         };
-        let _task = self.backend.update_task(&remote_id, task_args).await
+        let _task = self
+            .backend
+            .update_task(&remote_id, task_args)
+            .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
         // Then update local storage
@@ -715,7 +745,9 @@ impl SyncService {
         let remote_id = self.get_project_remote_id(project_uuid).await?;
 
         // Delete project via backend
-        self.backend.delete_project(&remote_id).await
+        self.backend
+            .delete_project(&remote_id)
+            .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
         // Remove from local storage
@@ -971,7 +1003,11 @@ impl SyncService {
     }
 
     /// Store projects in batch
-    async fn store_projects_batch(&self, storage: &LocalStorage, projects: &[crate::backend::BackendProject]) -> Result<()> {
+    async fn store_projects_batch(
+        &self,
+        storage: &LocalStorage,
+        projects: &[crate::backend::BackendProject],
+    ) -> Result<()> {
         use sea_orm::sea_query::OnConflict;
 
         let txn = storage.conn.begin().await?;
@@ -1010,7 +1046,8 @@ impl SyncService {
         for backend_project in projects {
             if let Some(remote_parent_id) = &backend_project.parent_remote_id {
                 if let Some(parent) = ProjectRepository::get_by_remote_id(&txn, remote_parent_id).await? {
-                    if let Some(project) = ProjectRepository::get_by_remote_id(&txn, &backend_project.remote_id).await? {
+                    if let Some(project) = ProjectRepository::get_by_remote_id(&txn, &backend_project.remote_id).await?
+                    {
                         let mut active_model: project::ActiveModel = project.into_active_model();
                         active_model.parent_uuid = ActiveValue::Set(Some(parent.uuid));
                         ProjectRepository::update(&txn, active_model).await?;
@@ -1072,13 +1109,14 @@ impl SyncService {
             let label_names = backend_task.labels.clone();
 
             // Look up local project UUID from remote project_id
-            let project_uuid = match Self::lookup_project_uuid(&txn, &backend_task.project_remote_id, "task batch sync").await {
-                Ok(uuid) => uuid,
-                Err(_) => {
-                    // Skip tasks whose projects don't exist locally (can happen with free tier API limitations)
-                    continue;
-                }
-            };
+            let project_uuid =
+                match Self::lookup_project_uuid(&txn, &backend_task.project_remote_id, "task batch sync").await {
+                    Ok(uuid) => uuid,
+                    Err(_) => {
+                        // Skip tasks whose projects don't exist locally (can happen with free tier API limitations)
+                        continue;
+                    }
+                };
 
             // Look up local section UUID from remote section_id if present
             let section_uuid = Self::lookup_section_uuid(&txn, backend_task.section_remote_id.as_ref()).await?;
@@ -1179,14 +1217,19 @@ impl SyncService {
     }
 
     /// Store sections in batch
-    async fn store_sections_batch(&self, storage: &LocalStorage, sections: &[crate::backend::BackendSection]) -> Result<()> {
+    async fn store_sections_batch(
+        &self,
+        storage: &LocalStorage,
+        sections: &[crate::backend::BackendSection],
+    ) -> Result<()> {
         use sea_orm::sea_query::OnConflict;
 
         let txn = storage.conn.begin().await?;
 
         for backend_section in sections {
             // Look up local project UUID from remote project_id
-            let project_uuid = Self::lookup_project_uuid(&txn, &backend_section.project_remote_id, "section sync").await?;
+            let project_uuid =
+                Self::lookup_project_uuid(&txn, &backend_section.project_remote_id, "section sync").await?;
 
             let local_section = section::ActiveModel {
                 uuid: ActiveValue::Set(Uuid::new_v4()),
@@ -1231,7 +1274,9 @@ impl SyncService {
         let remote_id = self.get_task_remote_id(task_uuid).await?;
 
         // Complete the task via backend using remote_id (this handles subtasks automatically)
-        self.backend.complete_task(&remote_id).await
+        self.backend
+            .complete_task(&remote_id)
+            .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
         // Then mark as completed in local storage (soft completion)
@@ -1261,7 +1306,9 @@ impl SyncService {
         let remote_id = self.get_task_remote_id(task_uuid).await?;
 
         // Delete the task via backend using remote_id
-        self.backend.delete_task(&remote_id).await
+        self.backend
+            .delete_task(&remote_id)
+            .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
         // Then mark as deleted in local storage (soft deletion)
@@ -1316,7 +1363,10 @@ impl SyncService {
                 labels: Vec::new(), // Labels will be synced separately
             };
 
-            let new_task = self.backend.create_task(task_args).await
+            let new_task = self
+                .backend
+                .create_task(task_args)
+                .await
                 .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
             // Update local storage: remove the old soft-deleted task and add the new one
@@ -1389,7 +1439,9 @@ impl SyncService {
             // For completed tasks, just reopen them
             let remote_id = task.remote_id.clone();
             drop(storage); // Release the lock before API call
-            self.backend.reopen_task(&remote_id).await
+            self.backend
+                .reopen_task(&remote_id)
+                .await
                 .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
             // Clear local completion flag

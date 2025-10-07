@@ -1,12 +1,11 @@
 //! Todoist backend implementation.
 
-use async_trait::async_trait;
-use crate::todoist::TodoistWrapper;
 use super::{
-    Backend, BackendError, BackendProject, BackendTask, BackendLabel, BackendSection,
-    CreateProjectArgs, CreateTaskArgs, CreateLabelArgs,
-    UpdateProjectArgs, UpdateTaskArgs, UpdateLabelArgs,
+    Backend, BackendError, BackendLabel, BackendProject, BackendSection, BackendTask, CreateLabelArgs,
+    CreateProjectArgs, CreateTaskArgs, UpdateLabelArgs, UpdateProjectArgs, UpdateTaskArgs,
 };
+use crate::todoist::TodoistWrapper;
+use async_trait::async_trait;
 
 /// Todoist backend implementation.
 pub struct TodoistBackend {
@@ -49,9 +48,7 @@ impl TodoistBackend {
             due_datetime: api_task.due.as_ref().and_then(|d| d.datetime.clone()),
             is_recurring: api_task.due.as_ref().map(|d| d.is_recurring).unwrap_or(false),
             deadline: None, // Todoist doesn't have deadline
-            duration: api_task.duration.as_ref().map(|d| {
-                format!("{} {}", d.amount, d.unit)
-            }),
+            duration: api_task.duration.as_ref().map(|d| format!("{} {}", d.amount, d.unit)),
             is_completed: false, // Fetch operations don't include completed tasks
             labels: api_task.labels.clone(),
         }
@@ -86,25 +83,37 @@ impl Backend for TodoistBackend {
     }
 
     async fn fetch_projects(&self) -> Result<Vec<BackendProject>, BackendError> {
-        let projects = self.wrapper.get_projects().await
+        let projects = self
+            .wrapper
+            .get_projects()
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))?;
         Ok(projects.iter().map(Self::project_to_backend).collect())
     }
 
     async fn fetch_tasks(&self) -> Result<Vec<BackendTask>, BackendError> {
-        let tasks = self.wrapper.get_tasks().await
+        let tasks = self
+            .wrapper
+            .get_tasks()
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))?;
         Ok(tasks.iter().map(Self::task_to_backend).collect())
     }
 
     async fn fetch_labels(&self) -> Result<Vec<BackendLabel>, BackendError> {
-        let labels = self.wrapper.get_labels().await
+        let labels = self
+            .wrapper
+            .get_labels()
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))?;
         Ok(labels.iter().map(Self::label_to_backend).collect())
     }
 
     async fn fetch_sections(&self) -> Result<Vec<BackendSection>, BackendError> {
-        let sections = self.wrapper.get_sections().await
+        let sections = self
+            .wrapper
+            .get_sections()
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))?;
         Ok(sections.iter().map(Self::section_to_backend).collect())
     }
@@ -118,7 +127,10 @@ impl Backend for TodoistBackend {
             view_style: None,
         };
 
-        let project = self.wrapper.create_project(&todoist_args).await
+        let project = self
+            .wrapper
+            .create_project(&todoist_args)
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))?;
         Ok(Self::project_to_backend(&project))
     }
@@ -131,13 +143,18 @@ impl Backend for TodoistBackend {
             view_style: None,
         };
 
-        let project = self.wrapper.update_project(remote_id, &todoist_args).await
+        let project = self
+            .wrapper
+            .update_project(remote_id, &todoist_args)
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))?;
         Ok(Self::project_to_backend(&project))
     }
 
     async fn delete_project(&self, remote_id: &str) -> Result<(), BackendError> {
-        self.wrapper.delete_project(remote_id).await
+        self.wrapper
+            .delete_project(remote_id)
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))
     }
 
@@ -164,7 +181,10 @@ impl Backend for TodoistBackend {
             ..Default::default()
         };
 
-        let task = self.wrapper.create_task(&todoist_args).await
+        let task = self
+            .wrapper
+            .create_task(&todoist_args)
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))?;
         Ok(Self::task_to_backend(&task))
     }
@@ -189,23 +209,32 @@ impl Backend for TodoistBackend {
             ..Default::default()
         };
 
-        let task = self.wrapper.update_task(remote_id, &todoist_args).await
+        let task = self
+            .wrapper
+            .update_task(remote_id, &todoist_args)
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))?;
         Ok(Self::task_to_backend(&task))
     }
 
     async fn delete_task(&self, remote_id: &str) -> Result<(), BackendError> {
-        self.wrapper.delete_task(remote_id).await
+        self.wrapper
+            .delete_task(remote_id)
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))
     }
 
     async fn complete_task(&self, remote_id: &str) -> Result<(), BackendError> {
-        self.wrapper.complete_task(remote_id).await
+        self.wrapper
+            .complete_task(remote_id)
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))
     }
 
     async fn reopen_task(&self, remote_id: &str) -> Result<(), BackendError> {
-        self.wrapper.reopen_task(remote_id).await
+        self.wrapper
+            .reopen_task(remote_id)
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))
     }
 
@@ -217,7 +246,10 @@ impl Backend for TodoistBackend {
             ..Default::default()
         };
 
-        let label = self.wrapper.create_label(&todoist_args).await
+        let label = self
+            .wrapper
+            .create_label(&todoist_args)
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))?;
         Ok(Self::label_to_backend(&label))
     }
@@ -230,13 +262,18 @@ impl Backend for TodoistBackend {
             ..Default::default()
         };
 
-        let label = self.wrapper.update_label(remote_id, &todoist_args).await
+        let label = self
+            .wrapper
+            .update_label(remote_id, &todoist_args)
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))?;
         Ok(Self::label_to_backend(&label))
     }
 
     async fn delete_label(&self, remote_id: &str) -> Result<(), BackendError> {
-        self.wrapper.delete_label(remote_id).await
+        self.wrapper
+            .delete_label(remote_id)
+            .await
             .map_err(|e| BackendError::Network(e.to_string()))
     }
 }

@@ -68,11 +68,9 @@ impl LocalStorage {
         ];
 
         for index_sql in indexes {
-            self.conn.execute(Statement::from_string(
-                DbBackend::Sqlite,
-                index_sql.to_owned(),
-            ))
-            .await?;
+            self.conn
+                .execute(Statement::from_string(DbBackend::Sqlite, index_sql.to_owned()))
+                .await?;
         }
 
         Ok(())

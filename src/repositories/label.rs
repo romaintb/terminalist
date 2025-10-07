@@ -28,10 +28,7 @@ impl LabelRepository {
     where
         C: ConnectionTrait,
     {
-        Ok(label::Entity::find()
-            .order_by_asc(label::Column::OrderIndex)
-            .all(conn)
-            .await?)
+        Ok(label::Entity::find().order_by_asc(label::Column::OrderIndex).all(conn).await?)
     }
 
     /// Get a single label by UUID.
@@ -39,10 +36,7 @@ impl LabelRepository {
     where
         C: ConnectionTrait,
     {
-        Ok(label::Entity::find()
-            .filter(label::Column::Uuid.eq(*uuid))
-            .one(conn)
-            .await?)
+        Ok(label::Entity::find().filter(label::Column::Uuid.eq(*uuid)).one(conn).await?)
     }
 
     /// Get a single label by name.
@@ -50,10 +44,7 @@ impl LabelRepository {
     where
         C: ConnectionTrait,
     {
-        Ok(label::Entity::find()
-            .filter(label::Column::Name.eq(name))
-            .one(conn)
-            .await?)
+        Ok(label::Entity::find().filter(label::Column::Name.eq(name)).one(conn).await?)
     }
 
     /// Update a label in the database.
