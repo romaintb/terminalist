@@ -34,6 +34,9 @@ pub mod icons;
 /// Logging utilities for debugging and error tracking
 pub mod logger;
 
+/// Repository layer for database operations
+pub mod repositories;
+
 /// Local storage layer for caching Todoist data
 pub mod storage;
 

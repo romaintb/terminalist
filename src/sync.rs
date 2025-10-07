@@ -18,6 +18,7 @@ use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::entities::{label, project, section, task, task_label};
+use crate::repositories::{BackendRepository, LabelRepository, ProjectRepository, SectionRepository, TaskRepository};
 use crate::storage::LocalStorage;
 use crate::todoist::{CreateProjectArgs, TodoistWrapper};
 use crate::utils::datetime;
@@ -148,11 +149,7 @@ impl SyncService {
     /// Returns an error if local storage access fails
     pub async fn get_projects(&self) -> Result<Vec<project::Model>> {
         let storage = self.storage.lock().await;
-        let projects = project::Entity::find()
-            .order_by_asc(project::Column::OrderIndex)
-            .all(&storage.conn)
-            .await?;
-        Ok(projects)
+        ProjectRepository::get_all(&storage.conn).await
     }
 
     /// Retrieves all tasks for a specific project from local storage.
@@ -167,14 +164,7 @@ impl SyncService {
     /// Returns an error if local storage access fails
     pub async fn get_tasks_for_project(&self, project_id: &Uuid) -> Result<Vec<task::Model>> {
         let storage = self.storage.lock().await;
-        let tasks = task::Entity::find()
-            .filter(task::Column::ProjectUuid.eq(*project_id))
-            .order_by_asc(task::Column::IsDeleted) // Deleted (true) last
-            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active (false) first, completed (true) second
-            .order_by_asc(task::Column::OrderIndex)
-            .all(&storage.conn)
-            .await?;
-        Ok(tasks)
+        TaskRepository::get_for_project(&storage.conn, project_id).await
     }
 
     /// Retrieves all tasks from local storage across all projects.
@@ -189,12 +179,7 @@ impl SyncService {
     /// Returns an error if local storage access fails
     pub async fn get_all_tasks(&self) -> Result<Vec<task::Model>> {
         let storage = self.storage.lock().await;
-        let tasks = task::Entity::find()
-            .order_by_asc(task::Column::IsDeleted) // Non-deleted (false) first, deleted (true) last
-            .order_by_asc(task::Column::OrderIndex)
-            .all(&storage.conn)
-            .await?;
-        Ok(tasks)
+        TaskRepository::get_all(&storage.conn).await
     }
 
     /// Searches for tasks by content using database-level filtering.
@@ -211,72 +196,32 @@ impl SyncService {
     /// # Errors
     /// Returns an error if local storage access fails
     pub async fn search_tasks(&self, query: &str) -> Result<Vec<task::Model>> {
-        use sea_orm::sea_query::Expr;
         let storage = self.storage.lock().await;
-        let tasks = task::Entity::find()
-            .filter(
-                Expr::col(task::Column::Content)
-                    .like(format!("%{}%", query))
-                    .or(Expr::col(task::Column::Description).like(format!("%{}%", query))),
-            )
-            .order_by_asc(task::Column::IsDeleted) // Deleted (true) last
-            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active (false) first, completed (true) second
-            .order_by_asc(task::Column::OrderIndex)
-            .all(&storage.conn)
-            .await?;
-        Ok(tasks)
+        TaskRepository::search(&storage.conn, query).await
     }
 
     /// Get all labels from local storage (fast)
     pub async fn get_labels(&self) -> Result<Vec<label::Model>> {
         let storage = self.storage.lock().await;
-        let labels = label::Entity::find()
-            .order_by_asc(label::Column::OrderIndex)
-            .all(&storage.conn)
-            .await?;
-        Ok(labels)
+        LabelRepository::get_all(&storage.conn).await
     }
 
     /// Get all sections from local storage (fast)
     pub async fn get_sections(&self) -> Result<Vec<section::Model>> {
         let storage = self.storage.lock().await;
-        let sections = section::Entity::find()
-            .order_by_asc(section::Column::OrderIndex)
-            .all(&storage.conn)
-            .await?;
-        Ok(sections)
+        SectionRepository::get_all(&storage.conn).await
     }
 
     /// Get sections for a project from local storage (fast)
     pub async fn get_sections_for_project(&self, project_uuid: &Uuid) -> Result<Vec<section::Model>> {
         let storage = self.storage.lock().await;
-        let sections = section::Entity::find()
-            .filter(section::Column::ProjectUuid.eq(*project_uuid))
-            .order_by_asc(section::Column::OrderIndex)
-            .all(&storage.conn)
-            .await?;
-        Ok(sections)
+        SectionRepository::get_for_project(&storage.conn, project_uuid).await
     }
 
     /// Get tasks with a specific label from local storage (fast)
     pub async fn get_tasks_with_label(&self, label_id: Uuid) -> Result<Vec<task::Model>> {
         let storage = self.storage.lock().await;
-        let tasks = task::Entity::find()
-            .filter(
-                task::Column::Uuid.in_subquery(
-                    task_label::Entity::find()
-                        .filter(task_label::Column::LabelUuid.eq(label_id))
-                        .select_only()
-                        .column(task_label::Column::TaskUuid)
-                        .into_query(),
-                ),
-            )
-            .order_by_asc(task::Column::IsDeleted)
-            .order_by_asc(task::Column::IsCompleted)
-            .order_by_asc(task::Column::OrderIndex)
-            .all(&storage.conn)
-            .await?;
-        Ok(tasks)
+        TaskRepository::get_with_label(&storage.conn, label_id).await
     }
 
     /// Retrieves tasks for the "Today" view with business logic.
@@ -293,15 +238,7 @@ impl SyncService {
     pub async fn get_tasks_for_today(&self) -> Result<Vec<task::Model>> {
         let storage = self.storage.lock().await;
         let today = datetime::format_today();
-
-        // Get overdue tasks and today's tasks using entity scopes
-        let overdue_tasks = task::Entity::overdue(&today).all(&storage.conn).await?;
-        let today_tasks = task::Entity::due_today(&today).all(&storage.conn).await?;
-
-        // UI business rule: show overdue first, then today
-        let mut result = overdue_tasks;
-        result.extend(today_tasks);
-        Ok(result)
+        TaskRepository::get_for_today(&storage.conn, &today).await
     }
 
     /// Retrieves tasks scheduled for tomorrow.
@@ -317,15 +254,7 @@ impl SyncService {
     pub async fn get_tasks_for_tomorrow(&self) -> Result<Vec<task::Model>> {
         let storage = self.storage.lock().await;
         let tomorrow = datetime::format_date_with_offset(1);
-
-        let tasks = task::Entity::find()
-            .filter(task::Column::DueDate.eq(&tomorrow))
-            .order_by_asc(task::Column::IsDeleted) // Deleted (true) last
-            .order_by_asc(task::Column::IsCompleted) // Within non-deleted: active (false) first, completed (true) second
-            .order_by_asc(task::Column::OrderIndex)
-            .all(&storage.conn)
-            .await?;
-        Ok(tasks)
+        TaskRepository::get_for_tomorrow(&storage.conn, &tomorrow).await
     }
 
     /// Retrieves tasks for the "Upcoming" view with business logic.
@@ -343,36 +272,13 @@ impl SyncService {
         let storage = self.storage.lock().await;
         let today = datetime::format_today();
         let three_months_later = datetime::format_date_with_offset(90);
-
-        // Get overdue, today's, and future tasks using entity scopes
-        let overdue_tasks = task::Entity::overdue(&today).all(&storage.conn).await?;
-        let today_tasks = task::Entity::due_today(&today).all(&storage.conn).await?;
-        let future_tasks = task::Entity::due_between(&today, &three_months_later)
-            .all(&storage.conn)
-            .await?;
-
-        // UI business rule: overdue → today → future
-        let mut result = overdue_tasks;
-        result.extend(today_tasks);
-        result.extend(future_tasks.into_iter().filter(|task| {
-            // Remove today tasks from future to avoid duplicates
-            if let Some(due_date) = &task.due_date {
-                due_date != &today
-            } else {
-                true
-            }
-        }));
-        Ok(result)
+        TaskRepository::get_for_upcoming(&storage.conn, &today, &three_months_later).await
     }
 
     /// Get a single task by ID from local storage (fast)
     pub async fn get_task_by_id(&self, task_id: &Uuid) -> Result<Option<task::Model>> {
         let storage = self.storage.lock().await;
-        let task = task::Entity::find()
-            .filter(task::Column::Uuid.eq(*task_id))
-            .one(&storage.conn)
-            .await?;
-        Ok(task)
+        TaskRepository::get_by_id(&storage.conn, task_id).await
     }
 
     /// Checks if a synchronization operation is currently in progress.
@@ -492,11 +398,7 @@ impl SyncService {
 
         // Look up local parent UUID from remote parent_id if present
         let parent_uuid = if let Some(remote_parent_id) = &api_task.parent_id {
-            task::Entity::find()
-                .filter(task::Column::RemoteId.eq(remote_parent_id))
-                .one(&txn)
-                .await?
-                .map(|t| t.uuid)
+            TaskRepository::get_by_remote_id(&txn, remote_parent_id).await?.map(|t| t.uuid)
         } else {
             None
         };
@@ -632,15 +534,10 @@ impl SyncService {
         );
         let storage = self.storage.lock().await;
 
-        let label = label::Entity::find()
-            .filter(label::Column::Uuid.eq(*label_uuid))
-            .one(&storage.conn)
-            .await?;
-
-        if let Some(label) = label {
+        if let Some(label) = LabelRepository::get_by_id(&storage.conn, label_uuid).await? {
             let mut active_model: label::ActiveModel = label.into_active_model();
             active_model.name = ActiveValue::Set(name.to_string());
-            active_model.update(&storage.conn).await?;
+            LabelRepository::update(&storage.conn, active_model).await?;
         }
 
         Ok(())
@@ -679,15 +576,10 @@ impl SyncService {
         );
         let storage = self.storage.lock().await;
 
-        let project = project::Entity::find()
-            .filter(project::Column::Uuid.eq(*project_uuid))
-            .one(&storage.conn)
-            .await?;
-
-        if let Some(project) = project {
+        if let Some(project) = ProjectRepository::get_by_id(&storage.conn, project_uuid).await? {
             let mut active_model: project::ActiveModel = project.into_active_model();
             active_model.name = ActiveValue::Set(name.to_string());
-            active_model.update(&storage.conn).await?;
+            ProjectRepository::update(&storage.conn, active_model).await?;
         }
 
         Ok(())
@@ -712,15 +604,10 @@ impl SyncService {
         );
         let storage = self.storage.lock().await;
 
-        let task = task::Entity::find()
-            .filter(task::Column::Uuid.eq(*task_uuid))
-            .one(&storage.conn)
-            .await?;
-
-        if let Some(task) = task {
+        if let Some(task) = TaskRepository::get_by_id(&storage.conn, task_uuid).await? {
             let mut active_model: task::ActiveModel = task.into_active_model();
             active_model.content = ActiveValue::Set(content.to_string());
-            active_model.update(&storage.conn).await?;
+            TaskRepository::update(&storage.conn, active_model).await?;
         }
 
         Ok(())
@@ -743,15 +630,10 @@ impl SyncService {
         // Then update local storage
         let storage = self.storage.lock().await;
 
-        let task = task::Entity::find()
-            .filter(task::Column::Uuid.eq(*task_uuid))
-            .one(&storage.conn)
-            .await?;
-
-        if let Some(task) = task {
+        if let Some(task) = TaskRepository::get_by_id(&storage.conn, task_uuid).await? {
             let mut active_model: task::ActiveModel = task.into_active_model();
             active_model.due_date = ActiveValue::Set(due_date.map(|s| s.to_string()));
-            active_model.update(&storage.conn).await?;
+            TaskRepository::update(&storage.conn, active_model).await?;
         }
 
         info!("API: Successfully updated task due date {}", task_uuid);
@@ -775,15 +657,10 @@ impl SyncService {
         // Then update local storage
         let storage = self.storage.lock().await;
 
-        let task = task::Entity::find()
-            .filter(task::Column::Uuid.eq(*task_uuid))
-            .one(&storage.conn)
-            .await?;
-
-        if let Some(task) = task {
+        if let Some(task) = TaskRepository::get_by_id(&storage.conn, task_uuid).await? {
             let mut active_model: task::ActiveModel = task.into_active_model();
             active_model.priority = ActiveValue::Set(priority);
-            active_model.update(&storage.conn).await?;
+            TaskRepository::update(&storage.conn, active_model).await?;
         }
 
         info!("API: Successfully updated task priority {}", task_uuid);
@@ -801,12 +678,8 @@ impl SyncService {
         // Remove from local storage
         let storage = self.storage.lock().await;
 
-        if let Some(project) = project::Entity::find()
-            .filter(project::Column::Uuid.eq(*project_uuid))
-            .one(&storage.conn)
-            .await?
-        {
-            project.delete(&storage.conn).await?;
+        if let Some(project) = ProjectRepository::get_by_id(&storage.conn, project_uuid).await? {
+            ProjectRepository::delete(&storage.conn, project).await?;
         }
 
         Ok(())
@@ -983,13 +856,9 @@ impl SyncService {
     ///
     /// # Errors
     /// Returns error if project with given UUID doesn't exist locally
-    async fn lookup_project_remote_id(conn: &sea_orm::DatabaseConnection, project_uuid: &Uuid) -> Result<String> {
-        project::Entity::find()
-            .filter(project::Column::Uuid.eq(*project_uuid))
-            .one(conn)
-            .await?
-            .map(|p| p.remote_id)
-            .ok_or_else(|| anyhow::anyhow!("Project not found: {}", project_uuid))
+    async fn get_project_remote_id(&self, project_uuid: &Uuid) -> Result<String> {
+        let storage = self.storage.lock().await;
+        ProjectRepository::get_remote_id(&storage.conn, project_uuid).await
     }
 
     /// Look up remote_id from local label UUID (with automatic locking).
@@ -1002,13 +871,9 @@ impl SyncService {
     ///
     /// # Errors
     /// Returns error if label with given UUID doesn't exist locally
-    async fn lookup_label_remote_id(conn: &sea_orm::DatabaseConnection, label_uuid: &Uuid) -> Result<String> {
-        label::Entity::find()
-            .filter(label::Column::Uuid.eq(*label_uuid))
-            .one(conn)
-            .await?
-            .map(|l| l.remote_id)
-            .ok_or_else(|| anyhow::anyhow!("Label not found: {}", label_uuid))
+    async fn get_label_remote_id(&self, label_uuid: &Uuid) -> Result<String> {
+        let storage = self.storage.lock().await;
+        LabelRepository::get_remote_id(&storage.conn, label_uuid).await
     }
 
     /// Look up local project UUID from remote project_id.
@@ -1028,11 +893,7 @@ impl SyncService {
         remote_project_id: &str,
         context: &str,
     ) -> Result<Uuid> {
-        if let Some(project) = project::Entity::find()
-            .filter(project::Column::RemoteId.eq(remote_project_id))
-            .one(txn)
-            .await?
-        {
+        if let Some(project) = ProjectRepository::get_by_remote_id(txn, remote_project_id).await? {
             Ok(project.uuid)
         } else {
             Err(anyhow::anyhow!(
@@ -1059,11 +920,7 @@ impl SyncService {
         remote_section_id: Option<&String>,
     ) -> Result<Option<Uuid>> {
         if let Some(remote_id) = remote_section_id {
-            let section_uuid = section::Entity::find()
-                .filter(section::Column::RemoteId.eq(remote_id))
-                .one(txn)
-                .await?
-                .map(|s| s.uuid);
+            let section_uuid = SectionRepository::get_by_remote_id(txn, remote_id).await?.map(|s| s.uuid);
             Ok(section_uuid)
         } else {
             Ok(None)
@@ -1109,19 +966,11 @@ impl SyncService {
         // Second pass: Update parent_uuid references to use local UUIDs
         for api_project in projects {
             if let Some(remote_parent_id) = &api_project.parent_id {
-                if let Some(parent) = project::Entity::find()
-                    .filter(project::Column::RemoteId.eq(remote_parent_id))
-                    .one(&txn)
-                    .await?
-                {
-                    if let Some(project) = project::Entity::find()
-                        .filter(project::Column::RemoteId.eq(&api_project.id))
-                        .one(&txn)
-                        .await?
-                    {
+                if let Some(parent) = ProjectRepository::get_by_remote_id(&txn, remote_parent_id).await? {
+                    if let Some(project) = ProjectRepository::get_by_remote_id(&txn, &api_project.id).await? {
                         let mut active_model: project::ActiveModel = project.into_active_model();
                         active_model.parent_uuid = ActiveValue::Set(Some(parent.uuid));
-                        active_model.update(&txn).await?;
+                        ProjectRepository::update(&txn, active_model).await?;
                     }
                 }
             }
@@ -1242,11 +1091,7 @@ impl SyncService {
             insert.exec(&txn).await?;
 
             // Get the uuid of the task we just inserted/updated
-            if let Some(task) = task::Entity::find()
-                .filter(task::Column::RemoteId.eq(&api_task.id))
-                .one(&txn)
-                .await?
-            {
+            if let Some(task) = TaskRepository::get_by_remote_id(&txn, &api_task.id).await? {
                 task_labels_map.push((task.uuid, label_names));
             }
         }
@@ -1254,19 +1099,11 @@ impl SyncService {
         // Second pass: Update parent_uuid references to use local UUIDs
         for api_task in tasks {
             if let Some(remote_parent_id) = &api_task.parent_id {
-                if let Some(parent) = task::Entity::find()
-                    .filter(task::Column::RemoteId.eq(remote_parent_id))
-                    .one(&txn)
-                    .await?
-                {
-                    if let Some(task) = task::Entity::find()
-                        .filter(task::Column::RemoteId.eq(&api_task.id))
-                        .one(&txn)
-                        .await?
-                    {
+                if let Some(parent) = TaskRepository::get_by_remote_id(&txn, remote_parent_id).await? {
+                    if let Some(task) = TaskRepository::get_by_remote_id(&txn, &api_task.id).await? {
                         let mut active_model: task::ActiveModel = task.into_active_model();
                         active_model.parent_uuid = ActiveValue::Set(Some(parent.uuid));
-                        active_model.update(&txn).await?;
+                        TaskRepository::update(&txn, active_model).await?;
                     }
                 }
             }
@@ -1280,11 +1117,7 @@ impl SyncService {
             if !label_names.is_empty() {
                 // Find label UUIDs by names
                 for label_name in label_names {
-                    if let Some(label) = label::Entity::find()
-                        .filter(label::Column::Name.eq(&label_name))
-                        .one(&txn)
-                        .await?
-                    {
+                    if let Some(label) = LabelRepository::get_by_name(&txn, &label_name).await? {
                         let task_label_relation = task_label::ActiveModel {
                             task_uuid: ActiveValue::Set(task_uuid),
                             label_uuid: ActiveValue::Set(label.uuid),
@@ -1367,15 +1200,10 @@ impl SyncService {
         // Then mark as completed in local storage (soft completion)
         let storage = self.storage.lock().await;
 
-        let task = task::Entity::find()
-            .filter(task::Column::Uuid.eq(*task_uuid))
-            .one(&storage.conn)
-            .await?;
-
-        if let Some(task) = task {
+        if let Some(task) = TaskRepository::get_by_id(&storage.conn, task_uuid).await? {
             let mut active_model: task::ActiveModel = task.into_active_model();
             active_model.is_completed = ActiveValue::Set(true);
-            active_model.update(&storage.conn).await?;
+            TaskRepository::update(&storage.conn, active_model).await?;
         }
 
         Ok(())
@@ -1401,15 +1229,10 @@ impl SyncService {
         // Then mark as deleted in local storage (soft deletion)
         let storage = self.storage.lock().await;
 
-        let task = task::Entity::find()
-            .filter(task::Column::Uuid.eq(*task_uuid))
-            .one(&storage.conn)
-            .await?;
-
-        if let Some(task) = task {
+        if let Some(task) = TaskRepository::get_by_id(&storage.conn, task_uuid).await? {
             let mut active_model: task::ActiveModel = task.into_active_model();
             active_model.is_deleted = ActiveValue::Set(true);
-            active_model.update(&storage.conn).await?;
+            TaskRepository::update(&storage.conn, active_model).await?;
         }
 
         Ok(())
@@ -1420,28 +1243,21 @@ impl SyncService {
     pub async fn restore_task(&self, task_id: &Uuid) -> Result<()> {
         // First, get the task from local storage to check its state
         let storage = self.storage.lock().await;
-        let task = task::Entity::find()
-            .filter(task::Column::Uuid.eq(*task_id))
-            .one(&storage.conn)
+        let task = TaskRepository::get_by_id(&storage.conn, task_id)
             .await?
             .ok_or_else(|| anyhow::anyhow!("Task not found in local storage: {}", task_id))?;
 
         if task.is_deleted {
             // For deleted tasks, we need to recreate them via API
             // Look up remote IDs before dropping storage lock
-            let remote_project_id = Self::lookup_project_remote_id(&storage.conn, &task.project_uuid).await?;
+            let remote_project_id = ProjectRepository::get_remote_id(&storage.conn, &task.project_uuid).await?;
             let remote_section_id = if let Some(section_uuid) = &task.section_uuid {
-                // Look up the section's remote_id directly
-                let section = section::Entity::find()
-                    .filter(section::Column::Uuid.eq(*section_uuid))
-                    .one(&storage.conn)
-                    .await?;
-                section.map(|s| s.remote_id)
+                SectionRepository::get_remote_id(&storage.conn, section_uuid).await?
             } else {
                 None
             };
             let remote_parent_id = if let Some(parent_uuid) = &task.parent_uuid {
-                Some(Self::lookup_task_remote_id(&storage.conn, parent_uuid).await?)
+                Some(TaskRepository::get_remote_id(&storage.conn, parent_uuid).await?)
             } else {
                 None
             };
@@ -1468,12 +1284,8 @@ impl SyncService {
             let storage = self.storage.lock().await;
 
             // Hard delete the old soft-deleted task
-            if let Some(old_task) = task::Entity::find()
-                .filter(task::Column::Uuid.eq(*task_id))
-                .one(&storage.conn)
-                .await?
-            {
-                old_task.delete(&storage.conn).await?;
+            if let Some(old_task) = TaskRepository::get_by_id(&storage.conn, task_id).await? {
+                TaskRepository::delete(&storage.conn, old_task).await?;
             }
 
             // Store the new task (reuse the single task upsert logic)
@@ -1484,11 +1296,7 @@ impl SyncService {
             let section_uuid = Self::lookup_section_uuid(&txn, new_task.section_id.as_ref()).await?;
 
             let parent_uuid = if let Some(remote_parent_id) = &new_task.parent_id {
-                task::Entity::find()
-                    .filter(task::Column::RemoteId.eq(remote_parent_id))
-                    .one(&txn)
-                    .await?
-                    .map(|t| t.uuid)
+                TaskRepository::get_by_remote_id(&txn, remote_parent_id).await?.map(|t| t.uuid)
             } else {
                 None
             };
@@ -1554,15 +1362,10 @@ impl SyncService {
             // Clear local completion flag
             let storage = self.storage.lock().await;
 
-            let task = task::Entity::find()
-                .filter(task::Column::Uuid.eq(*task_id))
-                .one(&storage.conn)
-                .await?;
-
-            if let Some(task) = task {
+            if let Some(task) = TaskRepository::get_by_id(&storage.conn, task_id).await? {
                 let mut active_model: task::ActiveModel = task.into_active_model();
                 active_model.is_completed = ActiveValue::Set(false);
-                active_model.update(&storage.conn).await?;
+                TaskRepository::update(&storage.conn, active_model).await?;
             }
         }
 
