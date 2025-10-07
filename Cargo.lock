@@ -2701,6 +2701,7 @@ name = "terminalist"
 version = "0.3.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "crossterm 0.29.0",
  "dirs",
@@ -2711,6 +2712,7 @@ dependencies = [
  "sea-orm",
  "serde",
  "serde_json",
+ "thiserror",
  "todoist-api",
  "tokio",
  "toml",

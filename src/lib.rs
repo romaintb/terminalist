@@ -16,6 +16,9 @@
 //! * [`ui`] - Terminal user interface components
 //! * [`utils`] - Utility functions and helpers
 
+/// Backend abstraction layer for multi-backend support
+pub mod backend;
+
 /// Configuration module for managing application settings
 pub mod config;
 

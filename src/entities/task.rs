@@ -8,7 +8,7 @@ use uuid::Uuid;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub uuid: Uuid,
-    #[sea_orm(unique)]
+    pub backend_uuid: Uuid,
     pub remote_id: String,
     pub content: String,
     pub description: Option<String>,
@@ -49,6 +49,13 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Parent,
+    #[sea_orm(
+        belongs_to = "super::backend::Entity",
+        from = "Column::BackendUuid",
+        to = "super::backend::Column::Uuid",
+        on_delete = "Cascade"
+    )]
+    Backend,
 }
 
 impl Related<super::project::Entity> for Entity {
@@ -69,6 +76,12 @@ impl Related<super::label::Entity> for Entity {
     }
     fn via() -> Option<RelationDef> {
         Some(super::task_label::Relation::Task.def().rev())
+    }
+}
+
+impl Related<super::backend::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Backend.def()
     }
 }
 

@@ -2,7 +2,7 @@ use anyhow::Result;
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbBackend, Schema, Statement};
 use std::time::Duration;
 
-use crate::entities::{label, project, section, task, task_label};
+use crate::entities::{backend, label, project, section, task, task_label};
 
 /// Local storage manager for Todoist data
 pub struct LocalStorage {
@@ -13,10 +13,8 @@ impl LocalStorage {
     /// Initialize the local storage with SQLite database
     pub async fn new(debug_mode: bool) -> Result<Self> {
         let database_url = if debug_mode {
-            // File-backed database for debugging
             "sqlite:terminalist_debug.db?mode=rwc"
         } else {
-            // In-memory database for normal operation
             "sqlite::memory:"
         };
 
@@ -48,7 +46,8 @@ impl LocalStorage {
         let schema = Schema::new(backend);
 
         // Create tables in the correct order (parent tables first)
-        let statements = vec![
+        let table_statements = vec![
+            schema.create_table_from_entity(backend::Entity),
             schema.create_table_from_entity(project::Entity),
             schema.create_table_from_entity(section::Entity),
             schema.create_table_from_entity(label::Entity),
@@ -56,8 +55,24 @@ impl LocalStorage {
             schema.create_table_from_entity(task_label::Entity),
         ];
 
-        for statement in statements {
+        for statement in table_statements {
             self.conn.execute(backend.build(&statement)).await?;
+        }
+
+        // Create composite unique indexes for (backend_uuid, remote_id)
+        let indexes = vec![
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_backend_remote ON projects(backend_uuid, remote_id)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_sections_backend_remote ON sections(backend_uuid, remote_id)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_labels_backend_remote ON labels(backend_uuid, remote_id)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_tasks_backend_remote ON tasks(backend_uuid, remote_id)",
+        ];
+
+        for index_sql in indexes {
+            self.conn.execute(Statement::from_string(
+                DbBackend::Sqlite,
+                index_sql.to_owned(),
+            ))
+            .await?;
         }
 
         Ok(())

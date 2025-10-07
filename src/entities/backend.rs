@@ -1,42 +1,33 @@
+//! Backend entity for storing configured backend instances.
+
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "sections")]
+#[sea_orm(table_name = "backends")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub uuid: Uuid,
-    pub backend_uuid: Uuid,
-    pub remote_id: String,
+    pub backend_type: String,
     pub name: String,
-    pub project_uuid: Uuid,
-    pub order_index: i32,
+    pub config: String, // JSON-encoded configuration (tokens, credentials, etc.)
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(
-        belongs_to = "super::project::Entity",
-        from = "Column::ProjectUuid",
-        to = "super::project::Column::Uuid",
-        on_delete = "Cascade"
-    )]
-    Project,
+    #[sea_orm(has_many = "super::project::Entity")]
+    Projects,
     #[sea_orm(has_many = "super::task::Entity")]
     Tasks,
-    #[sea_orm(
-        belongs_to = "super::backend::Entity",
-        from = "Column::BackendUuid",
-        to = "super::backend::Column::Uuid",
-        on_delete = "Cascade"
-    )]
-    Backend,
+    #[sea_orm(has_many = "super::label::Entity")]
+    Labels,
+    #[sea_orm(has_many = "super::section::Entity")]
+    Sections,
 }
 
 impl Related<super::project::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Project.def()
+        Relation::Projects.def()
     }
 }
 
@@ -46,9 +37,15 @@ impl Related<super::task::Entity> for Entity {
     }
 }
 
-impl Related<super::backend::Entity> for Entity {
+impl Related<super::label::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Backend.def()
+        Relation::Labels.def()
+    }
+}
+
+impl Related<super::section::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Sections.def()
     }
 }
 

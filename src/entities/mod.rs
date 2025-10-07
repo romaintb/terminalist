@@ -1,9 +1,11 @@
+pub mod backend;
 pub mod label;
 pub mod project;
 pub mod section;
 pub mod task;
 pub mod task_label;
 
+pub use backend::Entity as Backend;
 pub use label::Entity as Label;
 pub use project::Entity as Project;
 pub use section::Entity as Section;

@@ -12,10 +12,7 @@
 
 use anyhow::Result;
 use log::{error, info};
-use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, EntityTrait, IntoActiveModel, ModelTrait, QueryFilter, QueryOrder,
-    QuerySelect, QueryTrait, TransactionTrait,
-};
+use sea_orm::{ActiveValue, EntityTrait, IntoActiveModel, TransactionTrait};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -60,6 +57,8 @@ pub struct SyncService {
     storage: Arc<Mutex<LocalStorage>>,
     sync_in_progress: Arc<Mutex<bool>>,
     debug_mode: bool,
+    // Temporary: single backend UUID until registry is implemented
+    default_backend_uuid: Uuid,
 }
 
 /// Represents the current status of a synchronization operation.
@@ -102,11 +101,27 @@ impl SyncService {
         let storage = Arc::new(Mutex::new(LocalStorage::new(debug_mode).await?));
         let sync_in_progress = Arc::new(Mutex::new(false));
 
+        // TEMPORARY: Create the default backend record
+        let default_backend_uuid = {
+            use crate::entities::backend;
+            let storage_guard = storage.lock().await;
+
+            let backend_model = backend::ActiveModel {
+                uuid: ActiveValue::Set(Uuid::new_v4()),
+                backend_type: ActiveValue::Set("todoist".to_string()),
+                name: ActiveValue::Set("Default".to_string()),
+                config: ActiveValue::Set("{}".to_string()),
+            };
+            let insert_result = backend::Entity::insert(backend_model).exec(&storage_guard.conn).await?;
+            insert_result.last_insert_id
+        };
+
         Ok(Self {
             todoist,
             storage,
             sync_in_progress,
             debug_mode,
+            default_backend_uuid,
         })
     }
 
@@ -390,10 +405,7 @@ impl SyncService {
     pub async fn create_project(&self, name: &str, parent_uuid: Option<Uuid>) -> Result<()> {
         // Look up remote_id for parent project if provided
         let remote_parent_id = if let Some(uuid) = parent_uuid {
-            let storage = self.storage.lock().await;
-            let remote_id = Self::lookup_project_remote_id(&storage.conn, &uuid).await?;
-            drop(storage);
-            Some(remote_id)
+            Some(self.get_project_remote_id(&uuid).await?)
         } else {
             None
         };
@@ -401,10 +413,8 @@ impl SyncService {
         // Create project via API using the new CreateProjectArgs structure
         let project_args = CreateProjectArgs {
             name: name.to_string(),
-            color: None,
             parent_id: remote_parent_id,
-            is_favorite: None,
-            view_style: None,
+            ..Default::default()
         };
         let api_project = self.todoist.create_project(&project_args).await?;
 
@@ -414,6 +424,7 @@ impl SyncService {
         // Upsert the project
         let local_project = project::ActiveModel {
             uuid: ActiveValue::Set(Uuid::new_v4()),
+            backend_uuid: ActiveValue::Set(self.default_backend_uuid),
             remote_id: ActiveValue::Set(api_project.id),
             name: ActiveValue::Set(api_project.name),
             color: ActiveValue::Set(api_project.color),
@@ -426,7 +437,7 @@ impl SyncService {
         use sea_orm::sea_query::OnConflict;
         let mut insert = project::Entity::insert(local_project);
         insert = insert.on_conflict(
-            OnConflict::column(project::Column::RemoteId)
+            OnConflict::columns([project::Column::BackendUuid, project::Column::RemoteId])
                 .update_columns([
                     project::Column::Name,
                     project::Column::Color,
@@ -456,10 +467,7 @@ impl SyncService {
     pub async fn create_task(&self, content: &str, project_uuid: Option<Uuid>) -> Result<()> {
         // Look up remote_id for project if provided
         let remote_project_id = if let Some(uuid) = project_uuid {
-            let storage = self.storage.lock().await;
-            let remote_id = Self::lookup_project_remote_id(&storage.conn, &uuid).await?;
-            drop(storage);
-            Some(remote_id)
+            Some(self.get_project_remote_id(&uuid).await?)
         } else {
             None
         };
@@ -467,22 +475,8 @@ impl SyncService {
         // Create task via API using the new CreateTaskArgs structure
         let task_args = todoist_api::CreateTaskArgs {
             content: content.to_string(),
-            description: None,
             project_id: remote_project_id,
-            section_id: None,
-            parent_id: None,
-            order: None,
-            priority: None,
-            labels: None,
-            due_string: None,
-            due_date: None,
-            due_datetime: None,
-            due_lang: None,
-            deadline_date: None,
-            deadline_lang: None,
-            assignee_id: None,
-            duration: None,
-            duration_unit: None,
+            ..Default::default()
         };
         let api_task = self.todoist.create_task(&task_args).await?;
 
@@ -516,6 +510,7 @@ impl SyncService {
 
         let local_task = task::ActiveModel {
             uuid: ActiveValue::Set(Uuid::new_v4()),
+            backend_uuid: ActiveValue::Set(self.default_backend_uuid),
             remote_id: ActiveValue::Set(api_task.id),
             content: ActiveValue::Set(api_task.content),
             description: ActiveValue::Set(Some(api_task.description)),
@@ -536,7 +531,7 @@ impl SyncService {
         use sea_orm::sea_query::OnConflict;
         let mut insert = task::Entity::insert(local_task);
         insert = insert.on_conflict(
-            OnConflict::column(task::Column::RemoteId)
+            OnConflict::columns([task::Column::BackendUuid, task::Column::RemoteId])
                 .update_columns([
                     task::Column::Content,
                     task::Column::Description,
@@ -581,8 +576,7 @@ impl SyncService {
         let label_args = todoist_api::CreateLabelArgs {
             name: name.to_string(),
             color: color.map(std::string::ToString::to_string),
-            order: None,
-            is_favorite: None,
+            ..Default::default()
         };
         let api_label = self.todoist.create_label(&label_args).await?;
 
@@ -592,6 +586,7 @@ impl SyncService {
 
         let local_label = label::ActiveModel {
             uuid: ActiveValue::Set(Uuid::new_v4()),
+            backend_uuid: ActiveValue::Set(self.default_backend_uuid),
             remote_id: ActiveValue::Set(api_label.id),
             name: ActiveValue::Set(api_label.name),
             color: ActiveValue::Set(api_label.color),
@@ -602,7 +597,7 @@ impl SyncService {
         use sea_orm::sea_query::OnConflict;
         let mut insert = label::Entity::insert(local_label);
         insert = insert.on_conflict(
-            OnConflict::column(label::Column::RemoteId)
+            OnConflict::columns([label::Column::BackendUuid, label::Column::RemoteId])
                 .update_columns([
                     label::Column::Name,
                     label::Column::Color,
@@ -621,17 +616,12 @@ impl SyncService {
         info!("API: Updating label name for UUID {} to '{}'", label_uuid, name);
 
         // Look up the label's remote_id for API call
-        let storage = self.storage.lock().await;
-        let remote_id = Self::lookup_label_remote_id(&storage.conn, label_uuid).await?;
-        drop(storage);
+        let remote_id = self.get_label_remote_id(label_uuid).await?;
 
         // Update label via API using the UpdateLabelArgs structure
         let label_args = todoist_api::UpdateLabelArgs {
             name: Some(name.to_string()),
-            // Set all other fields to None to avoid overwriting existing data
-            color: None,
-            order: None,
-            is_favorite: None,
+            ..Default::default()
         };
         let _label = self.todoist.update_label(&remote_id, &label_args).await?;
 
@@ -659,9 +649,7 @@ impl SyncService {
     /// Delete a label
     pub async fn delete_label(&self, label_uuid: &Uuid) -> Result<()> {
         // Look up the label's remote_id for API call
-        let storage = self.storage.lock().await;
-        let remote_id = Self::lookup_label_remote_id(&storage.conn, label_uuid).await?;
-        drop(storage);
+        let remote_id = self.get_label_remote_id(label_uuid).await?;
 
         // Delete label via API
         self.todoist.delete_label(&remote_id).await?;
@@ -675,17 +663,12 @@ impl SyncService {
         info!("API: Updating project name for UUID {} to '{}'", project_uuid, name);
 
         // Look up the project's remote_id for API call
-        let storage = self.storage.lock().await;
-        let remote_id = Self::lookup_project_remote_id(&storage.conn, project_uuid).await?;
-        drop(storage);
+        let remote_id = self.get_project_remote_id(project_uuid).await?;
 
         // Update project via API using the UpdateProjectArgs structure
         let project_args = todoist_api::UpdateProjectArgs {
             name: Some(name.to_string()),
-            // Set all other fields to None to avoid overwriting existing data
-            color: None,
-            is_favorite: None,
-            view_style: None,
+            ..Default::default()
         };
         let _project = self.todoist.update_project(&remote_id, &project_args).await?;
 
@@ -713,25 +696,12 @@ impl SyncService {
     /// Update task content
     pub async fn update_task_content(&self, task_uuid: &Uuid, content: &str) -> Result<()> {
         // Look up the task's remote_id for API call
-        let storage = self.storage.lock().await;
-        let remote_id = Self::lookup_task_remote_id(&storage.conn, task_uuid).await?;
-        drop(storage);
+        let remote_id = self.get_task_remote_id(task_uuid).await?;
 
         // Update task via API using the UpdateTaskArgs structure
         let task_args = todoist_api::UpdateTaskArgs {
             content: Some(content.to_string()),
-            description: None,
-            labels: None,
-            priority: None,
-            due_string: None,
-            due_date: None,
-            due_datetime: None,
-            due_lang: None,
-            deadline_date: None,
-            deadline_lang: None,
-            assignee_id: None,
-            duration: None,
-            duration_unit: None,
+            ..Default::default()
         };
         let _task = self.todoist.update_task(&remote_id, &task_args).await?;
 
@@ -761,25 +731,12 @@ impl SyncService {
         info!("API: Updating task due date for UUID {} to {:?}", task_uuid, due_date);
 
         // Look up the task's remote_id for API call
-        let storage = self.storage.lock().await;
-        let remote_id = Self::lookup_task_remote_id(&storage.conn, task_uuid).await?;
-        drop(storage);
+        let remote_id = self.get_task_remote_id(task_uuid).await?;
 
         // Update task via API using the UpdateTaskArgs structure
         let task_args = todoist_api::UpdateTaskArgs {
-            content: None,
-            description: None,
-            labels: None,
-            priority: None,
-            due_string: None,
             due_date: due_date.map(std::string::ToString::to_string),
-            due_datetime: None,
-            due_lang: None,
-            deadline_date: None,
-            deadline_lang: None,
-            assignee_id: None,
-            duration: None,
-            duration_unit: None,
+            ..Default::default()
         };
         let _task = self.todoist.update_task(&remote_id, &task_args).await?;
 
@@ -806,25 +763,12 @@ impl SyncService {
         info!("API: Updating task priority for UUID {} to {}", task_uuid, priority);
 
         // Look up the task's remote_id for API call
-        let storage = self.storage.lock().await;
-        let remote_id = Self::lookup_task_remote_id(&storage.conn, task_uuid).await?;
-        drop(storage);
+        let remote_id = self.get_task_remote_id(task_uuid).await?;
 
         // Update task via API using the UpdateTaskArgs structure
         let task_args = todoist_api::UpdateTaskArgs {
-            content: None,
-            description: None,
-            labels: None,
             priority: Some(priority),
-            due_string: None,
-            due_date: None,
-            due_datetime: None,
-            due_lang: None,
-            deadline_date: None,
-            deadline_lang: None,
-            assignee_id: None,
-            duration: None,
-            duration_unit: None,
+            ..Default::default()
         };
         let _task = self.todoist.update_task(&remote_id, &task_args).await?;
 
@@ -849,9 +793,7 @@ impl SyncService {
     /// Delete a project
     pub async fn delete_project(&self, project_uuid: &Uuid) -> Result<()> {
         // Look up the project's remote_id for API call
-        let storage = self.storage.lock().await;
-        let remote_id = Self::lookup_project_remote_id(&storage.conn, project_uuid).await?;
-        drop(storage);
+        let remote_id = self.get_project_remote_id(project_uuid).await?;
 
         // Delete project via API
         self.todoist.delete_project(&remote_id).await?;
@@ -1016,10 +958,9 @@ impl SyncService {
         Ok(SyncStatus::Success)
     }
 
-    /// Look up remote_id from local task UUID.
+    /// Look up remote_id from local task UUID (with automatic locking).
     ///
     /// # Arguments
-    /// * `conn` - Database connection
     /// * `task_uuid` - Local task UUID
     ///
     /// # Returns
@@ -1027,19 +968,14 @@ impl SyncService {
     ///
     /// # Errors
     /// Returns error if task with given UUID doesn't exist locally
-    async fn lookup_task_remote_id(conn: &sea_orm::DatabaseConnection, task_uuid: &Uuid) -> Result<String> {
-        task::Entity::find()
-            .filter(task::Column::Uuid.eq(*task_uuid))
-            .one(conn)
-            .await?
-            .map(|t| t.remote_id)
-            .ok_or_else(|| anyhow::anyhow!("Task not found: {}", task_uuid))
+    async fn get_task_remote_id(&self, task_uuid: &Uuid) -> Result<String> {
+        let storage = self.storage.lock().await;
+        TaskRepository::get_remote_id(&storage.conn, task_uuid).await
     }
 
-    /// Look up remote_id from local project UUID.
+    /// Look up remote_id from local project UUID (with automatic locking).
     ///
     /// # Arguments
-    /// * `conn` - Database connection
     /// * `project_uuid` - Local project UUID
     ///
     /// # Returns
@@ -1056,10 +992,9 @@ impl SyncService {
             .ok_or_else(|| anyhow::anyhow!("Project not found: {}", project_uuid))
     }
 
-    /// Look up remote_id from local label UUID.
+    /// Look up remote_id from local label UUID (with automatic locking).
     ///
     /// # Arguments
-    /// * `conn` - Database connection
     /// * `label_uuid` - Local label UUID
     ///
     /// # Returns
@@ -1145,6 +1080,7 @@ impl SyncService {
         for api_project in projects {
             let local_project = project::ActiveModel {
                 uuid: ActiveValue::Set(Uuid::new_v4()),
+                backend_uuid: ActiveValue::Set(self.default_backend_uuid),
                 remote_id: ActiveValue::Set(api_project.id.clone()),
                 name: ActiveValue::Set(api_project.name.clone()),
                 color: ActiveValue::Set(api_project.color.clone()),
@@ -1156,7 +1092,7 @@ impl SyncService {
 
             let mut insert = project::Entity::insert(local_project);
             insert = insert.on_conflict(
-                OnConflict::column(project::Column::RemoteId)
+                OnConflict::columns([project::Column::BackendUuid, project::Column::RemoteId])
                     .update_columns([
                         project::Column::Name,
                         project::Column::Color,
@@ -1204,6 +1140,7 @@ impl SyncService {
         for api_label in labels {
             let local_label = label::ActiveModel {
                 uuid: ActiveValue::Set(Uuid::new_v4()),
+                backend_uuid: ActiveValue::Set(self.default_backend_uuid),
                 remote_id: ActiveValue::Set(api_label.id.clone()),
                 name: ActiveValue::Set(api_label.name.clone()),
                 color: ActiveValue::Set(api_label.color.clone()),
@@ -1213,7 +1150,7 @@ impl SyncService {
 
             let mut insert = label::Entity::insert(local_label);
             insert = insert.on_conflict(
-                OnConflict::column(label::Column::RemoteId)
+                OnConflict::columns([label::Column::BackendUuid, label::Column::RemoteId])
                     .update_columns([
                         label::Column::Name,
                         label::Column::Color,
@@ -1263,6 +1200,7 @@ impl SyncService {
 
             let local_task = task::ActiveModel {
                 uuid: ActiveValue::Set(Uuid::new_v4()),
+                backend_uuid: ActiveValue::Set(self.default_backend_uuid),
                 remote_id: ActiveValue::Set(api_task.id.clone()),
                 content: ActiveValue::Set(api_task.content.clone()),
                 description: ActiveValue::Set(Some(api_task.description.clone())),
@@ -1282,7 +1220,7 @@ impl SyncService {
 
             let mut insert = task::Entity::insert(local_task);
             insert = insert.on_conflict(
-                OnConflict::column(task::Column::RemoteId)
+                OnConflict::columns([task::Column::BackendUuid, task::Column::RemoteId])
                     .update_columns([
                         task::Column::Content,
                         task::Column::Description,
@@ -1383,6 +1321,7 @@ impl SyncService {
 
             let local_section = section::ActiveModel {
                 uuid: ActiveValue::Set(Uuid::new_v4()),
+                backend_uuid: ActiveValue::Set(self.default_backend_uuid),
                 remote_id: ActiveValue::Set(api_section.id.clone()),
                 name: ActiveValue::Set(api_section.name.clone()),
                 project_uuid: ActiveValue::Set(project_uuid),
@@ -1391,7 +1330,7 @@ impl SyncService {
 
             let mut insert = section::Entity::insert(local_section);
             insert = insert.on_conflict(
-                OnConflict::column(section::Column::RemoteId)
+                OnConflict::columns([section::Column::BackendUuid, section::Column::RemoteId])
                     .update_columns([section::Column::Name, section::Column::ProjectUuid, section::Column::OrderIndex])
                     .to_owned(),
             );
@@ -1420,9 +1359,7 @@ impl SyncService {
     /// Returns an error if the API call fails or local storage update fails
     pub async fn complete_task(&self, task_uuid: &Uuid) -> Result<()> {
         // Look up the task's remote_id for API call
-        let storage = self.storage.lock().await;
-        let remote_id = Self::lookup_task_remote_id(&storage.conn, task_uuid).await?;
-        drop(storage); // Release lock before API call
+        let remote_id = self.get_task_remote_id(task_uuid).await?;
 
         // Complete the task via API using remote_id (this handles subtasks automatically)
         self.todoist.complete_task(&remote_id).await?;
@@ -1446,7 +1383,7 @@ impl SyncService {
 
     /// Permanently deletes a task via the Todoist API and removes it from local storage.
     ///
-    /// This method performs a hard delete of the task both remotely and locally.
+    /// This method performs a hard delete of the task remotely, soft delete locally.
     /// The task will be permanently removed and cannot be recovered.
     ///
     /// # Arguments
@@ -1456,9 +1393,7 @@ impl SyncService {
     /// Returns an error if the API call fails or local storage update fails
     pub async fn delete_task(&self, task_uuid: &Uuid) -> Result<()> {
         // Look up the task's remote_id for API call
-        let storage = self.storage.lock().await;
-        let remote_id = Self::lookup_task_remote_id(&storage.conn, task_uuid).await?;
-        drop(storage); // Release lock before API call
+        let remote_id = self.get_task_remote_id(task_uuid).await?;
 
         // Delete the task via API using remote_id
         self.todoist.delete_task(&remote_id).await?;
@@ -1520,18 +1455,11 @@ impl SyncService {
                 project_id: Some(remote_project_id),
                 section_id: remote_section_id,
                 parent_id: remote_parent_id,
-                order: None,
-                labels: None, // TODO: Fetch task labels from storage
                 priority: Some(task.priority),
                 due_string: task.due_date.clone(),
-                due_date: None,
                 due_datetime: task.due_datetime.clone(),
-                due_lang: None,
-                assignee_id: None,
                 deadline_date: task.deadline.clone(),
-                deadline_lang: None,
-                duration: None,
-                duration_unit: None,
+                ..Default::default()
             };
 
             let new_task = self.todoist.create_task(&task_args).await?;
@@ -1574,6 +1502,7 @@ impl SyncService {
 
             let local_task = task::ActiveModel {
                 uuid: ActiveValue::Set(Uuid::new_v4()),
+                backend_uuid: ActiveValue::Set(self.default_backend_uuid),
                 remote_id: ActiveValue::Set(new_task.id),
                 content: ActiveValue::Set(new_task.content),
                 description: ActiveValue::Set(Some(new_task.description)),
@@ -1594,7 +1523,7 @@ impl SyncService {
             use sea_orm::sea_query::OnConflict;
             let mut insert = task::Entity::insert(local_task);
             insert = insert.on_conflict(
-                OnConflict::column(task::Column::RemoteId)
+                OnConflict::columns([task::Column::BackendUuid, task::Column::RemoteId])
                     .update_columns([
                         task::Column::Content,
                         task::Column::Description,
