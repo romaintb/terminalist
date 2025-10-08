@@ -16,6 +16,9 @@
 //! * [`ui`] - Terminal user interface components
 //! * [`utils`] - Utility functions and helpers
 
+/// Backend abstraction layer for multi-backend support
+pub mod backend;
+
 /// Configuration module for managing application settings
 pub mod config;
 
@@ -30,6 +33,9 @@ pub mod icons;
 
 /// Logging utilities for debugging and error tracking
 pub mod logger;
+
+/// Repository layer for database operations
+pub mod repositories;
 
 /// Local storage layer for caching Todoist data
 pub mod storage;

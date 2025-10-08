@@ -78,7 +78,7 @@ async fn main() -> Result<()> {
         }
 
         config::Config::generate_default_config(&config_path)?;
-        // TODO: make sure we return after this, the app should not run.
+
         return Ok(());
     }
 
@@ -102,12 +102,8 @@ async fn main() -> Result<()> {
     // Create sync service with timeout
     let api_token = std::env::var("TODOIST_API_TOKEN")?;
 
-    match tokio::time::timeout(
-        tokio::time::Duration::from_secs(10),
-        sync::SyncService::new(api_token, debug_mode),
-    )
-    .await
-    {
+    let timeout = tokio::time::Duration::from_secs(10);
+    match tokio::time::timeout(timeout, sync::SyncService::new(api_token, debug_mode)).await {
         Ok(Ok(sync_service)) => {
             ui::run_app(sync_service, config).await?;
         }

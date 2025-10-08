@@ -7,7 +7,7 @@ use uuid::Uuid;
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub uuid: Uuid,
-    #[sea_orm(unique)]
+    pub backend_uuid: Uuid,
     pub remote_id: String,
     pub name: String,
     pub color: String,
@@ -25,6 +25,13 @@ pub enum Relation {
     Sections,
     #[sea_orm(belongs_to = "Entity", from = "Column::ParentUuid", to = "Column::Uuid")]
     Parent,
+    #[sea_orm(
+        belongs_to = "super::backend::Entity",
+        from = "Column::BackendUuid",
+        to = "super::backend::Column::Uuid",
+        on_delete = "Cascade"
+    )]
+    Backend,
 }
 
 impl Related<super::task::Entity> for Entity {
@@ -36,6 +43,12 @@ impl Related<super::task::Entity> for Entity {
 impl Related<super::section::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Sections.def()
+    }
+}
+
+impl Related<super::backend::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Backend.def()
     }
 }
 
