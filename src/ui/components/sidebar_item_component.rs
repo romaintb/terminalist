@@ -33,6 +33,8 @@ pub enum SidebarItemType {
         original_index: usize,
         depth: usize,
         is_last_sibling: bool,
+        has_children: bool,
+        is_expanded: bool,
     },
     /// Label item (with account affiliation)
     Label {
@@ -119,6 +121,8 @@ impl SidebarItem for SidebarItemType {
                 original_index,
                 depth,
                 is_last_sibling,
+                has_children,
+                is_expanded,
                 ..
             } => {
                 let is_selected = matches!(
@@ -150,6 +154,13 @@ impl SidebarItem for SidebarItemType {
                 };
 
                 let mut spans = vec![];
+
+                // Add fold arrow if project has children
+                if *has_children {
+                    let arrow = if *is_expanded { "▼ " } else { "▶ " };
+                    spans.push(Span::styled(arrow, style));
+                }
+
                 if !tree_prefix.is_empty() {
                     spans.push(Span::styled(
                         tree_prefix,
@@ -213,7 +224,11 @@ impl SidebarItem for SidebarItemType {
     }
 
     fn is_foldable(&self) -> bool {
-        matches!(self, SidebarItemType::AccountFolder { .. })
+        match self {
+            SidebarItemType::AccountFolder { .. } => true,
+            SidebarItemType::Project { has_children, .. } => *has_children,
+            _ => false,
+        }
     }
 
     fn get_selection(&self) -> Option<SidebarSelection> {

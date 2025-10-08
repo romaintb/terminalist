@@ -7,16 +7,17 @@
 use crate::entities::{label, project};
 use crate::icons::IconService;
 use crate::ui::components::scrollbar_helper::ScrollbarHelper;
+use crate::ui::components::sidebar_item_component::{SidebarItem, SidebarItemType};
 use crate::ui::core::SidebarSelection;
 use crate::ui::core::{actions::Action, Component};
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
-    text::{Line, Span},
+    style::{Color, Style},
     widgets::{block::BorderType, Block, Borders, List, ListItem, ListState},
     Frame,
 };
+use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Navigation sidebar component for switching between views, projects, and labels.
@@ -37,6 +38,8 @@ pub struct SidebarComponent {
     pub projects: Vec<project::Model>,
     pub labels: Vec<label::Model>,
     pub icons: IconService,
+    items: Vec<SidebarItemType>,
+    folder_states: HashMap<String, bool>,
     list_state: ListState,
     scroll_position: usize, // Virtual scroll position for view
     scrollbar_helper: ScrollbarHelper,
@@ -57,6 +60,8 @@ impl SidebarComponent {
             projects: Vec::new(),
             labels: Vec::new(),
             icons: IconService::default(),
+            items: Vec::new(),
+            folder_states: HashMap::new(),
             list_state,
             scroll_position: 0,
             scrollbar_helper: ScrollbarHelper::new(),
@@ -66,14 +71,126 @@ impl SidebarComponent {
     pub fn update_data(&mut self, projects: Vec<project::Model>, labels: Vec<label::Model>) {
         self.projects = projects;
         self.labels = labels;
+        // Rebuild items list when data changes
+        self.build_item_list();
         // Reset scroll when data changes
         self.scroll_position = 0;
         self.update_list_state();
     }
 
+    /// Build the flattened list of sidebar items, respecting folder expanded/collapsed states
+    fn build_item_list(&mut self) {
+        self.items.clear();
+
+        // Add special views (always visible)
+        self.items.push(SidebarItemType::SpecialView {
+            name: "Today".to_string(),
+            selection: SidebarSelection::Today,
+        });
+        self.items.push(SidebarItemType::SpecialView {
+            name: "Tomorrow".to_string(),
+            selection: SidebarSelection::Tomorrow,
+        });
+        self.items.push(SidebarItemType::SpecialView {
+            name: "Upcoming".to_string(),
+            selection: SidebarSelection::Upcoming,
+        });
+
+        // Use placeholder account ID for now
+        let account_id = "main".to_string();
+
+        // Add labels
+        for (index, label) in self.labels.iter().enumerate() {
+            self.items.push(SidebarItemType::Label {
+                label: label.clone(),
+                account_id: account_id.clone(),
+                original_index: index,
+            });
+        }
+
+        // Add projects (sorted hierarchically), respecting fold states
+        // Clone the data we need before mutating self.items
+        let sorted_projects: Vec<_> = self.get_sorted_projects()
+            .into_iter()
+            .map(|(idx, proj)| (idx, proj.clone()))
+            .collect();
+
+        // Build a map of which projects have children
+        let mut has_children_map: HashMap<Uuid, bool> = HashMap::new();
+        for (_, project) in sorted_projects.iter() {
+            if let Some(parent_uuid) = project.parent_uuid {
+                has_children_map.insert(parent_uuid, true);
+            }
+        }
+
+        for (i, (original_index, project)) in sorted_projects.iter().enumerate() {
+            // Check if this project is a child of a collapsed parent
+            if let Some(parent_uuid) = project.parent_uuid {
+                let parent_key = parent_uuid.to_string();
+                if let Some(&is_expanded) = self.folder_states.get(&parent_key) {
+                    if !is_expanded {
+                        // Skip this child project if parent is collapsed
+                        continue;
+                    }
+                }
+            }
+
+            let depth = if project.parent_uuid.is_some() { 1 } else { 0 };
+            let is_last_sibling = i + 1 == sorted_projects.len()
+                || sorted_projects[i + 1].1.parent_uuid != project.parent_uuid;
+            let has_children = has_children_map.get(&project.uuid).copied().unwrap_or(false);
+            let is_expanded = self.folder_states
+                .get(&project.uuid.to_string())
+                .copied()
+                .unwrap_or(true); // Default to expanded
+
+            self.items.push(SidebarItemType::Project {
+                project: project.clone(),
+                account_id: account_id.clone(),
+                original_index: *original_index,
+                depth,
+                is_last_sibling,
+                has_children,
+                is_expanded,
+            });
+        }
+    }
+
+    /// Toggle the expanded/collapsed state of a project folder
+    pub fn toggle_folder(&mut self, key: &str) {
+        if let Some(is_expanded) = self.folder_states.get_mut(key) {
+            *is_expanded = !*is_expanded;
+        } else {
+            // If folder state doesn't exist, create it as collapsed
+            self.folder_states.insert(key.to_string(), false);
+        }
+        // Rebuild items list after toggling
+        self.build_item_list();
+    }
+
+    /// Check if the current position is on a foldable item and return its key
+    fn get_folder_at_position(&self, index: usize) -> Option<String> {
+        if let Some(item) = self.items.get(index) {
+            if item.is_foldable() {
+                match item {
+                    SidebarItemType::AccountFolder { account_id, .. } => {
+                        return Some(account_id.clone());
+                    }
+                    SidebarItemType::Project { project, has_children, .. } => {
+                        if *has_children {
+                            return Some(project.uuid.to_string());
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        None
+    }
+
     /// Get total number of items in the sidebar
     fn total_items(&self) -> usize {
-        3 + self.labels.len() + self.projects.len() // Today, Tomorrow, Upcoming + labels + projects
+        self.items.len()
     }
 
     /// Scroll the viewport up (showing earlier items)
@@ -112,105 +229,6 @@ impl SidebarComponent {
         // Update scrollbar state for selection-based positioning
         let total_items = self.total_items();
         self.scrollbar_helper.update_state(total_items, selection_index, None);
-    }
-
-    fn get_next_selection(&self) -> SidebarSelection {
-        match &self.selection {
-            SidebarSelection::Today => SidebarSelection::Tomorrow,
-            SidebarSelection::Tomorrow => SidebarSelection::Upcoming,
-            SidebarSelection::Upcoming => {
-                if !self.labels.is_empty() {
-                    SidebarSelection::Label(0)
-                } else if !self.projects.is_empty() {
-                    let sorted_projects = self.get_sorted_projects();
-                    if let Some((original_index, _)) = sorted_projects.first() {
-                        SidebarSelection::Project(*original_index)
-                    } else {
-                        SidebarSelection::Today
-                    }
-                } else {
-                    SidebarSelection::Today
-                }
-            }
-            SidebarSelection::Label(index) => {
-                let next_index = index + 1;
-                if next_index < self.labels.len() {
-                    SidebarSelection::Label(next_index)
-                } else if !self.projects.is_empty() {
-                    let sorted_projects = self.get_sorted_projects();
-                    if let Some((original_index, _)) = sorted_projects.first() {
-                        SidebarSelection::Project(*original_index)
-                    } else {
-                        SidebarSelection::Today
-                    }
-                } else {
-                    SidebarSelection::Today
-                }
-            }
-            SidebarSelection::Project(index) => {
-                let sorted_projects = self.get_sorted_projects();
-                if let Some(current_sorted_index) = sorted_projects.iter().position(|(orig_idx, _)| orig_idx == index) {
-                    let next_sorted_index = current_sorted_index + 1;
-                    if next_sorted_index < sorted_projects.len() {
-                        if let Some((original_index, _)) = sorted_projects.get(next_sorted_index) {
-                            SidebarSelection::Project(*original_index)
-                        } else {
-                            SidebarSelection::Today
-                        }
-                    } else {
-                        SidebarSelection::Today
-                    }
-                } else {
-                    SidebarSelection::Today
-                }
-            }
-        }
-    }
-
-    fn get_previous_selection(&self) -> SidebarSelection {
-        match &self.selection {
-            SidebarSelection::Today => {
-                if !self.projects.is_empty() {
-                    let sorted_projects = self.get_sorted_projects();
-                    if let Some((original_index, _)) = sorted_projects.last() {
-                        SidebarSelection::Project(*original_index)
-                    } else {
-                        SidebarSelection::Tomorrow
-                    }
-                } else if !self.labels.is_empty() {
-                    SidebarSelection::Label(self.labels.len() - 1)
-                } else {
-                    SidebarSelection::Tomorrow
-                }
-            }
-            SidebarSelection::Tomorrow => SidebarSelection::Today,
-            SidebarSelection::Upcoming => SidebarSelection::Tomorrow,
-            SidebarSelection::Label(index) => {
-                if *index > 0 {
-                    SidebarSelection::Label(index - 1)
-                } else {
-                    SidebarSelection::Upcoming
-                }
-            }
-            SidebarSelection::Project(index) => {
-                let sorted_projects = self.get_sorted_projects();
-                if let Some(current_sorted_index) = sorted_projects.iter().position(|(orig_idx, _)| orig_idx == index) {
-                    if current_sorted_index > 0 {
-                        if let Some((original_index, _)) = sorted_projects.get(current_sorted_index - 1) {
-                            SidebarSelection::Project(*original_index)
-                        } else {
-                            SidebarSelection::Today
-                        }
-                    } else if !self.labels.is_empty() {
-                        SidebarSelection::Label(self.labels.len() - 1)
-                    } else {
-                        SidebarSelection::Upcoming
-                    }
-                } else {
-                    SidebarSelection::Today
-                }
-            }
-        }
     }
 
     fn get_sorted_projects(&self) -> Vec<(usize, &project::Model)> {
@@ -266,61 +284,29 @@ impl SidebarComponent {
             .expect("Root project should exist in projects list")
     }
 
-    /// Calculate the tree depth of a project for indentation
-    /// Since Todoist only has parent/child (no deeper nesting), depth is either 0 or 1
-    fn calculate_tree_depth(&self, project: &project::Model) -> usize {
-        if project.parent_uuid.is_some() {
-            1
-        } else {
-            0
-        }
-    }
-
     /// Convert list index to SidebarSelection
     fn index_to_selection(&self, index: usize) -> SidebarSelection {
-        if index == 0 {
-            return SidebarSelection::Today;
+        if let Some(item) = self.items.get(index) {
+            // Try to get selection from the item
+            if let Some(selection) = item.get_selection() {
+                return selection;
+            }
         }
-        if index == 1 {
-            return SidebarSelection::Tomorrow;
-        }
-        if index == 2 {
-            return SidebarSelection::Upcoming;
-        }
-
-        let label_count = self.labels.len();
-        if index < 3 + label_count {
-            return SidebarSelection::Label(index - 3);
-        }
-
-        let project_index = index - 3 - label_count;
-        let sorted_projects = self.get_sorted_projects();
-        if let Some((original_index, _)) = sorted_projects.get(project_index) {
-            SidebarSelection::Project(*original_index)
-        } else {
-            SidebarSelection::Today
-        }
+        // Default to Today if index is out of bounds or item is not selectable
+        SidebarSelection::Today
     }
 
     /// Convert SidebarSelection to list index
     fn selection_to_index(&self, selection: &SidebarSelection) -> usize {
-        match selection {
-            SidebarSelection::Today => 0,
-            SidebarSelection::Tomorrow => 1,
-            SidebarSelection::Upcoming => 2,
-            SidebarSelection::Label(index) => 3 + index,
-            SidebarSelection::Project(original_index) => {
-                // Find the position of this project in the sorted list
-                let sorted_projects = self.get_sorted_projects();
-                for (sorted_index, (orig_idx, _)) in sorted_projects.iter().enumerate() {
-                    if orig_idx == original_index {
-                        return 3 + self.labels.len() + sorted_index;
-                    }
+        for (index, item) in self.items.iter().enumerate() {
+            if let Some(item_selection) = item.get_selection() {
+                if &item_selection == selection {
+                    return index;
                 }
-                // If not found, default to Today
-                0
             }
         }
+        // If not found, default to 0 (Today)
+        0
     }
 
     /// Handle mouse events
@@ -356,12 +342,40 @@ impl SidebarComponent {
             }
             // Mouse wheel for navigation (move selection like task list)
             MouseEventKind::ScrollUp => {
-                let prev_selection = self.get_previous_selection();
-                Action::NavigateToSidebar(prev_selection)
+                let current_index = self.list_state.selected().unwrap_or(0);
+                // Find previous selectable item
+                for offset in 1..=self.items.len() {
+                    let prev_index = if current_index >= offset {
+                        current_index - offset
+                    } else {
+                        self.items.len() + current_index - offset
+                    };
+                    if let Some(item) = self.items.get(prev_index) {
+                        if item.is_selectable() {
+                            if let Some(selection) = item.get_selection() {
+                                self.list_state.select(Some(prev_index));
+                                return Action::NavigateToSidebar(selection);
+                            }
+                        }
+                    }
+                }
+                Action::None
             }
             MouseEventKind::ScrollDown => {
-                let next_selection = self.get_next_selection();
-                Action::NavigateToSidebar(next_selection)
+                let current_index = self.list_state.selected().unwrap_or(0);
+                // Find next selectable item
+                for offset in 1..=self.items.len() {
+                    let next_index = (current_index + offset) % self.items.len();
+                    if let Some(item) = self.items.get(next_index) {
+                        if item.is_selectable() {
+                            if let Some(selection) = item.get_selection() {
+                                self.list_state.select(Some(next_index));
+                                return Action::NavigateToSidebar(selection);
+                            }
+                        }
+                    }
+                }
+                Action::None
             }
             _ => Action::None,
         }
@@ -373,21 +387,67 @@ impl Component for SidebarComponent {
         use crossterm::event::KeyModifiers;
 
         match key.code {
-            KeyCode::Char('J') => {
-                let next_selection = self.get_next_selection();
-                Action::NavigateToSidebar(next_selection)
+            KeyCode::Char('H') => {
+                // H key: collapse/fold folder if cursor is on a folder
+                if let Some(current_index) = self.list_state.selected() {
+                    if let Some(account_id) = self.get_folder_at_position(current_index) {
+                        // Set folder to collapsed
+                        self.folder_states.insert(account_id, false);
+                        self.build_item_list();
+                    }
+                }
+                Action::None
             }
-            KeyCode::Char('K') => {
-                let prev_selection = self.get_previous_selection();
-                Action::NavigateToSidebar(prev_selection)
+            KeyCode::Char('L') => {
+                // L key: expand/unfold folder if cursor is on a folder
+                if let Some(current_index) = self.list_state.selected() {
+                    if let Some(account_id) = self.get_folder_at_position(current_index) {
+                        // Set folder to expanded
+                        self.folder_states.insert(account_id, true);
+                        self.build_item_list();
+                    }
+                }
+                Action::None
             }
-            KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                let next_selection = self.get_next_selection();
-                Action::NavigateToSidebar(next_selection)
+            KeyCode::Char('J') | KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                // Move to next selectable item, skipping non-selectable items (folders)
+                let current_index = self.list_state.selected().unwrap_or(0);
+
+                // Search forward for next selectable item
+                for offset in 1..=self.items.len() {
+                    let next_index = (current_index + offset) % self.items.len();
+                    if let Some(item) = self.items.get(next_index) {
+                        if item.is_selectable() {
+                            if let Some(selection) = item.get_selection() {
+                                self.list_state.select(Some(next_index));
+                                return Action::NavigateToSidebar(selection);
+                            }
+                        }
+                    }
+                }
+                Action::None
             }
-            KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
-                let prev_selection = self.get_previous_selection();
-                Action::NavigateToSidebar(prev_selection)
+            KeyCode::Char('K') | KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
+                // Move to previous selectable item, skipping non-selectable items (folders)
+                let current_index = self.list_state.selected().unwrap_or(0);
+
+                // Search backward for previous selectable item
+                for offset in 1..=self.items.len() {
+                    let prev_index = if current_index >= offset {
+                        current_index - offset
+                    } else {
+                        self.items.len() + current_index - offset
+                    };
+                    if let Some(item) = self.items.get(prev_index) {
+                        if item.is_selectable() {
+                            if let Some(selection) = item.get_selection() {
+                                self.list_state.select(Some(prev_index));
+                                return Action::NavigateToSidebar(selection);
+                            }
+                        }
+                    }
+                }
+                Action::None
             }
             KeyCode::Up if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.scroll_up();
@@ -414,102 +474,18 @@ impl Component for SidebarComponent {
     }
 
     fn render(&mut self, f: &mut Frame, rect: Rect) {
-        let mut all_items: Vec<ListItem> = Vec::new();
+        // Rebuild items list to ensure it's current
+        self.build_item_list();
 
-        // Add Today item
-        let is_today_selected = matches!(self.selection, SidebarSelection::Today);
-        let today_style = if is_today_selected {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-
-        all_items.push(ListItem::new(Line::from(vec![
-            Span::styled(self.icons.today().to_string(), today_style),
-            Span::styled("Today".to_string(), today_style),
-        ])));
-
-        // Add Tomorrow item
-        let is_tomorrow_selected = matches!(self.selection, SidebarSelection::Tomorrow);
-        let tomorrow_style = if is_tomorrow_selected {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-
-        all_items.push(ListItem::new(Line::from(vec![
-            Span::styled(self.icons.tomorrow().to_string(), tomorrow_style),
-            Span::styled("Tomorrow".to_string(), tomorrow_style),
-        ])));
-
-        // Add Upcoming item
-        let is_upcoming_selected = matches!(self.selection, SidebarSelection::Upcoming);
-        let upcoming_style = if is_upcoming_selected {
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-        } else {
-            Style::default().fg(Color::White)
-        };
-
-        all_items.push(ListItem::new(Line::from(vec![
-            Span::styled(self.icons.upcoming().to_string(), upcoming_style),
-            Span::styled("Upcoming".to_string(), upcoming_style),
-        ])));
-
-        // Add labels
-        for (index, label) in self.labels.iter().enumerate() {
-            let is_selected = matches!(self.selection, SidebarSelection::Label(i) if i == index);
-            let style = if is_selected {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
-            };
-
-            all_items.push(ListItem::new(Line::from(vec![
-                Span::styled(self.icons.label().to_string(), style),
-                Span::styled(label.name.clone(), style),
-            ])));
-        }
-
-        // Add projects (sorted hierarchically)
-        let sorted_projects = self.get_sorted_projects();
-        for (i, (original_index, project)) in sorted_projects.iter().enumerate() {
-            let is_selected = matches!(self.selection, SidebarSelection::Project(idx) if idx == *original_index);
-            let style = if is_selected {
-                Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(Color::White)
-            };
-
-            let depth = self.calculate_tree_depth(project);
-            let tree_prefix = if depth > 0 {
-                let is_last =
-                    i + 1 == sorted_projects.len() || sorted_projects[i + 1].1.parent_uuid != project.parent_uuid;
-                if is_last {
-                    "└─"
-                } else {
-                    "├─"
-                }
-            } else {
-                ""
-            };
-
-            let icon = if project.is_favorite {
-                self.icons.project_favorite()
-            } else {
-                self.icons.project_regular()
-            };
-
-            let mut spans = vec![];
-            if !tree_prefix.is_empty() {
-                spans.push(Span::styled(tree_prefix, Style::default().fg(Color::DarkGray)));
-            }
-            spans.extend([Span::styled(icon.to_string(), style), Span::styled(project.name.clone(), style)]);
-
-            all_items.push(ListItem::new(Line::from(spans)));
-        }
-
-        // Ensure list state is synced with current selection
+        // Ensure list state is synced with current selection (do this before borrowing items)
         self.update_list_state();
+
+        // Render all items using their render() method
+        let all_items: Vec<ListItem> = self
+            .items
+            .iter()
+            .map(|item| item.render(&self.icons, &self.selection, false))
+            .collect();
 
         // Calculate areas for list and scrollbar using helper
         let total_items = all_items.len();
