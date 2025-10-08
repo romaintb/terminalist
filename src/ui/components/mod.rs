@@ -43,6 +43,7 @@ pub mod scrollbar_helper;
 pub mod dialog_component;
 pub mod dialogs;
 pub mod sidebar_component;
+pub mod sidebar_item_component;
 pub mod task_list_component;
 pub mod task_list_item_component;
 
