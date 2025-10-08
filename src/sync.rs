@@ -111,11 +111,18 @@ impl SyncService {
             use crate::entities::backend;
             let storage_guard = storage.lock().await;
 
+            let credentials = serde_json::json!({
+                "api_token": api_token.clone()
+            })
+            .to_string();
+
             let backend_model = backend::ActiveModel {
                 uuid: ActiveValue::Set(default_backend_uuid),
                 backend_type: ActiveValue::Set("todoist".to_string()),
-                name: ActiveValue::Set("Default".to_string()),
-                config: ActiveValue::Set("{}".to_string()),
+                name: ActiveValue::Set("My Todoist".to_string()),
+                is_enabled: ActiveValue::Set(true),
+                credentials: ActiveValue::Set(credentials),
+                settings: ActiveValue::Set("{}".to_string()),
             };
             backend::Entity::insert(backend_model).exec(&storage_guard.conn).await?;
         }
