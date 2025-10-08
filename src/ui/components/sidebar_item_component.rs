@@ -16,10 +16,7 @@ use ratatui::{
 #[derive(Clone, Debug)]
 pub enum SidebarItemType {
     /// Special views (Today, Tomorrow, Upcoming)
-    SpecialView {
-        name: String,
-        selection: SidebarSelection,
-    },
+    SpecialView { name: String, selection: SidebarSelection },
     /// Foldable account folder header
     AccountFolder {
         name: String,
@@ -80,9 +77,7 @@ impl SidebarItem for SidebarItemType {
             SidebarItemType::SpecialView { name, selection } => {
                 let is_selected = current_selection == selection;
                 let style = if is_selected {
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD)
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(Color::White)
                 };
@@ -100,11 +95,7 @@ impl SidebarItem for SidebarItemType {
                 ]))
             }
 
-            SidebarItemType::AccountFolder {
-                name,
-                is_expanded,
-                ..
-            } => {
+            SidebarItemType::AccountFolder { name, is_expanded, .. } => {
                 let style = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
                 let arrow = if *is_expanded { "▼" } else { "▶" };
                 let icon = "📦";
@@ -130,9 +121,7 @@ impl SidebarItem for SidebarItemType {
                     SidebarSelection::Project(idx) if idx == original_index
                 );
                 let style = if is_selected {
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD)
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(Color::White)
                 };
@@ -162,10 +151,7 @@ impl SidebarItem for SidebarItemType {
                 }
 
                 if !tree_prefix.is_empty() {
-                    spans.push(Span::styled(
-                        tree_prefix,
-                        Style::default().fg(Color::DarkGray),
-                    ));
+                    spans.push(Span::styled(tree_prefix, Style::default().fg(Color::DarkGray)));
                 }
                 spans.push(Span::styled(icon.to_string(), style));
                 spans.push(Span::styled(project.name.clone(), style));
@@ -174,18 +160,14 @@ impl SidebarItem for SidebarItemType {
             }
 
             SidebarItemType::Label {
-                label,
-                original_index,
-                ..
+                label, original_index, ..
             } => {
                 let is_selected = matches!(
                     current_selection,
                     SidebarSelection::Label(idx) if idx == original_index
                 );
                 let style = if is_selected {
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD)
+                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
                 } else {
                     Style::default().fg(Color::White)
                 };
@@ -235,12 +217,8 @@ impl SidebarItem for SidebarItemType {
         match self {
             SidebarItemType::SpecialView { selection, .. } => Some(selection.clone()),
             SidebarItemType::AccountFolder { .. } => None,
-            SidebarItemType::Project { original_index, .. } => {
-                Some(SidebarSelection::Project(*original_index))
-            }
-            SidebarItemType::Label { original_index, .. } => {
-                Some(SidebarSelection::Label(*original_index))
-            }
+            SidebarItemType::Project { original_index, .. } => Some(SidebarSelection::Project(*original_index)),
+            SidebarItemType::Label { original_index, .. } => Some(SidebarSelection::Label(*original_index)),
             SidebarItemType::Separator { .. } => None,
         }
     }

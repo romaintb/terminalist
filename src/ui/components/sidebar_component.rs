@@ -110,7 +110,8 @@ impl SidebarComponent {
 
         // Add projects (sorted hierarchically), respecting fold states
         // Clone the data we need before mutating self.items
-        let sorted_projects: Vec<_> = self.get_sorted_projects()
+        let sorted_projects: Vec<_> = self
+            .get_sorted_projects()
             .into_iter()
             .map(|(idx, proj)| (idx, proj.clone()))
             .collect();
@@ -136,13 +137,10 @@ impl SidebarComponent {
             }
 
             let depth = if project.parent_uuid.is_some() { 1 } else { 0 };
-            let is_last_sibling = i + 1 == sorted_projects.len()
-                || sorted_projects[i + 1].1.parent_uuid != project.parent_uuid;
+            let is_last_sibling =
+                i + 1 == sorted_projects.len() || sorted_projects[i + 1].1.parent_uuid != project.parent_uuid;
             let has_children = has_children_map.get(&project.uuid).copied().unwrap_or(false);
-            let is_expanded = self.folder_states
-                .get(&project.uuid.to_string())
-                .copied()
-                .unwrap_or(true); // Default to expanded
+            let is_expanded = self.folder_states.get(&project.uuid.to_string()).copied().unwrap_or(true); // Default to expanded
 
             self.items.push(SidebarItemType::Project {
                 project: project.clone(),
@@ -176,7 +174,9 @@ impl SidebarComponent {
                     SidebarItemType::AccountFolder { account_id, .. } => {
                         return Some(account_id.clone());
                     }
-                    SidebarItemType::Project { project, has_children, .. } => {
+                    SidebarItemType::Project {
+                        project, has_children, ..
+                    } => {
                         if *has_children {
                             return Some(project.uuid.to_string());
                         }
