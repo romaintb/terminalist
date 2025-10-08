@@ -414,14 +414,14 @@ impl SyncService {
         let txn = storage.conn.begin().await?;
 
         // Look up local project UUID from remote project_id
-        let project_uuid = Self::lookup_project_uuid(&txn, &backend_task.project_remote_id, "task creation").await?;
+        let project_uuid = Self::lookup_project_uuid(&txn, &self.default_backend_uuid, &backend_task.project_remote_id, "task creation").await?;
 
         // Look up local section UUID from remote section_id if present
-        let section_uuid = Self::lookup_section_uuid(&txn, backend_task.section_remote_id.as_ref()).await?;
+        let section_uuid = Self::lookup_section_uuid(&txn, &self.default_backend_uuid, backend_task.section_remote_id.as_ref()).await?;
 
         // Look up local parent UUID from remote parent_id if present
         let parent_uuid = if let Some(remote_parent_id) = &backend_task.parent_remote_id {
-            TaskRepository::get_by_remote_id(&txn, remote_parent_id).await?.map(|t| t.uuid)
+            TaskRepository::get_by_remote_id(&txn, &self.default_backend_uuid, remote_parent_id).await?.map(|t| t.uuid)
         } else {
             None
         };
@@ -965,10 +965,11 @@ impl SyncService {
     /// Returns error if project with given remote_id doesn't exist locally
     async fn lookup_project_uuid(
         txn: &sea_orm::DatabaseTransaction,
+        backend_uuid: &Uuid,
         remote_project_id: &str,
         context: &str,
     ) -> Result<Uuid> {
-        if let Some(project) = ProjectRepository::get_by_remote_id(txn, remote_project_id).await? {
+        if let Some(project) = ProjectRepository::get_by_remote_id(txn, backend_uuid, remote_project_id).await? {
             Ok(project.uuid)
         } else {
             Err(anyhow::anyhow!(
@@ -992,10 +993,11 @@ impl SyncService {
     /// Returns error if database query fails
     async fn lookup_section_uuid(
         txn: &sea_orm::DatabaseTransaction,
+        backend_uuid: &Uuid,
         remote_section_id: Option<&String>,
     ) -> Result<Option<Uuid>> {
         if let Some(remote_id) = remote_section_id {
-            let section_uuid = SectionRepository::get_by_remote_id(txn, remote_id).await?.map(|s| s.uuid);
+            let section_uuid = SectionRepository::get_by_remote_id(txn, backend_uuid, remote_id).await?.map(|s| s.uuid);
             Ok(section_uuid)
         } else {
             Ok(None)
@@ -1045,8 +1047,8 @@ impl SyncService {
         // Second pass: Update parent_uuid references to use local UUIDs
         for backend_project in projects {
             if let Some(remote_parent_id) = &backend_project.parent_remote_id {
-                if let Some(parent) = ProjectRepository::get_by_remote_id(&txn, remote_parent_id).await? {
-                    if let Some(project) = ProjectRepository::get_by_remote_id(&txn, &backend_project.remote_id).await?
+                if let Some(parent) = ProjectRepository::get_by_remote_id(&txn, &self.default_backend_uuid, remote_parent_id).await? {
+                    if let Some(project) = ProjectRepository::get_by_remote_id(&txn, &self.default_backend_uuid, &backend_project.remote_id).await?
                     {
                         let mut active_model: project::ActiveModel = project.into_active_model();
                         active_model.parent_uuid = ActiveValue::Set(Some(parent.uuid));
@@ -1110,7 +1112,7 @@ impl SyncService {
 
             // Look up local project UUID from remote project_id
             let project_uuid =
-                match Self::lookup_project_uuid(&txn, &backend_task.project_remote_id, "task batch sync").await {
+                match Self::lookup_project_uuid(&txn, &self.default_backend_uuid, &backend_task.project_remote_id, "task batch sync").await {
                     Ok(uuid) => uuid,
                     Err(_) => {
                         // Skip tasks whose projects don't exist locally (can happen with free tier API limitations)
@@ -1119,7 +1121,7 @@ impl SyncService {
                 };
 
             // Look up local section UUID from remote section_id if present
-            let section_uuid = Self::lookup_section_uuid(&txn, backend_task.section_remote_id.as_ref()).await?;
+            let section_uuid = Self::lookup_section_uuid(&txn, &self.default_backend_uuid, backend_task.section_remote_id.as_ref()).await?;
 
             let local_task = task::ActiveModel {
                 uuid: ActiveValue::Set(Uuid::new_v4()),
@@ -1165,7 +1167,7 @@ impl SyncService {
             insert.exec(&txn).await?;
 
             // Get the uuid of the task we just inserted/updated
-            if let Some(task) = TaskRepository::get_by_remote_id(&txn, &backend_task.remote_id).await? {
+            if let Some(task) = TaskRepository::get_by_remote_id(&txn, &self.default_backend_uuid, &backend_task.remote_id).await? {
                 task_labels_map.push((task.uuid, label_names));
             }
         }
@@ -1173,8 +1175,8 @@ impl SyncService {
         // Second pass: Update parent_uuid references to use local UUIDs
         for backend_task in tasks {
             if let Some(remote_parent_id) = &backend_task.parent_remote_id {
-                if let Some(parent) = TaskRepository::get_by_remote_id(&txn, remote_parent_id).await? {
-                    if let Some(task) = TaskRepository::get_by_remote_id(&txn, &backend_task.remote_id).await? {
+                if let Some(parent) = TaskRepository::get_by_remote_id(&txn, &self.default_backend_uuid, remote_parent_id).await? {
+                    if let Some(task) = TaskRepository::get_by_remote_id(&txn, &self.default_backend_uuid, &backend_task.remote_id).await? {
                         let mut active_model: task::ActiveModel = task.into_active_model();
                         active_model.parent_uuid = ActiveValue::Set(Some(parent.uuid));
                         TaskRepository::update(&txn, active_model).await?;
@@ -1229,7 +1231,7 @@ impl SyncService {
         for backend_section in sections {
             // Look up local project UUID from remote project_id
             let project_uuid =
-                Self::lookup_project_uuid(&txn, &backend_section.project_remote_id, "section sync").await?;
+                Self::lookup_project_uuid(&txn, &self.default_backend_uuid, &backend_section.project_remote_id, "section sync").await?;
 
             let local_section = section::ActiveModel {
                 uuid: ActiveValue::Set(Uuid::new_v4()),
@@ -1380,12 +1382,12 @@ impl SyncService {
             // Store the new task (reuse the single task upsert logic)
             let txn = storage.conn.begin().await?;
 
-            let project_uuid = Self::lookup_project_uuid(&txn, &new_task.project_remote_id, "task restore").await?;
+            let project_uuid = Self::lookup_project_uuid(&txn, &self.default_backend_uuid, &new_task.project_remote_id, "task restore").await?;
 
-            let section_uuid = Self::lookup_section_uuid(&txn, new_task.section_remote_id.as_ref()).await?;
+            let section_uuid = Self::lookup_section_uuid(&txn, &self.default_backend_uuid, new_task.section_remote_id.as_ref()).await?;
 
             let parent_uuid = if let Some(remote_parent_id) = &new_task.parent_remote_id {
-                TaskRepository::get_by_remote_id(&txn, remote_parent_id).await?.map(|t| t.uuid)
+                TaskRepository::get_by_remote_id(&txn, &self.default_backend_uuid, remote_parent_id).await?.map(|t| t.uuid)
             } else {
                 None
             };

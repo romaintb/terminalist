@@ -43,12 +43,13 @@ impl TaskRepository {
         Ok(task::Entity::find().filter(task::Column::Uuid.eq(*uuid)).one(conn).await?)
     }
 
-    /// Get a single task by remote_id.
-    pub async fn get_by_remote_id<C>(conn: &C, remote_id: &str) -> Result<Option<task::Model>>
+    /// Get a single task by remote_id and backend_uuid.
+    pub async fn get_by_remote_id<C>(conn: &C, backend_uuid: &Uuid, remote_id: &str) -> Result<Option<task::Model>>
     where
         C: ConnectionTrait,
     {
         Ok(task::Entity::find()
+            .filter(task::Column::BackendUuid.eq(*backend_uuid))
             .filter(task::Column::RemoteId.eq(remote_id))
             .one(conn)
             .await?)

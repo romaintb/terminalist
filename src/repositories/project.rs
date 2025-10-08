@@ -45,12 +45,13 @@ impl ProjectRepository {
             .await?)
     }
 
-    /// Get a single project by remote_id.
-    pub async fn get_by_remote_id<C>(conn: &C, remote_id: &str) -> Result<Option<project::Model>>
+    /// Get a single project by remote_id and backend_uuid.
+    pub async fn get_by_remote_id<C>(conn: &C, backend_uuid: &Uuid, remote_id: &str) -> Result<Option<project::Model>>
     where
         C: ConnectionTrait,
     {
         Ok(project::Entity::find()
+            .filter(project::Column::BackendUuid.eq(*backend_uuid))
             .filter(project::Column::RemoteId.eq(remote_id))
             .one(conn)
             .await?)
