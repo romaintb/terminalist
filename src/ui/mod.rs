@@ -29,10 +29,18 @@
 //! use terminalist::ui::run_app;
 //! use terminalist::sync::SyncService;
 //! use terminalist::config::Config;
+//! use terminalist::backend_registry::BackendRegistry;
+//! use terminalist::storage::LocalStorage;
+//! use std::sync::Arc;
+//! use tokio::sync::Mutex;
 //!
 //! # async fn example() -> anyhow::Result<()> {
 //! let config = Config::load()?;
-//! let sync_service = SyncService::new("token".to_string(), false).await?;
+//! let storage = Arc::new(Mutex::new(LocalStorage::new(false).await?));
+//! let backend_registry = Arc::new(BackendRegistry::new(storage));
+//! // ... initialize and load backends ...
+//! # let backend_uuid = uuid::Uuid::new_v4();
+//! let sync_service = SyncService::new(backend_registry, backend_uuid, false).await?;
 //!
 //! run_app(sync_service, config).await?;
 //! # Ok(())
