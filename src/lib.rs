@@ -19,6 +19,9 @@
 /// Backend abstraction layer for multi-backend support
 pub mod backend;
 
+/// Backend registry for managing multiple backend instances
+pub mod backend_registry;
+
 /// Configuration module for managing application settings
 pub mod config;
 

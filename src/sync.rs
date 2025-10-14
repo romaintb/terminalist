@@ -44,9 +44,17 @@ use crate::utils::datetime;
 /// # Example
 /// ```rust,no_run
 /// use terminalist::sync::SyncService;
+/// use terminalist::backend_registry::BackendRegistry;
+/// use terminalist::storage::LocalStorage;
+/// use std::sync::Arc;
+/// use tokio::sync::Mutex;
 ///
 /// # async fn example() -> anyhow::Result<()> {
-/// let sync_service = SyncService::new("api_token".to_string(), false,).await?;
+/// let storage = Arc::new(Mutex::new(LocalStorage::new(false).await?));
+/// let backend_registry = Arc::new(BackendRegistry::new(storage));
+/// // ... initialize and load backends ...
+/// # let backend_uuid = uuid::Uuid::new_v4();
+/// let sync_service = SyncService::new(backend_registry, backend_uuid, false).await?;
 ///
 /// // Sync data from remote backend
 /// sync_service.sync().await?;
@@ -58,12 +66,11 @@ use crate::utils::datetime;
 /// ```
 #[derive(Clone)]
 pub struct SyncService {
-    backend: Arc<Box<dyn crate::backend::Backend>>,
+    backend_registry: Arc<crate::backend_registry::BackendRegistry>,
+    backend_uuid: Uuid,
     storage: Arc<Mutex<LocalStorage>>,
     sync_in_progress: Arc<Mutex<bool>>,
     debug_mode: bool,
-    // Temporary: single backend UUID until registry is implemented
-    default_backend_uuid: Uuid,
 }
 
 /// Represents the current status of a synchronization operation.
@@ -86,51 +93,43 @@ pub enum SyncStatus {
 }
 
 impl SyncService {
-    /// Creates a new `SyncService` instance with the provided configuration.
+    /// Creates a new `SyncService` instance with the provided backend registry.
     ///
-    /// This initializes the backend instance, local storage, and optional logging
-    /// based on the provided configuration. The service is ready to perform sync
-    /// operations immediately after creation.
+    /// This creates a sync service that manages synchronization for a specific backend.
+    /// The backend instance is retrieved from the registry on-demand.
     ///
     /// # Arguments
-    /// * `api_token` - The backend API token for authentication (currently Todoist)
+    /// * `backend_registry` - Shared backend registry instance
+    /// * `backend_uuid` - UUID of the backend this service will manage
     /// * `debug_mode` - Whether to enable debug mode for local storage
     ///
     /// # Returns
     /// A new `SyncService` instance ready for use
     ///
     /// # Errors
-    /// Returns an error if local storage initialization fails
-    pub async fn new(api_token: String, debug_mode: bool) -> Result<Self> {
-        let storage = Arc::new(Mutex::new(LocalStorage::new(debug_mode).await?));
-        let sync_in_progress = Arc::new(Mutex::new(false));
+    /// Returns an error if the backend UUID is not found in the registry
+    pub async fn new(
+        backend_registry: Arc<crate::backend_registry::BackendRegistry>,
+        backend_uuid: Uuid,
+        debug_mode: bool,
+    ) -> Result<Self> {
+        // Verify backend exists
+        backend_registry.get_backend(&backend_uuid).await?;
 
-        // TEMPORARY: Create the default backend record and backend instance
-        let default_backend_uuid = Uuid::new_v4();
-        {
-            use crate::entities::backend;
-            let storage_guard = storage.lock().await;
-
-            let backend_model = backend::ActiveModel {
-                uuid: ActiveValue::Set(default_backend_uuid),
-                backend_type: ActiveValue::Set("todoist".to_string()),
-                name: ActiveValue::Set("Default".to_string()),
-                config: ActiveValue::Set("{}".to_string()),
-            };
-            backend::Entity::insert(backend_model).exec(&storage_guard.conn).await?;
-        }
-
-        // Create Todoist backend instance
-        let backend: Box<dyn crate::backend::Backend> =
-            Box::new(crate::backend::todoist::TodoistBackend::new(api_token));
+        let storage = backend_registry.storage();
 
         Ok(Self {
-            backend: Arc::new(backend),
+            backend_registry,
+            backend_uuid,
             storage,
-            sync_in_progress,
+            sync_in_progress: Arc::new(Mutex::new(false)),
             debug_mode,
-            default_backend_uuid,
         })
+    }
+
+    /// Helper to get the current backend instance from the registry.
+    async fn get_backend(&self) -> Result<Arc<Box<dyn crate::backend::Backend>>> {
+        self.backend_registry.get_backend(&self.backend_uuid).await
     }
 
     /// Returns whether debug mode is enabled.
@@ -331,7 +330,8 @@ impl SyncService {
             is_favorite: None,
         };
         let backend_project = self
-            .backend
+            .get_backend()
+            .await?
             .create_project(project_args)
             .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
@@ -342,7 +342,7 @@ impl SyncService {
         // Upsert the project
         let local_project = project::ActiveModel {
             uuid: ActiveValue::Set(Uuid::new_v4()),
-            backend_uuid: ActiveValue::Set(self.default_backend_uuid),
+            backend_uuid: ActiveValue::Set(self.backend_uuid),
             remote_id: ActiveValue::Set(backend_project.remote_id),
             name: ActiveValue::Set(backend_project.name),
             color: ActiveValue::Set(backend_project.color),
@@ -404,7 +404,8 @@ impl SyncService {
             labels: Vec::new(),
         };
         let backend_task = self
-            .backend
+            .get_backend()
+            .await?
             .create_task(task_args)
             .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
@@ -416,23 +417,19 @@ impl SyncService {
         // Look up local project UUID from remote project_id
         let project_uuid = Self::lookup_project_uuid(
             &txn,
-            &self.default_backend_uuid,
+            &self.backend_uuid,
             &backend_task.project_remote_id,
             "task creation",
         )
         .await?;
 
         // Look up local section UUID from remote section_id if present
-        let section_uuid = Self::lookup_section_uuid(
-            &txn,
-            &self.default_backend_uuid,
-            backend_task.section_remote_id.as_ref(),
-        )
-        .await?;
+        let section_uuid =
+            Self::lookup_section_uuid(&txn, &self.backend_uuid, backend_task.section_remote_id.as_ref()).await?;
 
         // Look up local parent UUID from remote parent_id if present
         let parent_uuid = if let Some(remote_parent_id) = &backend_task.parent_remote_id {
-            TaskRepository::get_by_remote_id(&txn, &self.default_backend_uuid, remote_parent_id)
+            TaskRepository::get_by_remote_id(&txn, &self.backend_uuid, remote_parent_id)
                 .await?
                 .map(|t| t.uuid)
         } else {
@@ -441,7 +438,7 @@ impl SyncService {
 
         let local_task = task::ActiveModel {
             uuid: ActiveValue::Set(Uuid::new_v4()),
-            backend_uuid: ActiveValue::Set(self.default_backend_uuid),
+            backend_uuid: ActiveValue::Set(self.backend_uuid),
             remote_id: ActiveValue::Set(backend_task.remote_id),
             content: ActiveValue::Set(backend_task.content),
             description: ActiveValue::Set(backend_task.description),
@@ -510,7 +507,8 @@ impl SyncService {
             is_favorite: None,
         };
         let api_label = self
-            .backend
+            .get_backend()
+            .await?
             .create_label(label_args)
             .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
@@ -521,7 +519,7 @@ impl SyncService {
 
         let local_label = label::ActiveModel {
             uuid: ActiveValue::Set(Uuid::new_v4()),
-            backend_uuid: ActiveValue::Set(self.default_backend_uuid),
+            backend_uuid: ActiveValue::Set(self.backend_uuid),
             remote_id: ActiveValue::Set(api_label.remote_id),
             name: ActiveValue::Set(api_label.name),
             color: ActiveValue::Set(api_label.color),
@@ -560,7 +558,8 @@ impl SyncService {
             is_favorite: None,
         };
         let _label = self
-            .backend
+            .get_backend()
+            .await?
             .update_label(&remote_id, label_args)
             .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
@@ -587,7 +586,8 @@ impl SyncService {
         let remote_id = self.get_label_remote_id(label_uuid).await?;
 
         // Delete label via backend
-        self.backend
+        self.get_backend()
+            .await?
             .delete_label(&remote_id)
             .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
@@ -610,7 +610,8 @@ impl SyncService {
             is_favorite: None,
         };
         let _project = self
-            .backend
+            .get_backend()
+            .await?
             .update_project(&remote_id, project_args)
             .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
@@ -650,7 +651,8 @@ impl SyncService {
             labels: None,
         };
         let _task = self
-            .backend
+            .get_backend()
+            .await?
             .update_task(&remote_id, task_args)
             .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
@@ -695,7 +697,8 @@ impl SyncService {
             labels: None,
         };
         let _task = self
-            .backend
+            .get_backend()
+            .await?
             .update_task(&remote_id, task_args)
             .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
@@ -734,7 +737,8 @@ impl SyncService {
             labels: None,
         };
         let _task = self
-            .backend
+            .get_backend()
+            .await?
             .update_task(&remote_id, task_args)
             .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
@@ -758,7 +762,8 @@ impl SyncService {
         let remote_id = self.get_project_remote_id(project_uuid).await?;
 
         // Delete project via backend
-        self.backend
+        self.get_backend()
+            .await?
             .delete_project(&remote_id)
             .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
@@ -817,7 +822,7 @@ impl SyncService {
         info!("🔄 Starting sync process...");
 
         // Fetch projects from backend
-        let projects = match self.backend.fetch_projects().await {
+        let projects = match self.get_backend().await?.fetch_projects().await {
             Ok(projects) => {
                 info!("✅ Fetched {} projects from backend", projects.len());
                 projects
@@ -831,7 +836,7 @@ impl SyncService {
         };
 
         // Fetch all tasks from backend
-        let tasks = match self.backend.fetch_tasks().await {
+        let tasks = match self.get_backend().await?.fetch_tasks().await {
             Ok(tasks) => {
                 info!("✅ Fetched {} tasks from backend", tasks.len());
                 tasks
@@ -845,7 +850,7 @@ impl SyncService {
         };
 
         // Fetch all labels from backend
-        let labels = match self.backend.fetch_labels().await {
+        let labels = match self.get_backend().await?.fetch_labels().await {
             Ok(labels) => {
                 info!("✅ Fetched {} labels from backend", labels.len());
                 labels
@@ -859,7 +864,7 @@ impl SyncService {
         };
 
         // Fetch all sections from backend
-        let sections = match self.backend.fetch_sections().await {
+        let sections = match self.get_backend().await?.fetch_sections().await {
             Ok(sections) => {
                 info!("✅ Fetched {} sections from backend", sections.len());
                 sections
@@ -1033,7 +1038,7 @@ impl SyncService {
         for backend_project in projects {
             let local_project = project::ActiveModel {
                 uuid: ActiveValue::Set(Uuid::new_v4()),
-                backend_uuid: ActiveValue::Set(self.default_backend_uuid),
+                backend_uuid: ActiveValue::Set(self.backend_uuid),
                 remote_id: ActiveValue::Set(backend_project.remote_id.clone()),
                 name: ActiveValue::Set(backend_project.name.clone()),
                 color: ActiveValue::Set(backend_project.color.clone()),
@@ -1063,14 +1068,11 @@ impl SyncService {
         for backend_project in projects {
             if let Some(remote_parent_id) = &backend_project.parent_remote_id {
                 if let Some(parent) =
-                    ProjectRepository::get_by_remote_id(&txn, &self.default_backend_uuid, remote_parent_id).await?
+                    ProjectRepository::get_by_remote_id(&txn, &self.backend_uuid, remote_parent_id).await?
                 {
-                    if let Some(project) = ProjectRepository::get_by_remote_id(
-                        &txn,
-                        &self.default_backend_uuid,
-                        &backend_project.remote_id,
-                    )
-                    .await?
+                    if let Some(project) =
+                        ProjectRepository::get_by_remote_id(&txn, &self.backend_uuid, &backend_project.remote_id)
+                            .await?
                     {
                         let mut active_model: project::ActiveModel = project.into_active_model();
                         active_model.parent_uuid = ActiveValue::Set(Some(parent.uuid));
@@ -1093,7 +1095,7 @@ impl SyncService {
         for backend_label in labels {
             let local_label = label::ActiveModel {
                 uuid: ActiveValue::Set(Uuid::new_v4()),
-                backend_uuid: ActiveValue::Set(self.default_backend_uuid),
+                backend_uuid: ActiveValue::Set(self.backend_uuid),
                 remote_id: ActiveValue::Set(backend_label.remote_id.clone()),
                 name: ActiveValue::Set(backend_label.name.clone()),
                 color: ActiveValue::Set(backend_label.color.clone()),
@@ -1135,7 +1137,7 @@ impl SyncService {
             // Look up local project UUID from remote project_id
             let project_uuid = match Self::lookup_project_uuid(
                 &txn,
-                &self.default_backend_uuid,
+                &self.backend_uuid,
                 &backend_task.project_remote_id,
                 "task batch sync",
             )
@@ -1149,16 +1151,12 @@ impl SyncService {
             };
 
             // Look up local section UUID from remote section_id if present
-            let section_uuid = Self::lookup_section_uuid(
-                &txn,
-                &self.default_backend_uuid,
-                backend_task.section_remote_id.as_ref(),
-            )
-            .await?;
+            let section_uuid =
+                Self::lookup_section_uuid(&txn, &self.backend_uuid, backend_task.section_remote_id.as_ref()).await?;
 
             let local_task = task::ActiveModel {
                 uuid: ActiveValue::Set(Uuid::new_v4()),
-                backend_uuid: ActiveValue::Set(self.default_backend_uuid),
+                backend_uuid: ActiveValue::Set(self.backend_uuid),
                 remote_id: ActiveValue::Set(backend_task.remote_id.clone()),
                 content: ActiveValue::Set(backend_task.content.clone()),
                 description: ActiveValue::Set(backend_task.description.clone()),
@@ -1201,7 +1199,7 @@ impl SyncService {
 
             // Get the uuid of the task we just inserted/updated
             if let Some(task) =
-                TaskRepository::get_by_remote_id(&txn, &self.default_backend_uuid, &backend_task.remote_id).await?
+                TaskRepository::get_by_remote_id(&txn, &self.backend_uuid, &backend_task.remote_id).await?
             {
                 task_labels_map.push((task.uuid, label_names));
             }
@@ -1211,11 +1209,10 @@ impl SyncService {
         for backend_task in tasks {
             if let Some(remote_parent_id) = &backend_task.parent_remote_id {
                 if let Some(parent) =
-                    TaskRepository::get_by_remote_id(&txn, &self.default_backend_uuid, remote_parent_id).await?
+                    TaskRepository::get_by_remote_id(&txn, &self.backend_uuid, remote_parent_id).await?
                 {
                     if let Some(task) =
-                        TaskRepository::get_by_remote_id(&txn, &self.default_backend_uuid, &backend_task.remote_id)
-                            .await?
+                        TaskRepository::get_by_remote_id(&txn, &self.backend_uuid, &backend_task.remote_id).await?
                     {
                         let mut active_model: task::ActiveModel = task.into_active_model();
                         active_model.parent_uuid = ActiveValue::Set(Some(parent.uuid));
@@ -1272,7 +1269,7 @@ impl SyncService {
             // Look up local project UUID from remote project_id
             let project_uuid = Self::lookup_project_uuid(
                 &txn,
-                &self.default_backend_uuid,
+                &self.backend_uuid,
                 &backend_section.project_remote_id,
                 "section sync",
             )
@@ -1280,7 +1277,7 @@ impl SyncService {
 
             let local_section = section::ActiveModel {
                 uuid: ActiveValue::Set(Uuid::new_v4()),
-                backend_uuid: ActiveValue::Set(self.default_backend_uuid),
+                backend_uuid: ActiveValue::Set(self.backend_uuid),
                 remote_id: ActiveValue::Set(backend_section.remote_id.clone()),
                 name: ActiveValue::Set(backend_section.name.clone()),
                 project_uuid: ActiveValue::Set(project_uuid),
@@ -1321,7 +1318,8 @@ impl SyncService {
         let remote_id = self.get_task_remote_id(task_uuid).await?;
 
         // Complete the task via backend using remote_id (this handles subtasks automatically)
-        self.backend
+        self.get_backend()
+            .await?
             .complete_task(&remote_id)
             .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
@@ -1353,7 +1351,8 @@ impl SyncService {
         let remote_id = self.get_task_remote_id(task_uuid).await?;
 
         // Delete the task via backend using remote_id
-        self.backend
+        self.get_backend()
+            .await?
             .delete_task(&remote_id)
             .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
@@ -1411,7 +1410,8 @@ impl SyncService {
             };
 
             let new_task = self
-                .backend
+                .get_backend()
+                .await?
                 .create_task(task_args)
                 .await
                 .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
@@ -1427,20 +1427,15 @@ impl SyncService {
             // Store the new task (reuse the single task upsert logic)
             let txn = storage.conn.begin().await?;
 
-            let project_uuid = Self::lookup_project_uuid(
-                &txn,
-                &self.default_backend_uuid,
-                &new_task.project_remote_id,
-                "task restore",
-            )
-            .await?;
-
-            let section_uuid =
-                Self::lookup_section_uuid(&txn, &self.default_backend_uuid, new_task.section_remote_id.as_ref())
+            let project_uuid =
+                Self::lookup_project_uuid(&txn, &self.backend_uuid, &new_task.project_remote_id, "task restore")
                     .await?;
 
+            let section_uuid =
+                Self::lookup_section_uuid(&txn, &self.backend_uuid, new_task.section_remote_id.as_ref()).await?;
+
             let parent_uuid = if let Some(remote_parent_id) = &new_task.parent_remote_id {
-                TaskRepository::get_by_remote_id(&txn, &self.default_backend_uuid, remote_parent_id)
+                TaskRepository::get_by_remote_id(&txn, &self.backend_uuid, remote_parent_id)
                     .await?
                     .map(|t| t.uuid)
             } else {
@@ -1449,7 +1444,7 @@ impl SyncService {
 
             let local_task = task::ActiveModel {
                 uuid: ActiveValue::Set(Uuid::new_v4()),
-                backend_uuid: ActiveValue::Set(self.default_backend_uuid),
+                backend_uuid: ActiveValue::Set(self.backend_uuid),
                 remote_id: ActiveValue::Set(new_task.remote_id),
                 content: ActiveValue::Set(new_task.content),
                 description: ActiveValue::Set(new_task.description),
@@ -1496,7 +1491,8 @@ impl SyncService {
             // For completed tasks, just reopen them
             let remote_id = task.remote_id.clone();
             drop(storage); // Release the lock before API call
-            self.backend
+            self.get_backend()
+                .await?
                 .reopen_task(&remote_id)
                 .await
                 .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
