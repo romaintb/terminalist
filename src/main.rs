@@ -17,7 +17,9 @@
 
 use anyhow::{Context, Result};
 use std::env;
-use terminalist::{config, logger, sync, ui};
+use std::sync::Arc;
+use terminalist::{backend_registry, config, logger, storage, sync, ui};
+use tokio::sync::Mutex;
 
 /// Main entry point for the Terminalist application.
 ///
@@ -99,11 +101,33 @@ async fn main() -> Result<()> {
         return Ok(());
     }
 
-    // Create sync service with timeout
-    let api_token = std::env::var("TODOIST_API_TOKEN")?;
+    // Initialize storage
+    let local_storage = Arc::new(Mutex::new(storage::LocalStorage::new(debug_mode).await?));
 
+    // Initialize backend registry
+    let backend_registry = Arc::new(backend_registry::BackendRegistry::new(local_storage.clone()));
+
+    // Create initial Todoist backend (DB is always fresh at startup)
+    let api_token = std::env::var("TODOIST_API_TOKEN")?;
+    let credentials = serde_json::json!({ "api_token": api_token }).to_string();
+
+    let backend_uuid = backend_registry
+        .add_backend(
+            "todoist".to_string(),
+            "My Todoist".to_string(),
+            credentials,
+            "{}".to_string(),
+        )
+        .await?;
+
+    // Create sync service with timeout
     let timeout = tokio::time::Duration::from_secs(10);
-    match tokio::time::timeout(timeout, sync::SyncService::new(api_token, debug_mode)).await {
+    match tokio::time::timeout(
+        timeout,
+        sync::SyncService::new(backend_registry.clone(), backend_uuid, debug_mode),
+    )
+    .await
+    {
         Ok(Ok(sync_service)) => {
             ui::run_app(sync_service, config).await?;
         }

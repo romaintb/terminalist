@@ -6,6 +6,7 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
+pub mod factory;
 pub mod todoist;
 
 /// Common error types for backend operations.
