@@ -15,7 +15,7 @@ jobs:
     name: Format and Lint
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -42,7 +42,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable, beta]
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - name: Install Rust
       uses: dtolnay/rust-toolchain@stable
@@ -70,7 +70,7 @@ jobs:
     name: MSRV 1.78 Build
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - name: Install Rust (MSRV)
       uses: dtolnay/rust-toolchain@stable
       with:
@@ -88,7 +88,7 @@ jobs:
     name: Security Audit
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
     - uses: rustsec/audit-check@v2
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
