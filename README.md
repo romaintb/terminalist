@@ -9,6 +9,8 @@
 
 **📖 Documentation:** [Configuration](docs/CONFIGURATION.md) | [Keyboard Shortcuts](docs/KEYBOARD_SHORTCUTS.md) | [Development](docs/DEVELOPMENT.md) | [Architecture](docs/ARCHITECTURE.md)
 
+**💬 Contact:** [#terminalist:matrix.doxin.net](https://app.element.io/#/room/%23terminalist%3Amatrix.doxin.net)
+
 A terminal application for interacting with Todoist, built in Rust with a modern TUI interface.
 
 <img src="docs/images/screenshot1.png" width="48%" alt="Terminalist Main Interface"> <img src="docs/images/screenshot2.png" width="48%" alt="Terminalist Project View">
