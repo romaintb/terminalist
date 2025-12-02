@@ -9,20 +9,15 @@
 use serde::{Deserialize, Serialize};
 
 /// Icon theme variants
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum IconTheme {
     /// Emoji icons (colorful, modern look)
     Emoji,
     /// Unicode symbols (clean, native look)
+    #[default]
     Unicode,
     /// ASCII characters (maximum compatibility)
     Ascii,
-}
-
-impl Default for IconTheme {
-    fn default() -> Self {
-        Self::Unicode
-    }
 }
 
 /// Task status icons
