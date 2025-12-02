@@ -448,6 +448,8 @@ impl DialogComponent {
             f.set_cursor_position((layout[0].x + 1 + self.cursor_position as u16, layout[0].y + 1));
         }
 
+        // Display the input buffer with cursor highlighting (safe for multi-byte chars)
+
         // Render search results
         let results_text = if self.search_results.is_empty() {
             if self.input_buffer.is_empty() {
@@ -603,21 +605,46 @@ impl Component for DialogComponent {
                 KeyCode::Esc => Action::HideDialog,
                 KeyCode::Enter => Action::HideDialog,
                 KeyCode::Char(c) => {
-                    self.input_buffer.insert(self.cursor_position, c);
+                    let byte_pos: usize = self
+                        .input_buffer
+                        .chars()
+                        .take(self.cursor_position)
+                        .map(|ch| ch.len_utf8())
+                        .sum();
+                    self.input_buffer.insert(byte_pos, c);
                     self.cursor_position += 1;
                     self.trigger_search()
                 }
                 KeyCode::Backspace => {
                     if self.cursor_position > 0 {
-                        self.input_buffer.remove(self.cursor_position - 1);
+                        let byte_pos: usize = self
+                            .input_buffer
+                            .chars()
+                            .take(self.cursor_position)
+                            .map(|ch| ch.len_utf8())
+                            .sum();
+                        let prev_char_len = self
+                            .input_buffer
+                            .chars()
+                            .nth(self.cursor_position - 1)
+                            .map(|ch| ch.len_utf8())
+                            .unwrap_or(1);
+                        self.input_buffer.remove(byte_pos - prev_char_len);
                         self.cursor_position -= 1;
                         return self.trigger_search();
                     }
                     Action::None
                 }
                 KeyCode::Delete => {
-                    if self.cursor_position < self.input_buffer.len() {
-                        self.input_buffer.remove(self.cursor_position);
+                    let char_count = self.input_buffer.chars().count();
+                    if self.cursor_position < char_count {
+                        let byte_pos: usize = self
+                            .input_buffer
+                            .chars()
+                            .take(self.cursor_position)
+                            .map(|ch| ch.len_utf8())
+                            .sum();
+                        self.input_buffer.remove(byte_pos);
                         return self.trigger_search();
                     }
                     Action::None
@@ -629,7 +656,8 @@ impl Component for DialogComponent {
                     Action::None
                 }
                 KeyCode::Right => {
-                    if self.cursor_position < self.input_buffer.len() {
+                    let char_count = self.input_buffer.chars().count();
+                    if self.cursor_position < char_count {
                         self.cursor_position += 1;
                     }
                     Action::None
@@ -642,20 +670,45 @@ impl Component for DialogComponent {
                     KeyCode::Esc => Action::HideDialog,
                     KeyCode::Enter => self.handle_submit(),
                     KeyCode::Char(c) => {
-                        self.input_buffer.insert(self.cursor_position, c);
+                        let byte_pos: usize = self
+                            .input_buffer
+                            .chars()
+                            .take(self.cursor_position)
+                            .map(|ch| ch.len_utf8())
+                            .sum();
+                        self.input_buffer.insert(byte_pos, c);
                         self.cursor_position += 1;
                         Action::None
                     }
                     KeyCode::Backspace => {
                         if self.cursor_position > 0 {
-                            self.input_buffer.remove(self.cursor_position - 1);
+                            let byte_pos: usize = self
+                                .input_buffer
+                                .chars()
+                                .take(self.cursor_position)
+                                .map(|ch| ch.len_utf8())
+                                .sum();
+                            let prev_char_len = self
+                                .input_buffer
+                                .chars()
+                                .nth(self.cursor_position - 1)
+                                .map(|ch| ch.len_utf8())
+                                .unwrap_or(1);
+                            self.input_buffer.remove(byte_pos - prev_char_len);
                             self.cursor_position -= 1;
                         }
                         Action::None
                     }
                     KeyCode::Delete => {
-                        if self.cursor_position < self.input_buffer.len() {
-                            self.input_buffer.remove(self.cursor_position);
+                        let char_count = self.input_buffer.chars().count();
+                        if self.cursor_position < char_count {
+                            let byte_pos: usize = self
+                                .input_buffer
+                                .chars()
+                                .take(self.cursor_position)
+                                .map(|ch| ch.len_utf8())
+                                .sum();
+                            self.input_buffer.remove(byte_pos);
                         }
                         Action::None
                     }
@@ -666,7 +719,8 @@ impl Component for DialogComponent {
                         Action::None
                     }
                     KeyCode::Right => {
-                        if self.cursor_position < self.input_buffer.len() {
+                        let char_count = self.input_buffer.chars().count();
+                        if self.cursor_position < char_count {
                             self.cursor_position += 1;
                         }
                         Action::None
@@ -747,15 +801,15 @@ impl Component for DialogComponent {
                 match &dialog_type {
                     DialogType::TaskEdit { content, .. } => {
                         self.input_buffer = content.clone();
-                        self.cursor_position = content.len();
+                        self.cursor_position = content.chars().count();
                     }
                     DialogType::ProjectEdit { name, .. } => {
                         self.input_buffer = name.clone();
-                        self.cursor_position = name.len();
+                        self.cursor_position = name.chars().count();
                     }
                     DialogType::LabelEdit { name, .. } => {
                         self.input_buffer = name.clone();
-                        self.cursor_position = name.len();
+                        self.cursor_position = name.chars().count();
                     }
                     DialogType::TaskCreation { default_project_uuid } => {
                         self.input_buffer.clear();
