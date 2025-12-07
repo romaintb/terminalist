@@ -13,7 +13,7 @@
 
 use anyhow::Result;
 use log::{error, info};
-use sea_orm::{ActiveValue, EntityTrait, IntoActiveModel, TransactionTrait};
+use sea_orm::{ActiveValue, ColumnTrait, EntityTrait, IntoActiveModel, QueryFilter, TransactionTrait};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -887,14 +887,7 @@ impl SyncService {
             }
             info!("✅ Stored labels in database");
 
-            if let Err(e) = self.store_tasks_batch(&storage, &tasks).await {
-                error!("❌ Failed to store tasks: {e}");
-                return Ok(SyncStatus::Error {
-                    message: format!("Failed to store tasks: {e}"),
-                });
-            }
-            info!("✅ Stored tasks in database");
-
+            // Store sections BEFORE tasks since tasks have foreign key references to sections
             if !sections.is_empty() {
                 if let Err(e) = self.store_sections_batch(&storage, &sections).await {
                     error!("❌ Failed to store sections: {e}");
@@ -906,6 +899,14 @@ impl SyncService {
             } else {
                 info!("⚠️  No sections to store (skipped due to backend issue)");
             }
+
+            if let Err(e) = self.store_tasks_batch(&storage, &tasks).await {
+                error!("❌ Failed to store tasks: {e}");
+                return Ok(SyncStatus::Error {
+                    message: format!("Failed to store tasks: {e}"),
+                });
+            }
+            info!("✅ Stored tasks in database");
         }
 
         Ok(SyncStatus::Success)
@@ -1201,8 +1202,17 @@ impl SyncService {
             }
         }
 
-        // Delete all existing task-label relationships
-        task_label::Entity::delete_many().exec(&txn).await?;
+        // Delete task-label relationships only for tasks being synced
+        for backend_task in tasks {
+            if let Some(task) =
+                TaskRepository::get_by_remote_id(&txn, &self.backend_uuid, &backend_task.remote_id).await?
+            {
+                task_label::Entity::delete_many()
+                    .filter(task_label::Column::TaskUuid.eq(task.uuid))
+                    .exec(&txn)
+                    .await?;
+            }
+        }
 
         // Recreate relationships
         for (task_uuid, label_names) in task_labels_map {
