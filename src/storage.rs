@@ -1,5 +1,6 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbBackend, Schema, Statement};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use crate::entities::{backend, label, project, section, task, task_label};
@@ -10,13 +11,31 @@ pub struct LocalStorage {
 }
 
 impl LocalStorage {
+    /// Get the database file path using XDG directories
+    fn get_db_path() -> Result<PathBuf> {
+        // Always use XDG data directory
+        let data_dir = dirs::data_dir()
+            .context("Failed to get XDG data directory")?;
+        let app_data_dir = data_dir.join("terminalist");
+
+        // Create directory if it doesn't exist
+        std::fs::create_dir_all(&app_data_dir)
+            .context("Failed to create application data directory")?;
+
+        Ok(app_data_dir.join("terminalist.db"))
+    }
+
     /// Initialize the local storage with SQLite database
     pub async fn new(debug_mode: bool) -> Result<Self> {
-        let database_url = if debug_mode {
-            "sqlite:terminalist_debug.db?mode=rwc"
-        } else {
-            "sqlite::memory:"
-        };
+        let db_path = Self::get_db_path()?;
+
+        // In normal mode, always delete the database file to start fresh
+        // In debug mode, keep the database file if it exists (for debugging without re-syncing)
+        if !debug_mode && db_path.exists() {
+            std::fs::remove_file(&db_path)?;
+        }
+
+        let database_url = format!("sqlite:{}?mode=rwc", db_path.display());
 
         let mut opt = ConnectOptions::new(database_url);
         opt.max_connections(4)

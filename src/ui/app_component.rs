@@ -139,15 +139,22 @@ impl AppComponent {
         self.state.projects.len()
     }
 
-    /// Trigger initial sync on startup
+    /// Trigger initial sync on startup (unless in debug mode)
     pub fn trigger_initial_sync(&mut self) {
-        info!("AppComponent: Starting initial sync");
-
-        if self.active_sync_task.is_none() {
+        if self.sync_service.is_debug_mode() {
+            info!("AppComponent: Skipping initial sync (debug mode)");
+            // In debug mode, just load existing data from database
             self.is_initial_sync = true;
-            self.start_background_sync();
-            // Data fetch will be triggered automatically when sync completes
-            info!("AppComponent: Initial sync scheduled");
+            self.schedule_initial_data_fetch();
+            self.is_initial_sync = false;
+        } else {
+            info!("AppComponent: Starting initial sync");
+            if self.active_sync_task.is_none() {
+                self.is_initial_sync = true;
+                self.start_background_sync();
+                // Data fetch will be triggered automatically when sync completes
+                info!("AppComponent: Initial sync scheduled");
+            }
         }
     }
 

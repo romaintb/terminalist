@@ -60,7 +60,7 @@ async fn main() -> Result<()> {
         println!("OPTIONS:");
         println!("    -h, --help           Show this help message");
         println!("    -V, --version        Show version information");
-        println!("    -d, --debug          Use file-backed SQLite database for debugging");
+        println!("    -d, --debug          Debug mode: keep database file and skip initial sync");
         println!("    --generate-config    Generate a default configuration file");
         println!();
         println!("ENVIRONMENT VARIABLES:");
