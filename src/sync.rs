@@ -326,7 +326,6 @@ impl SyncService {
         let project_args = crate::backend::CreateProjectArgs {
             name: name.to_string(),
             parent_remote_id: remote_parent_id,
-            color: None,
             is_favorite: None,
         };
         let backend_project = self
@@ -345,7 +344,6 @@ impl SyncService {
             backend_uuid: ActiveValue::Set(self.backend_uuid),
             remote_id: ActiveValue::Set(backend_project.remote_id),
             name: ActiveValue::Set(backend_project.name),
-            color: ActiveValue::Set(backend_project.color),
             is_favorite: ActiveValue::Set(backend_project.is_favorite),
             is_inbox_project: ActiveValue::Set(backend_project.is_inbox),
             order_index: ActiveValue::Set(backend_project.order_index),
@@ -358,7 +356,6 @@ impl SyncService {
             OnConflict::columns([project::Column::BackendUuid, project::Column::RemoteId])
                 .update_columns([
                     project::Column::Name,
-                    project::Column::Color,
                     project::Column::IsFavorite,
                     project::Column::IsInboxProject,
                     project::Column::OrderIndex,
@@ -606,7 +603,6 @@ impl SyncService {
         // Update project via backend using the UpdateProjectArgs structure
         let project_args = crate::backend::UpdateProjectArgs {
             name: Some(name.to_string()),
-            color: None,
             is_favorite: None,
         };
         let _project = self
@@ -1041,7 +1037,6 @@ impl SyncService {
                 backend_uuid: ActiveValue::Set(self.backend_uuid),
                 remote_id: ActiveValue::Set(backend_project.remote_id.clone()),
                 name: ActiveValue::Set(backend_project.name.clone()),
-                color: ActiveValue::Set(backend_project.color.clone()),
                 is_favorite: ActiveValue::Set(backend_project.is_favorite),
                 is_inbox_project: ActiveValue::Set(backend_project.is_inbox),
                 order_index: ActiveValue::Set(backend_project.order_index),
@@ -1053,7 +1048,6 @@ impl SyncService {
                 OnConflict::columns([project::Column::BackendUuid, project::Column::RemoteId])
                     .update_columns([
                         project::Column::Name,
-                        project::Column::Color,
                         project::Column::IsFavorite,
                         project::Column::IsInboxProject,
                         project::Column::OrderIndex,

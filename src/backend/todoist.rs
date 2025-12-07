@@ -25,7 +25,6 @@ impl TodoistBackend {
         BackendProject {
             remote_id: api_project.id.clone(),
             name: api_project.name.clone(),
-            color: api_project.color.clone(),
             is_favorite: api_project.is_favorite,
             is_inbox: api_project.is_inbox_project,
             order_index: api_project.order,
@@ -121,7 +120,7 @@ impl Backend for TodoistBackend {
     async fn create_project(&self, args: CreateProjectArgs) -> Result<BackendProject, BackendError> {
         let todoist_args = crate::todoist::CreateProjectArgs {
             name: args.name,
-            color: args.color,
+            color: None,
             is_favorite: args.is_favorite,
             parent_id: args.parent_remote_id,
             view_style: None,
@@ -138,7 +137,7 @@ impl Backend for TodoistBackend {
     async fn update_project(&self, remote_id: &str, args: UpdateProjectArgs) -> Result<BackendProject, BackendError> {
         let todoist_args = crate::todoist::UpdateProjectArgs {
             name: args.name,
-            color: args.color,
+            color: None,
             is_favorite: args.is_favorite,
             view_style: None,
         };
