@@ -14,13 +14,11 @@ impl LocalStorage {
     /// Get the database file path using XDG directories
     fn get_db_path() -> Result<PathBuf> {
         // Always use XDG data directory
-        let data_dir = dirs::data_dir()
-            .context("Failed to get XDG data directory")?;
+        let data_dir = dirs::data_dir().context("Failed to get XDG data directory")?;
         let app_data_dir = data_dir.join("terminalist");
 
         // Create directory if it doesn't exist
-        std::fs::create_dir_all(&app_data_dir)
-            .context("Failed to create application data directory")?;
+        std::fs::create_dir_all(&app_data_dir).context("Failed to create application data directory")?;
 
         Ok(app_data_dir.join("terminalist.db"))
     }

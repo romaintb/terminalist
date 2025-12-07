@@ -11,13 +11,27 @@ src/
 ├── config.rs                  # Configuration management
 ├── todoist.rs                 # Todoist API models & display structs
 ├── sync.rs                    # Sync service with API integration
-├── storage/                   # SQLite storage (in-memory)
-│   ├── db.rs
-│   ├── labels.rs
-│   ├── projects.rs
-│   ├── sections.rs
-│   ├── tasks.rs
+├── storage.rs                 # Storage initialization
+├── entities/                  # Sea-ORM domain entities
+│   ├── backend.rs             # Backend entity (Todoist, etc.)
+│   ├── label.rs
+│   ├── project.rs
+│   ├── section.rs
+│   ├── task.rs
+│   ├── task_label.rs
 │   └── mod.rs
+├── repositories/              # Repository pattern for data access
+│   ├── backend.rs
+│   ├── label.rs
+│   ├── project.rs
+│   ├── section.rs
+│   ├── task.rs
+│   └── mod.rs
+├── backend/                   # Backend abstraction layer
+│   ├── factory.rs
+│   ├── todoist.rs             # Todoist backend implementation
+│   └── mod.rs
+├── backend_registry.rs        # Backend registry system
 ├── icons.rs                   # Icon service for terminal compatibility
 ├── logger.rs                  # Debug logging system
 ├── utils/                     # Utility modules
@@ -43,9 +57,11 @@ src/
 ## Data Management
 
 ### Local Storage
-- All data is cached locally in an **in-memory SQLite database**
-- **No persistence between sessions** - task data is fresh on each launch
-- Provides instant loading and fast response times
+- Data is cached locally in a **file-backed SQLite database**
+- Database is recreated from scratch on each startup by syncing with the backend
+- Uses Sea-ORM for type-safe database operations
+- Repository pattern provides clean data access layer
+- UUID-based primary keys for robust entity management
 
 ### Sync Behavior
 - **First Run**: Automatically syncs all data from Todoist
@@ -54,8 +70,16 @@ src/
 - **Sync Indicators**: Sync progress is shown during operations
 
 ### Data Types
+- **Backends**: Abstract backend entity supporting multiple task management services (Todoist, etc.)
 - **Projects**: Hierarchical structure with parent-child relationships
+- **Sections**: Project sections for organizing tasks
 - **Tasks**: Full task details including labels, priority, and status
 - **Labels**: Colored badges for task categorization
 - **Search**: Fast database-level search across all tasks with live results
 - **Real-time Updates**: Create, modify, and delete tasks/projects immediately
+
+### Backend Abstraction
+- **Backend Registry**: Centralized system for managing multiple backend services
+- **Repository Pattern**: Clean separation between data access and business logic
+- **Entity System**: Sea-ORM entities with UUID primary keys and backend associations
+- **Current Status**: Todoist is the only supported backend and remains the main focus. Preliminary architectural work has been completed to enable future support for other task management services.
