@@ -10,7 +10,6 @@ pub struct Model {
     pub backend_uuid: Uuid,
     pub remote_id: String,
     pub name: String,
-    pub color: String,
     pub order_index: i32,
     pub is_favorite: bool,
 }

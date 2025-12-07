@@ -1021,7 +1021,7 @@ impl AppComponent {
                             Err(e) => Err(format!("Invalid label UUID: {}", e)),
                         }
                     }
-                    "Create label" => match sync_service.create_label(&task_info, None).await {
+                    "Create label" => match sync_service.create_label(&task_info).await {
                         Ok(()) => Ok(format!("{}: {}", SUCCESS_LABEL_CREATED, task_info)),
                         Err(e) => Err(format!("{}: {}", ERROR_LABEL_CREATE_FAILED, e)),
                     },

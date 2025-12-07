@@ -33,7 +33,6 @@ pub enum BackendError {
 pub struct BackendProject {
     pub remote_id: String,
     pub name: String,
-    pub color: String,
     pub is_favorite: bool,
     pub is_inbox: bool,
     pub order_index: i32,
@@ -65,7 +64,6 @@ pub struct BackendTask {
 pub struct BackendLabel {
     pub remote_id: String,
     pub name: String,
-    pub color: String,
     pub order_index: i32,
     pub is_favorite: bool,
 }
@@ -83,7 +81,6 @@ pub struct BackendSection {
 #[derive(Clone, Debug)]
 pub struct CreateProjectArgs {
     pub name: String,
-    pub color: Option<String>,
     pub is_favorite: Option<bool>,
     pub parent_remote_id: Option<String>,
 }
@@ -107,7 +104,6 @@ pub struct CreateTaskArgs {
 #[derive(Clone, Debug)]
 pub struct CreateLabelArgs {
     pub name: String,
-    pub color: Option<String>,
     pub is_favorite: Option<bool>,
 }
 
@@ -115,7 +111,6 @@ pub struct CreateLabelArgs {
 #[derive(Clone, Debug)]
 pub struct UpdateProjectArgs {
     pub name: Option<String>,
-    pub color: Option<String>,
     pub is_favorite: Option<bool>,
 }
 
@@ -138,7 +133,6 @@ pub struct UpdateTaskArgs {
 #[derive(Clone, Debug)]
 pub struct UpdateLabelArgs {
     pub name: Option<String>,
-    pub color: Option<String>,
     pub is_favorite: Option<bool>,
 }
 
