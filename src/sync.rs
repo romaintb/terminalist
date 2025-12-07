@@ -490,17 +490,15 @@ impl SyncService {
     ///
     /// # Arguments
     /// * `name` - The name of the new label
-    /// * `color` - Optional color for the label (hex code or predefined color name)
     ///
     /// # Errors
     /// Returns an error if the backend call fails or local storage update fails
-    pub async fn create_label(&self, name: &str, color: Option<&str>) -> Result<()> {
-        info!("Backend: Creating label '{}' with color {:?}", name, color);
+    pub async fn create_label(&self, name: &str) -> Result<()> {
+        info!("Backend: Creating label '{}'", name);
 
         // Create label via backend using the CreateLabelArgs structure
         let label_args = crate::backend::CreateLabelArgs {
             name: name.to_string(),
-            color: color.map(std::string::ToString::to_string),
             is_favorite: None,
         };
         let api_label = self
@@ -519,7 +517,6 @@ impl SyncService {
             backend_uuid: ActiveValue::Set(self.backend_uuid),
             remote_id: ActiveValue::Set(api_label.remote_id),
             name: ActiveValue::Set(api_label.name),
-            color: ActiveValue::Set(api_label.color),
             order_index: ActiveValue::Set(api_label.order_index),
             is_favorite: ActiveValue::Set(api_label.is_favorite),
         };
@@ -528,12 +525,7 @@ impl SyncService {
         let mut insert = label::Entity::insert(local_label);
         insert = insert.on_conflict(
             OnConflict::columns([label::Column::BackendUuid, label::Column::RemoteId])
-                .update_columns([
-                    label::Column::Name,
-                    label::Column::Color,
-                    label::Column::OrderIndex,
-                    label::Column::IsFavorite,
-                ])
+                .update_columns([label::Column::Name, label::Column::OrderIndex, label::Column::IsFavorite])
                 .to_owned(),
         );
         insert.exec(&storage.conn).await?;
@@ -551,7 +543,6 @@ impl SyncService {
         // Update label via backend using the UpdateLabelArgs structure
         let label_args = crate::backend::UpdateLabelArgs {
             name: Some(name.to_string()),
-            color: None,
             is_favorite: None,
         };
         let _label = self
@@ -1092,7 +1083,6 @@ impl SyncService {
                 backend_uuid: ActiveValue::Set(self.backend_uuid),
                 remote_id: ActiveValue::Set(backend_label.remote_id.clone()),
                 name: ActiveValue::Set(backend_label.name.clone()),
-                color: ActiveValue::Set(backend_label.color.clone()),
                 order_index: ActiveValue::Set(backend_label.order_index),
                 is_favorite: ActiveValue::Set(backend_label.is_favorite),
             };
@@ -1100,12 +1090,7 @@ impl SyncService {
             let mut insert = label::Entity::insert(local_label);
             insert = insert.on_conflict(
                 OnConflict::columns([label::Column::BackendUuid, label::Column::RemoteId])
-                    .update_columns([
-                        label::Column::Name,
-                        label::Column::Color,
-                        label::Column::OrderIndex,
-                        label::Column::IsFavorite,
-                    ])
+                    .update_columns([label::Column::Name, label::Column::OrderIndex, label::Column::IsFavorite])
                     .to_owned(),
             );
             insert.exec(&txn).await?;

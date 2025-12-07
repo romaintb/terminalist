@@ -64,7 +64,6 @@ pub struct BackendTask {
 pub struct BackendLabel {
     pub remote_id: String,
     pub name: String,
-    pub color: String,
     pub order_index: i32,
     pub is_favorite: bool,
 }
@@ -105,7 +104,6 @@ pub struct CreateTaskArgs {
 #[derive(Clone, Debug)]
 pub struct CreateLabelArgs {
     pub name: String,
-    pub color: Option<String>,
     pub is_favorite: Option<bool>,
 }
 
@@ -135,7 +133,6 @@ pub struct UpdateTaskArgs {
 #[derive(Clone, Debug)]
 pub struct UpdateLabelArgs {
     pub name: Option<String>,
-    pub color: Option<String>,
     pub is_favorite: Option<bool>,
 }
 
