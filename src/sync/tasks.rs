@@ -132,14 +132,17 @@ impl SyncService {
     /// Returns an error if the backend call fails or local storage update fails
     pub async fn create_task(&self, content: &str, project_uuid: Option<Uuid>) -> Result<()> {
         // Look up remote_id for project if provided
-        let storage = self.storage.lock().await;
-        let remote_project_id = if let Some(uuid) = project_uuid {
-            Some(ProjectRepository::get_remote_id(&storage.conn, &uuid).await?)
-        } else {
-            None
+        let remote_project_id = {
+            let storage = self.storage.lock().await;
+            if let Some(uuid) = project_uuid {
+                Some(ProjectRepository::get_remote_id(&storage.conn, &uuid).await?)
+            } else {
+                None
+            }
+            // Lock is automatically dropped here when storage goes out of scope
         };
 
-        // Create task via backend using backend CreateTaskArgs
+        // Create task via backend using backend CreateTaskArgs (lock is not held)
         let task_args = crate::backend::CreateTaskArgs {
             content: content.to_string(),
             description: None,
