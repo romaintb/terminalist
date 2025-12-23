@@ -299,7 +299,18 @@ impl SyncService {
         Ok(SyncStatus::Success)
     }
 
-    /// Force sync regardless of last sync time
+    /// Forces a full synchronization with the remote backend, bypassing any checks (e.g., last sync time).
+    ///
+    /// This method is intended for situations where an immediate and complete synchronization
+    /// is required, regardless of when the last sync occurred or whether changes are detected.
+    /// Currently, it defers to the `sync` method, but it is designed for future enhancements
+    /// where it might, for example, clear local cache before syncing or bypass rate limiting logic.
+    ///
+    /// # Returns
+    /// A `SyncStatus` indicating the result of the force sync operation.
+    ///
+    /// # Errors
+    /// Returns `SyncStatus::Error` if any part of the sync process fails.
     pub async fn force_sync(&self) -> Result<SyncStatus> {
         self.sync().await
     }
