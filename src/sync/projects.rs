@@ -1,5 +1,6 @@
 use crate::entities::project;
 use crate::repositories::ProjectRepository;
+use log::warn;
 use crate::sync::SyncService;
 use anyhow::Result;
 use sea_orm::{ActiveValue, EntityTrait, IntoActiveModel};
@@ -118,6 +119,8 @@ impl SyncService {
             let mut active_model: project::ActiveModel = project.into_active_model();
             active_model.name = ActiveValue::Set(name.to_string());
             ProjectRepository::update(&storage.conn, active_model).await?;
+        } else {
+            warn!("Local project with UUID {} not found after successful backend update.", project_uuid);
         }
 
         Ok(())
@@ -140,6 +143,8 @@ impl SyncService {
 
         if let Some(project) = ProjectRepository::get_by_id(&storage.conn, project_uuid).await? {
             ProjectRepository::delete(&storage.conn, project).await?;
+        } else {
+            warn!("Local project with UUID {} not found after successful backend deletion.", project_uuid);
         }
 
         Ok(())
