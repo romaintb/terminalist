@@ -40,10 +40,7 @@ impl SyncService {
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
 
         // Store the created label in local database immediately for UI refresh
-        info!(
-            "Storage: Storing new label locally with ID {}",
-            api_label.remote_id
-        );
+        info!("Storage: Storing new label locally with ID {}", api_label.remote_id);
         let storage = self.storage.lock().await;
 
         let local_label = label::ActiveModel {
@@ -59,11 +56,7 @@ impl SyncService {
         let mut insert = label::Entity::insert(local_label);
         insert = insert.on_conflict(
             OnConflict::columns([label::Column::BackendUuid, label::Column::RemoteId])
-                .update_columns([
-                    label::Column::Name,
-                    label::Column::OrderIndex,
-                    label::Column::IsFavorite,
-                ])
+                .update_columns([label::Column::Name, label::Column::OrderIndex, label::Column::IsFavorite])
                 .to_owned(),
         );
         insert.exec(&storage.conn).await?;
@@ -73,10 +66,7 @@ impl SyncService {
 
     /// Update label content (name only for now)
     pub async fn update_label_content(&self, label_uuid: &Uuid, name: &str) -> Result<()> {
-        info!(
-            "Backend: Updating label name for UUID {} to '{}'",
-            label_uuid, name
-        );
+        info!("Backend: Updating label name for UUID {} to '{}'", label_uuid, name);
 
         // Look up the label's remote_id for backend call
         let remote_id = self.get_label_remote_id(label_uuid).await?;

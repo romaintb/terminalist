@@ -144,6 +144,4 @@ impl SyncService {
 
         Ok(())
     }
-
-
 }

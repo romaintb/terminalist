@@ -1,4 +1,3 @@
-
 //! Synchronization service module for the terminalist application.
 //!
 //! This module provides the [`SyncService`] struct which handles data synchronization
