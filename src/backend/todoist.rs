@@ -26,8 +26,8 @@ impl TodoistBackend {
             remote_id: api_project.id.clone(),
             name: api_project.name.clone(),
             is_favorite: api_project.is_favorite,
-            is_inbox: api_project.is_inbox_project,
-            order_index: api_project.order,
+            is_inbox: api_project.inbox_project,
+            order_index: 0, // order field removed from API v1
             parent_remote_id: api_project.parent_id.clone(),
         }
     }
@@ -42,7 +42,7 @@ impl TodoistBackend {
             section_remote_id: api_task.section_id.clone(),
             parent_remote_id: api_task.parent_id.clone(),
             priority: api_task.priority,
-            order_index: api_task.order,
+            order_index: 0, // order field removed from API v1
             due_date: api_task.due.as_ref().map(|d| d.date.clone()),
             due_datetime: api_task.due.as_ref().and_then(|d| d.datetime.clone()),
             is_recurring: api_task.due.as_ref().map(|d| d.is_recurring).unwrap_or(false),
@@ -69,7 +69,7 @@ impl TodoistBackend {
             remote_id: api_section.id.clone(),
             name: api_section.name.clone(),
             project_remote_id: api_section.project_id.clone(),
-            order_index: api_section.order,
+            order_index: api_section.section_order,
         }
     }
 }
@@ -81,39 +81,99 @@ impl Backend for TodoistBackend {
     }
 
     async fn fetch_projects(&self) -> Result<Vec<BackendProject>, BackendError> {
-        let projects = self
-            .wrapper
-            .get_projects()
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))?;
-        Ok(projects.iter().map(Self::project_to_backend).collect())
+        let mut all_projects = Vec::new();
+        let mut cursor: Option<String> = None;
+
+        // Fetch all pages with limit=200
+        loop {
+            let response = self
+                .wrapper
+                .get_projects(Some(200), cursor.clone())
+                .await
+                .map_err(|e| BackendError::Network(e.to_string()))?;
+
+            all_projects.extend(response.results.iter().map(Self::project_to_backend));
+
+            // Check if there are more pages
+            if response.next_cursor.is_none() {
+                break;
+            }
+            cursor = response.next_cursor;
+        }
+
+        Ok(all_projects)
     }
 
     async fn fetch_tasks(&self) -> Result<Vec<BackendTask>, BackendError> {
-        let tasks = self
-            .wrapper
-            .get_tasks()
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))?;
-        Ok(tasks.iter().map(Self::task_to_backend).collect())
+        let mut all_tasks = Vec::new();
+        let mut cursor: Option<String> = None;
+
+        // Fetch all pages with limit=200
+        loop {
+            let response = self
+                .wrapper
+                .get_tasks(Some(200), cursor.clone())
+                .await
+                .map_err(|e| BackendError::Network(e.to_string()))?;
+
+            all_tasks.extend(response.results.iter().map(Self::task_to_backend));
+
+            // Check if there are more pages
+            if response.next_cursor.is_none() {
+                break;
+            }
+            cursor = response.next_cursor;
+        }
+
+        Ok(all_tasks)
     }
 
     async fn fetch_labels(&self) -> Result<Vec<BackendLabel>, BackendError> {
-        let labels = self
-            .wrapper
-            .get_labels()
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))?;
-        Ok(labels.iter().map(Self::label_to_backend).collect())
+        let mut all_labels = Vec::new();
+        let mut cursor: Option<String> = None;
+
+        // Fetch all pages with limit=200
+        loop {
+            let response = self
+                .wrapper
+                .get_labels(Some(200), cursor.clone())
+                .await
+                .map_err(|e| BackendError::Network(e.to_string()))?;
+
+            all_labels.extend(response.results.iter().map(Self::label_to_backend));
+
+            // Check if there are more pages
+            if response.next_cursor.is_none() {
+                break;
+            }
+            cursor = response.next_cursor;
+        }
+
+        Ok(all_labels)
     }
 
     async fn fetch_sections(&self) -> Result<Vec<BackendSection>, BackendError> {
-        let sections = self
-            .wrapper
-            .get_sections()
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))?;
-        Ok(sections.iter().map(Self::section_to_backend).collect())
+        let mut all_sections = Vec::new();
+        let mut cursor: Option<String> = None;
+
+        // Fetch all pages with limit=200
+        loop {
+            let response = self
+                .wrapper
+                .get_sections(Some(200), cursor.clone())
+                .await
+                .map_err(|e| BackendError::Network(e.to_string()))?;
+
+            all_sections.extend(response.results.iter().map(Self::section_to_backend));
+
+            // Check if there are more pages
+            if response.next_cursor.is_none() {
+                break;
+            }
+            cursor = response.next_cursor;
+        }
+
+        Ok(all_sections)
     }
 
     async fn create_project(&self, args: CreateProjectArgs) -> Result<BackendProject, BackendError> {
