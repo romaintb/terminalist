@@ -13,6 +13,7 @@ pub fn render_project_creation_dialog(
     area: Rect,
     _icons: &IconService,
     input_buffer: &str,
+    cursor_position: usize,
     root_projects: &[&crate::entities::project::Model],
     selected_parent_index: Option<usize>,
 ) {
@@ -34,7 +35,7 @@ pub fn render_project_creation_dialog(
         ])
         .split(inner_area);
 
-    let input_paragraph = common::create_input_paragraph(input_buffer, "Project Name");
+    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Project Name");
 
     // Parent project selection field
     let parent_project_name = match selected_parent_index {
@@ -65,9 +66,22 @@ pub fn render_project_creation_dialog(
     f.render_widget(input_paragraph, chunks[0]);
     f.render_widget(parent_paragraph, chunks[1]);
     f.render_widget(instructions_paragraph, chunks[3]);
+
+    // Set terminal cursor position with safe u16 conversion and overflow protection
+    let base_x = chunks[0].x.saturating_add(1);
+    let cursor_u16 = u16::try_from(cursor_position).unwrap_or(u16::MAX.saturating_sub(base_x));
+    let final_x = base_x.saturating_add(cursor_u16);
+    let final_y = chunks[0].y.saturating_add(1);
+    f.set_cursor_position((final_x, final_y));
 }
 
-pub fn render_project_edit_dialog(f: &mut Frame, area: Rect, _icons: &IconService, input_buffer: &str) {
+pub fn render_project_edit_dialog(
+    f: &mut Frame,
+    area: Rect,
+    _icons: &IconService,
+    input_buffer: &str,
+    cursor_position: usize,
+) {
     let dialog_area = LayoutManager::centered_rect_lines(65, 9, area);
     f.render_widget(Clear, dialog_area);
 
@@ -85,7 +99,7 @@ pub fn render_project_edit_dialog(f: &mut Frame, area: Rect, _icons: &IconServic
         ])
         .split(inner_area);
 
-    let input_paragraph = common::create_input_paragraph(input_buffer, "Project Name");
+    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Project Name");
 
     let instructions = [
         ("Enter", Color::Green, " Save Changes"),
@@ -98,4 +112,11 @@ pub fn render_project_edit_dialog(f: &mut Frame, area: Rect, _icons: &IconServic
     f.render_widget(main_block, dialog_area);
     f.render_widget(input_paragraph, chunks[0]);
     f.render_widget(instructions_paragraph, chunks[2]);
+
+    // Set terminal cursor position with safe u16 conversion and overflow protection
+    let base_x = chunks[0].x.saturating_add(1);
+    let cursor_u16 = u16::try_from(cursor_position).unwrap_or(u16::MAX.saturating_sub(base_x));
+    let final_x = base_x.saturating_add(cursor_u16);
+    let final_y = chunks[0].y.saturating_add(1);
+    f.set_cursor_position((final_x, final_y));
 }

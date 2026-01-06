@@ -316,6 +316,7 @@ impl DialogComponent {
             area,
             &self.icons,
             &self.input_buffer,
+            self.cursor_position,
             &task_projects,
             self.selected_task_project_index,
         );
@@ -328,21 +329,22 @@ impl DialogComponent {
             area,
             &self.icons,
             &self.input_buffer,
+            self.cursor_position,
             &root_projects,
             self.selected_parent_project_index,
         );
     }
 
     fn render_project_edit_dialog(&self, f: &mut Frame, area: Rect) {
-        project_dialogs::render_project_edit_dialog(f, area, &self.icons, &self.input_buffer);
+        project_dialogs::render_project_edit_dialog(f, area, &self.icons, &self.input_buffer, self.cursor_position);
     }
 
     fn render_label_creation_dialog(&self, f: &mut Frame, area: Rect) {
-        label_dialogs::render_label_creation_dialog(f, area, &self.icons, &self.input_buffer);
+        label_dialogs::render_label_creation_dialog(f, area, &self.icons, &self.input_buffer, self.cursor_position);
     }
 
     fn render_label_edit_dialog(&self, f: &mut Frame, area: Rect) {
-        label_dialogs::render_label_edit_dialog(f, area, &self.icons, &self.input_buffer);
+        label_dialogs::render_label_edit_dialog(f, area, &self.icons, &self.input_buffer, self.cursor_position);
     }
 
     fn render_task_edit_dialog(&self, f: &mut Frame, area: Rect) {
@@ -360,6 +362,7 @@ impl DialogComponent {
             area,
             &self.icons,
             &self.input_buffer,
+            self.cursor_position,
             &task_projects,
             current_project_index,
         );
@@ -444,11 +447,7 @@ impl DialogComponent {
         f.render_widget(input_paragraph, layout[0]);
 
         // Set cursor position in input field
-        if !self.input_buffer.is_empty() || self.cursor_position == 0 {
-            f.set_cursor_position((layout[0].x + 1 + self.cursor_position as u16, layout[0].y + 1));
-        }
-
-        // Display the input buffer with cursor highlighting (safe for multi-byte chars)
+        f.set_cursor_position((layout[0].x + 1 + self.cursor_position as u16, layout[0].y + 1));
 
         // Render search results
         let results_text = if self.search_results.is_empty() {
