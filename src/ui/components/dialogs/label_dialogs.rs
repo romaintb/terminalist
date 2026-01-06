@@ -51,8 +51,12 @@ fn render_label_dialog(
     f.render_widget(input_paragraph, chunks[0]);
     f.render_widget(instructions_paragraph, chunks[2]);
 
-    // Set terminal cursor position
-    f.set_cursor_position((chunks[0].x + 1 + cursor_position as u16, chunks[0].y + 1));
+    // Set terminal cursor position with safe u16 conversion and overflow protection
+    let base_x = chunks[0].x.saturating_add(1);
+    let cursor_u16 = u16::try_from(cursor_position).unwrap_or(u16::MAX.saturating_sub(base_x));
+    let final_x = base_x.saturating_add(cursor_u16);
+    let final_y = chunks[0].y.saturating_add(1);
+    f.set_cursor_position((final_x, final_y));
 }
 
 pub fn render_label_creation_dialog(
