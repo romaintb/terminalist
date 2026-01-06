@@ -8,7 +8,14 @@ use ratatui::{
     Frame,
 };
 
-fn render_label_dialog(f: &mut Frame, area: Rect, _icons: &IconService, input_buffer: &str, is_editing: bool) {
+fn render_label_dialog(
+    f: &mut Frame,
+    area: Rect,
+    _icons: &IconService,
+    input_buffer: &str,
+    cursor_position: usize,
+    is_editing: bool,
+) {
     let dialog_area = LayoutManager::centered_rect_lines(65, 9, area);
     f.render_widget(Clear, dialog_area);
 
@@ -27,7 +34,7 @@ fn render_label_dialog(f: &mut Frame, area: Rect, _icons: &IconService, input_bu
         ])
         .split(inner_area);
 
-    let input_paragraph = common::create_input_paragraph(input_buffer, "Label Name");
+    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Label Name");
 
     // Instructions based on mode
     let action = if is_editing {
@@ -43,12 +50,27 @@ fn render_label_dialog(f: &mut Frame, area: Rect, _icons: &IconService, input_bu
     f.render_widget(main_block, dialog_area);
     f.render_widget(input_paragraph, chunks[0]);
     f.render_widget(instructions_paragraph, chunks[2]);
+
+    // Set terminal cursor position
+    f.set_cursor_position((chunks[0].x + 1 + cursor_position as u16, chunks[0].y + 1));
 }
 
-pub fn render_label_creation_dialog(f: &mut Frame, area: Rect, icons: &IconService, input_buffer: &str) {
-    render_label_dialog(f, area, icons, input_buffer, false);
+pub fn render_label_creation_dialog(
+    f: &mut Frame,
+    area: Rect,
+    icons: &IconService,
+    input_buffer: &str,
+    cursor_position: usize,
+) {
+    render_label_dialog(f, area, icons, input_buffer, cursor_position, false);
 }
 
-pub fn render_label_edit_dialog(f: &mut Frame, area: Rect, icons: &IconService, input_buffer: &str) {
-    render_label_dialog(f, area, icons, input_buffer, true);
+pub fn render_label_edit_dialog(
+    f: &mut Frame,
+    area: Rect,
+    icons: &IconService,
+    input_buffer: &str,
+    cursor_position: usize,
+) {
+    render_label_dialog(f, area, icons, input_buffer, cursor_position, true);
 }

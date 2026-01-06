@@ -14,6 +14,7 @@ pub fn render_task_dialog(
     area: Rect,
     _icons: &IconService,
     input_buffer: &str,
+    cursor_position: usize,
     task_projects: &[&project::Model],
     selected_project_index: Option<usize>,
     is_editing: bool,
@@ -37,7 +38,7 @@ pub fn render_task_dialog(
         ])
         .split(inner_area);
 
-    let input_paragraph = common::create_input_paragraph(input_buffer, "Task Content");
+    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Task Content");
 
     // Project selection field
     let project_name = match selected_project_index {
@@ -75,6 +76,9 @@ pub fn render_task_dialog(
     f.render_widget(input_paragraph, chunks[0]);
     f.render_widget(project_paragraph, chunks[1]);
     f.render_widget(instructions_paragraph, chunks[3]);
+
+    // Set terminal cursor position
+    f.set_cursor_position((chunks[0].x + 1 + cursor_position as u16, chunks[0].y + 1));
 }
 
 // Legacy wrapper functions for backward compatibility
@@ -83,6 +87,7 @@ pub fn render_task_creation_dialog(
     area: Rect,
     icons: &IconService,
     input_buffer: &str,
+    cursor_position: usize,
     task_projects: &[&project::Model],
     selected_task_project_index: Option<usize>,
 ) {
@@ -91,6 +96,7 @@ pub fn render_task_creation_dialog(
         area,
         icons,
         input_buffer,
+        cursor_position,
         task_projects,
         selected_task_project_index,
         false, // is_editing = false for creation
@@ -102,6 +108,7 @@ pub fn render_task_edit_dialog(
     area: Rect,
     icons: &IconService,
     input_buffer: &str,
+    cursor_position: usize,
     task_projects: &[&project::Model],
     selected_task_project_index: Option<usize>,
 ) {
@@ -110,6 +117,7 @@ pub fn render_task_edit_dialog(
         area,
         icons,
         input_buffer,
+        cursor_position,
         task_projects,
         selected_task_project_index,
         true, // is_editing = true for editing

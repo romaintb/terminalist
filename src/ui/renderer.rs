@@ -29,6 +29,9 @@ pub async fn run_app(sync_service: SyncService, config: Config) -> anyhow::Resul
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    // Enable cursor for dialog input fields
+    terminal.show_cursor()?;
+
     // Initialize application components
     let mut app = AppComponent::new(sync_service, config.clone());
     let mut event_handler = EventHandler::new();

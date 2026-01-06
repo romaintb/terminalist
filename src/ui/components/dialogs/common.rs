@@ -16,10 +16,7 @@ pub fn create_dialog_block<'a>(title: &'a str, theme_color: Color) -> Block<'a> 
 }
 
 /// Creates an input field block with a visual cursor
-pub fn create_input_paragraph<'a>(input_buffer: &'a str, field_title: &str) -> Paragraph<'a> {
-    let cursor_char = "█";
-    let input_display = format!("{}{}", input_buffer, cursor_char);
-
+pub fn create_input_paragraph<'a>(input_buffer: &'a str, _cursor_position: usize, field_title: &str) -> Paragraph<'a> {
     let input_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -27,7 +24,7 @@ pub fn create_input_paragraph<'a>(input_buffer: &'a str, field_title: &str) -> P
         .title_style(Style::default().fg(Color::White))
         .style(Style::default().fg(Color::Gray));
 
-    Paragraph::new(input_display)
+    Paragraph::new(input_buffer)
         .block(input_block)
         .style(Style::default().fg(Color::White))
 }
