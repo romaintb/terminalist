@@ -2728,9 +2728,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "todoist-api"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c26027015d86c71ce3bb7980979ec408641fed9bb98aeca7b6d65db84fbfd745"
+checksum = "f7d8dbb3022c8e110b46356c4a519ad7945fa90aa4d1bbab7b7d3ff51e5eddfa"
 dependencies = [
  "reqwest",
  "serde",
