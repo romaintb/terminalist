@@ -58,7 +58,7 @@ impl TodoistBackend {
         BackendLabel {
             remote_id: api_label.id.clone(),
             name: api_label.name.clone(),
-            order_index: api_label.order,
+            order_index: api_label.order.unwrap_or(0),
             is_favorite: api_label.is_favorite,
         }
     }
