@@ -29,6 +29,8 @@ pub struct UiConfig {
     pub mouse_enabled: bool,
     /// Sidebar width in columns
     pub sidebar_width: u16,
+    /// Show sidebar on startup
+    pub sidebar_visible: bool,
 }
 
 /// Sync configuration
@@ -71,6 +73,7 @@ impl Default for UiConfig {
             default_project: "today".to_string(),
             mouse_enabled: true,
             sidebar_width: SIDEBAR_DEFAULT_WIDTH,
+            sidebar_visible: true,
         }
     }
 }

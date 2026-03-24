@@ -26,6 +26,7 @@ This document lists all available keyboard shortcuts and TUI controls.
 
 ## System
 
+- **`b`** Toggle sidebar visibility
 - **`/`** Open task search dialog (search across all tasks)
 - **`r`** Force sync with Todoist
 - **`i`** Cycle through icon themes
