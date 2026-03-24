@@ -224,6 +224,7 @@ GENERAL CONTROLS
 ----------------
 ?           Toggle help panel
 h           Toggle help panel
+b           Toggle sidebar visibility
 q           Quit application
 i           Change icon theme
 

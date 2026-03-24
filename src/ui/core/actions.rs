@@ -85,6 +85,7 @@ pub enum Action {
     RefreshData,
 
     // UI operations
+    ToggleSidebar,
     ShowHelp(bool),
     ShowDebug(bool),
     ShowDialog(DialogType),

@@ -81,6 +81,7 @@ pub struct AppComponent {
     is_initial_sync: bool,
 
     // Layout state
+    sidebar_visible: bool,
     sidebar_width: u16,
     screen_width: u16,
     screen_height: u16,
@@ -105,6 +106,7 @@ impl AppComponent {
             sync_service,
             task_manager,
             background_action_rx,
+            sidebar_visible: config.ui.sidebar_visible,
             config,
             should_quit: false,
             active_sync_task: None,
@@ -242,6 +244,10 @@ impl AppComponent {
         }
 
         match key.code {
+            KeyCode::Char('b') => {
+                info!("Global key: 'b' - toggling sidebar visibility");
+                Action::ToggleSidebar
+            }
             KeyCode::Char('q') => {
                 info!("Global key: 'q' - quitting application");
                 Action::Quit
@@ -422,6 +428,10 @@ impl AppComponent {
     /// Handle app-level actions that require business logic
     pub async fn handle_app_action(&mut self, action: Action) -> Action {
         match action {
+            Action::ToggleSidebar => {
+                self.sidebar_visible = !self.sidebar_visible;
+                Action::None
+            }
             Action::Quit => {
                 self.should_quit = true;
                 Action::None
@@ -1129,7 +1139,7 @@ impl AppComponent {
         let action = match event_type {
             EventType::Mouse(mouse) => {
                 if !self.dialog.is_visible() {
-                    if mouse.column < self.sidebar_width {
+                    if self.sidebar_visible && mouse.column < self.sidebar_width {
                         // Mouse is in sidebar area
                         let sidebar_area = Rect::new(0, 0, self.sidebar_width, self.screen_height);
                         self.sidebar.handle_mouse(mouse, sidebar_area)
@@ -1226,7 +1236,11 @@ impl Component for AppComponent {
 
     fn render(&mut self, f: &mut Frame, rect: Rect) {
         // Create layout: sidebar (configurable width) | task list (remainder)
-        let sidebar_width = self.calculate_sidebar_width(rect.width);
+        let sidebar_width = if self.sidebar_visible {
+            self.calculate_sidebar_width(rect.width)
+        } else {
+            0
+        };
 
         // Update cached dimensions for mouse event handling
         self.sidebar_width = sidebar_width;
@@ -1236,7 +1250,9 @@ impl Component for AppComponent {
         let main_chunks = Layout::horizontal([Constraint::Length(sidebar_width), Constraint::Min(0)]).split(rect);
 
         // Render components
-        self.sidebar.render(f, main_chunks[0]);
+        if self.sidebar_visible {
+            self.sidebar.render(f, main_chunks[0]);
+        }
         self.task_list.render(f, main_chunks[1]);
 
         // Render sync status if syncing or loading
