@@ -130,6 +130,7 @@ Essential keyboard shortcuts to get started:
 | `Space` | Complete task |
 | `a` | Create new task |
 | `/` | Search tasks |
+| `b` | Toggle sidebar |
 | `r` | Sync with Todoist |
 | `?` | Show help panel |
 | `q` | Quit |

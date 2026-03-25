@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-25
+
+### Added
+- **Togglable Sidebar** - Press `b` to show/hide the sidebar, giving more screen space for the task list
+
+### Changed
+- **Todoist API v1** - Migrated from todoist-api 0.3.x to v1.0 with paginated data fetching, ensuring all projects, tasks, labels, and sections are fully retrieved
+- **Sync Service Architecture** - Split sync service into focused modules for better maintainability
+- **Dependency Updates**:
+  - todoist-api from 0.3.1 to 1.0.0-alpha.1
+  - tokio from 1.48.0 to 1.49.0
+  - serde_json from 1.0.145 to 1.0.149
+  - rsa from 0.9.8 to 0.9.10
+  - toml from 0.9.8 to 0.9.11
+  - thiserror from 2.0.17 to 2.0.18
+  - chrono from 0.4.42 to 0.4.43
+  - uuid from 1.18.1 to 1.20.0
+  - log from 0.4.28 to 0.4.29
+
+### Security
+- **bytes integer overflow** - Updated bytes from 1.10.1 to 1.11.1, fixing an integer overflow in `BytesMut::reserve`
+
+### Fixed
+- **Dialog Cursor** - Unified cursor handling across all dialogs (task, project, label, search); input fields now use the visible terminal cursor for clearer feedback
+
 ## [0.4.0] - 2025-12-07
 
 ### Added
