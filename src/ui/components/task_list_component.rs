@@ -21,7 +21,7 @@ use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKin
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
-    widgets::{block::BorderType, Block, Borders, List, ListItem as RatatuiListItem, ListState},
+    widgets::{Block, BorderType, Borders, List, ListItem as RatatuiListItem, ListState},
     Frame,
 };
 use uuid::Uuid;

@@ -71,7 +71,10 @@ async fn run_app_loop<B: Backend>(
     event_handler: &mut EventHandler,
     _cleanup_interval: &mut tokio::time::Interval,
     _render_interval: &mut tokio::time::Interval,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    B::Error: std::error::Error + Send + Sync + 'static,
+{
     let mut needs_render = true;
 
     loop {
