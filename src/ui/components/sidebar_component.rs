@@ -14,7 +14,7 @@ use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKin
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
-    widgets::{block::BorderType, Block, Borders, List, ListItem, ListState},
+    widgets::{Block, BorderType, Borders, List, ListItem, ListState},
     Frame,
 };
 use std::collections::HashMap;
