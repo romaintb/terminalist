@@ -1,10 +1,10 @@
 use super::common::{self, shortcuts};
 use crate::entities::project;
 use crate::icons::IconService;
+use crate::theme::Theme;
 use crate::ui::layout::LayoutManager;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     widgets::Clear,
     Frame,
 };
@@ -19,12 +19,13 @@ pub fn render_task_dialog(
     task_projects: &[&project::Model],
     selected_project_index: Option<usize>,
     is_editing: bool,
+    theme: &Theme,
 ) {
     let title = if is_editing { "Edit Task" } else { "New Task" };
     let dialog_area = LayoutManager::centered_rect_lines(65, 12, area);
     f.render_widget(Clear, dialog_area);
 
-    let main_block = common::create_dialog_block(title, Color::Cyan);
+    let main_block = common::create_dialog_block(title, theme.info);
 
     // Create layout for content
     let inner_area = main_block.inner(dialog_area);
@@ -39,7 +40,7 @@ pub fn render_task_dialog(
         ])
         .split(inner_area);
 
-    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Task Content");
+    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Task Content", theme);
 
     // Project selection field
     let project_name = match selected_project_index {
@@ -53,24 +54,24 @@ pub fn render_task_dialog(
         }
     };
 
-    let project_paragraph = common::create_selection_paragraph(project_name, "Project");
+    let project_paragraph = common::create_selection_paragraph(project_name, "Project", theme);
 
     // Instructions based on mode
     let action = if is_editing {
-        ("Enter", Color::Green, " Save Task")
+        ("Enter", theme.success, " Save Task")
     } else {
-        ("Enter", Color::Green, " Create Task")
+        ("Enter", theme.success, " Create Task")
     };
 
     let instructions = [
         action,
-        shortcuts::SEPARATOR,
-        shortcuts::TAB_SELECT,
-        (" Project", Color::Gray, ""),
-        shortcuts::SEPARATOR,
-        shortcuts::ESC_CANCEL,
+        shortcuts::separator(theme),
+        shortcuts::tab_select(theme),
+        (" Project", theme.border_dim, ""),
+        shortcuts::separator(theme),
+        shortcuts::esc_cancel(theme),
     ];
-    let instructions_paragraph = common::create_instructions_paragraph(&instructions);
+    let instructions_paragraph = common::create_instructions_paragraph(&instructions, theme);
 
     // Render all components
     f.render_widget(main_block, dialog_area);
@@ -83,6 +84,7 @@ pub fn render_task_dialog(
 }
 
 // Legacy wrapper functions for backward compatibility
+#[allow(clippy::too_many_arguments)]
 pub fn render_task_creation_dialog(
     f: &mut Frame,
     area: Rect,
@@ -91,6 +93,7 @@ pub fn render_task_creation_dialog(
     cursor_position: usize,
     task_projects: &[&project::Model],
     selected_task_project_index: Option<usize>,
+    theme: &Theme,
 ) {
     render_task_dialog(
         f,
@@ -101,9 +104,11 @@ pub fn render_task_creation_dialog(
         task_projects,
         selected_task_project_index,
         false, // is_editing = false for creation
+        theme,
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_task_edit_dialog(
     f: &mut Frame,
     area: Rect,
@@ -112,6 +117,7 @@ pub fn render_task_edit_dialog(
     cursor_position: usize,
     task_projects: &[&project::Model],
     selected_task_project_index: Option<usize>,
+    theme: &Theme,
 ) {
     render_task_dialog(
         f,
@@ -122,5 +128,6 @@ pub fn render_task_edit_dialog(
         task_projects,
         selected_task_project_index,
         true, // is_editing = true for editing
+        theme,
     );
 }

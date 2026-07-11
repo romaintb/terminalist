@@ -1,5 +1,6 @@
 use crate::icons::IconService;
 use crate::logger;
+use crate::theme::Theme;
 use crate::ui::layout::LayoutManager;
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -24,6 +25,7 @@ fn render_scrollable_message_dialog(
     message: &str,
     scroll_offset: usize,
     scrollbar_state: &mut ScrollbarState,
+    theme: &Theme,
 ) {
     let dialog_area = LayoutManager::centered_rect_lines(config.width_percent, config.height_lines, area);
     f.render_widget(Clear, dialog_area);
@@ -69,12 +71,12 @@ fn render_scrollable_message_dialog(
     };
 
     let message_paragraph = Paragraph::new(message_text)
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(theme.text))
         .alignment(Alignment::Left)
         .wrap(ratatui::widgets::Wrap { trim: true });
 
     let instructions_paragraph = Paragraph::new(instructions)
-        .style(Style::default().fg(Color::Gray))
+        .style(Style::default().fg(theme.border_dim))
         .alignment(Alignment::Center);
 
     f.render_widget(block, dialog_area);
@@ -87,25 +89,31 @@ fn render_scrollable_message_dialog(
             .end_symbol(Some("↓"))
             .track_symbol(Some("│"))
             .thumb_symbol("▐")
-            .style(Style::default().fg(Color::Gray))
-            .thumb_style(Style::default().fg(Color::White));
+            .style(Style::default().fg(theme.border_dim))
+            .thumb_style(Style::default().fg(theme.text));
 
         f.render_stateful_widget(scrollbar, content_area, scrollbar_state);
     }
 }
 
-pub fn render_delete_confirmation_dialog(f: &mut Frame, area: Rect, icons: &IconService, item_type: &str) {
+pub fn render_delete_confirmation_dialog(
+    f: &mut Frame,
+    area: Rect,
+    icons: &IconService,
+    item_type: &str,
+    theme: &Theme,
+) {
     let dialog_area = LayoutManager::centered_rect_lines(60, 8, area);
     f.render_widget(Clear, dialog_area);
 
-    // Main dialog block with rounded borders and red theme (appropriate for deletion)
+    // Main dialog block with rounded borders and danger theme (appropriate for deletion)
     let title = format!("{} Confirm Delete", icons.warning());
     let main_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .title(title)
-        .title_style(Style::default().fg(Color::Red).add_modifier(Modifier::BOLD))
-        .style(Style::default().fg(Color::Red));
+        .title_style(Style::default().fg(theme.danger).add_modifier(Modifier::BOLD))
+        .style(Style::default().fg(theme.danger));
 
     // Create layout for content
     let inner_area = main_block.inner(dialog_area);
@@ -122,14 +130,14 @@ pub fn render_delete_confirmation_dialog(f: &mut Frame, area: Rect, icons: &Icon
     // Confirmation message
     let message = format!("Are you sure you want to delete this {}?", item_type);
     let message_paragraph = Paragraph::new(message)
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(theme.text))
         .alignment(Alignment::Center);
 
     // Enhanced instructions with color-coded shortcuts
     let instructions = vec![
-        ("Enter", Color::Red, " Delete"),
-        (" • ", Color::Gray, ""),
-        ("Esc", Color::Green, " Cancel"),
+        ("Enter", theme.danger, " Delete"),
+        (" • ", theme.border_dim, ""),
+        ("Esc", theme.success, " Cancel"),
     ];
 
     let mut instruction_text = Vec::new();
@@ -138,7 +146,7 @@ pub fn render_delete_confirmation_dialog(f: &mut Frame, area: Rect, icons: &Icon
             key,
             Style::default().fg(color).add_modifier(Modifier::BOLD),
         ));
-        instruction_text.push(ratatui::text::Span::styled(desc, Style::default().fg(Color::Gray)));
+        instruction_text.push(ratatui::text::Span::styled(desc, Style::default().fg(theme.border_dim)));
     }
 
     let instructions_paragraph =
@@ -157,14 +165,15 @@ pub fn render_info_dialog(
     message: &str,
     scroll_offset: usize,
     scrollbar_state: &mut ScrollbarState,
+    theme: &Theme,
 ) {
     let config = ScrollableDialogConfig {
         title: format!("{} Info", icons.info()),
-        color: Color::Blue,
+        color: theme.info_dialog,
         width_percent: 60,
         height_lines: 10,
     };
-    render_scrollable_message_dialog(f, area, config, message, scroll_offset, scrollbar_state);
+    render_scrollable_message_dialog(f, area, config, message, scroll_offset, scrollbar_state, theme);
 }
 
 pub fn render_error_dialog(
@@ -174,17 +183,24 @@ pub fn render_error_dialog(
     message: &str,
     scroll_offset: usize,
     scrollbar_state: &mut ScrollbarState,
+    theme: &Theme,
 ) {
     let config = ScrollableDialogConfig {
         title: format!("{} Error", icons.warning()),
-        color: Color::Red,
+        color: theme.danger,
         width_percent: 70,
         height_lines: 12,
     };
-    render_scrollable_message_dialog(f, area, config, message, scroll_offset, scrollbar_state);
+    render_scrollable_message_dialog(f, area, config, message, scroll_offset, scrollbar_state, theme);
 }
 
-pub fn render_help_dialog(f: &mut Frame, area: Rect, scroll_offset: usize, scrollbar_state: &mut ScrollbarState) {
+pub fn render_help_dialog(
+    f: &mut Frame,
+    area: Rect,
+    scroll_offset: usize,
+    scrollbar_state: &mut ScrollbarState,
+    theme: &Theme,
+) {
     let help_content = r"
 TERMINALIST - Todoist Terminal Client
 ====================================
@@ -290,7 +306,7 @@ Press 'Esc', '?' or 'h' to close this help panel
                 .title("📖 Help - Press 'Esc', '?' or 'h' to close")
                 .title_alignment(Alignment::Center),
         )
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(theme.text))
         .alignment(Alignment::Left);
 
     f.render_widget(help_paragraph, help_content_area);
@@ -301,14 +317,20 @@ Press 'Esc', '?' or 'h' to close this help panel
             .end_symbol(Some("↓"))
             .track_symbol(Some("│"))
             .thumb_symbol("▐")
-            .style(Style::default().fg(Color::Gray))
-            .thumb_style(Style::default().fg(Color::White));
+            .style(Style::default().fg(theme.border_dim))
+            .thumb_style(Style::default().fg(theme.text));
 
         f.render_stateful_widget(scrollbar, help_content_area, scrollbar_state);
     }
 }
 
-pub fn render_logs_dialog(f: &mut Frame, area: Rect, scroll_offset: usize, scrollbar_state: &mut ScrollbarState) {
+pub fn render_logs_dialog(
+    f: &mut Frame,
+    area: Rect,
+    scroll_offset: usize,
+    scrollbar_state: &mut ScrollbarState,
+    theme: &Theme,
+) {
     let logs_area = LayoutManager::centered_rect(90, 90, area);
     f.render_widget(Clear, logs_area);
 
@@ -352,7 +374,7 @@ pub fn render_logs_dialog(f: &mut Frame, area: Rect, scroll_offset: usize, scrol
                 .title("🔍 Debug Logs - Press 'Esc', 'G' or 'q' to close")
                 .title_alignment(Alignment::Center),
         )
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(theme.text))
         .alignment(Alignment::Left);
 
     f.render_widget(logs_paragraph, logs_content_area);
@@ -363,8 +385,8 @@ pub fn render_logs_dialog(f: &mut Frame, area: Rect, scroll_offset: usize, scrol
             .end_symbol(Some("↓"))
             .track_symbol(Some("│"))
             .thumb_symbol("▐")
-            .style(Style::default().fg(Color::Gray))
-            .thumb_style(Style::default().fg(Color::White));
+            .style(Style::default().fg(theme.border_dim))
+            .thumb_style(Style::default().fg(theme.text));
 
         f.render_stateful_widget(scrollbar, logs_content_area, scrollbar_state);
     }

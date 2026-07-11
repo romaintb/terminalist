@@ -1,3 +1,4 @@
+use crate::theme::Theme;
 use ratatui::{
     layout::Alignment,
     style::{Color, Modifier, Style},
@@ -16,43 +17,48 @@ pub fn create_dialog_block<'a>(title: &'a str, theme_color: Color) -> Block<'a> 
 }
 
 /// Creates an input field block with a visual cursor
-pub fn create_input_paragraph<'a>(input_buffer: &'a str, _cursor_position: usize, field_title: &str) -> Paragraph<'a> {
+pub fn create_input_paragraph<'a>(
+    input_buffer: &'a str,
+    _cursor_position: usize,
+    field_title: &str,
+    theme: &Theme,
+) -> Paragraph<'a> {
     let input_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .title(format!(" {} ", field_title))
-        .title_style(Style::default().fg(Color::White))
-        .style(Style::default().fg(Color::Gray));
+        .title_style(Style::default().fg(theme.text))
+        .style(Style::default().fg(theme.border_dim));
 
     Paragraph::new(input_buffer)
         .block(input_block)
-        .style(Style::default().fg(Color::White))
+        .style(Style::default().fg(theme.text))
 }
 
 /// Creates a selection field block (read-only display with title)
-pub fn create_selection_paragraph(value: String, field_title: &str) -> Paragraph<'static> {
+pub fn create_selection_paragraph(value: String, field_title: &str, theme: &Theme) -> Paragraph<'static> {
     let block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
         .title(format!(" {} ", field_title))
-        .title_style(Style::default().fg(Color::White))
-        .style(Style::default().fg(Color::Gray));
+        .title_style(Style::default().fg(theme.text))
+        .style(Style::default().fg(theme.border_dim));
 
-    Paragraph::new(value).block(block).style(Style::default().fg(Color::White))
+    Paragraph::new(value).block(block).style(Style::default().fg(theme.text))
 }
 
 /// Instruction shortcut definition: (key, color, description)
 pub type InstructionShortcut = (&'static str, Color, &'static str);
 
 /// Creates a paragraph with color-coded instruction shortcuts
-pub fn create_instructions_paragraph<'a>(instructions: &[InstructionShortcut]) -> Paragraph<'a> {
+pub fn create_instructions_paragraph<'a>(instructions: &[InstructionShortcut], theme: &Theme) -> Paragraph<'a> {
     let mut instruction_text = Vec::new();
     for (key, color, desc) in instructions {
         instruction_text.push(Span::styled(
             *key,
             Style::default().fg(*color).add_modifier(Modifier::BOLD),
         ));
-        instruction_text.push(Span::styled(*desc, Style::default().fg(Color::Gray)));
+        instruction_text.push(Span::styled(*desc, Style::default().fg(theme.border_dim)));
     }
 
     Paragraph::new(Line::from(instruction_text)).alignment(Alignment::Center)
@@ -62,7 +68,15 @@ pub fn create_instructions_paragraph<'a>(instructions: &[InstructionShortcut]) -
 pub mod shortcuts {
     use super::*;
 
-    pub const SEPARATOR: InstructionShortcut = (" • ", Color::Gray, "");
-    pub const ESC_CANCEL: InstructionShortcut = ("Esc", Color::Red, " Cancel");
-    pub const TAB_SELECT: InstructionShortcut = ("Tab", Color::Cyan, " Select");
+    pub fn separator(theme: &Theme) -> InstructionShortcut {
+        (" • ", theme.border_dim, "")
+    }
+
+    pub fn esc_cancel(theme: &Theme) -> InstructionShortcut {
+        ("Esc", theme.danger, " Cancel")
+    }
+
+    pub fn tab_select(theme: &Theme) -> InstructionShortcut {
+        ("Tab", theme.info, " Select")
+    }
 }

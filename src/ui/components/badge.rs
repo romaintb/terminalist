@@ -1,4 +1,5 @@
 use crate::entities::label;
+use crate::theme::Theme;
 use ratatui::{
     style::{Color, Modifier, Style},
     text::Span,
@@ -18,8 +19,8 @@ pub fn create_paren_badge(text: &str) -> Span<'static> {
 
 /// Create a label badge with custom color
 #[must_use]
-pub fn create_label_badge(name: &str) -> Span<'static> {
-    let style = Style::default().fg(Color::Green).add_modifier(Modifier::BOLD);
+pub fn create_label_badge(name: &str, theme: &Theme) -> Span<'static> {
+    let style = Style::default().fg(theme.label).add_modifier(Modifier::BOLD);
 
     Span::styled(format!("@{}", name), style)
 }
@@ -31,6 +32,7 @@ pub fn create_task_badges(
     _has_deadline: bool,
     duration: Option<&str>,
     labels: &[label::Model],
+    theme: &Theme,
 ) -> Vec<Span<'static>> {
     let mut badges = Vec::new();
 
@@ -43,7 +45,7 @@ pub fn create_task_badges(
     }
 
     for label in labels {
-        badges.push(create_label_badge(&label.name));
+        badges.push(create_label_badge(&label.name, theme));
     }
 
     badges

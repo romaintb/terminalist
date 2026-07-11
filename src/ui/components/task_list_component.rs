@@ -8,6 +8,7 @@ use crate::config::DisplayConfig;
 use crate::constants::{HEADER_OVERDUE, HEADER_TODAY, HEADER_TOMORROW};
 use crate::entities::{label, project, section, task};
 use crate::icons::IconService;
+use crate::theme::Theme;
 use crate::ui::components::scrollbar_helper::ScrollbarHelper;
 use crate::ui::components::task_list_item_component::{ListItem, TaskItem, TaskListItemType};
 use crate::ui::core::SidebarSelection;
@@ -20,7 +21,7 @@ use chrono::{Duration, Local};
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     widgets::{Block, BorderType, Borders, List, ListItem as RatatuiListItem, ListState},
     Frame,
 };
@@ -50,6 +51,7 @@ pub struct TaskListComponent {
     pub tasks: Vec<task::Model>,
     pub display_config: DisplayConfig,
     scrollbar_helper: ScrollbarHelper,
+    theme: Theme,
 }
 
 impl Default for TaskListComponent {
@@ -72,11 +74,16 @@ impl TaskListComponent {
             icons: IconService::default(),
             display_config: DisplayConfig::default(),
             scrollbar_helper: ScrollbarHelper::new(),
+            theme: Theme::default(),
         }
     }
 
     pub fn update_display_config(&mut self, display_config: DisplayConfig) {
         self.display_config = display_config;
+    }
+
+    pub fn update_theme(&mut self, theme: Theme) {
+        self.theme = theme;
     }
 
     pub fn update_data(
@@ -507,7 +514,7 @@ impl TaskListComponent {
         self.items
             .iter()
             .map(|item| {
-                item.render(false, &self.display_config) // Selection styling handled by List widget
+                item.render(false, &self.display_config, &self.theme) // Selection styling handled by List widget
             })
             .collect()
     }
@@ -636,15 +643,15 @@ impl Component for TaskListComponent {
             List::new(vec![RatatuiListItem::new(empty_message)])
         } else {
             List::new(self.create_list_items(list_area))
-                .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+                .highlight_style(Style::default().bg(self.theme.selection_bg).add_modifier(Modifier::BOLD))
         }
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
                 .title("Tasks")
-                .title_style(Style::default().fg(Color::White))
-                .border_style(Style::default().fg(Color::DarkGray)),
+                .title_style(Style::default().fg(self.theme.text))
+                .border_style(Style::default().fg(self.theme.border)),
         );
 
         // Update scrollbar state with current position and viewport info
@@ -656,6 +663,6 @@ impl Component for TaskListComponent {
         f.render_stateful_widget(tasks_list, list_area, &mut self.list_state);
 
         // Render scrollbar using helper
-        self.scrollbar_helper.render(f, scrollbar_area);
+        self.scrollbar_helper.render(f, scrollbar_area, self.theme.text_muted);
     }
 }

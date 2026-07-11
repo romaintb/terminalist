@@ -1,13 +1,14 @@
 use super::common::{self, shortcuts};
 use crate::icons::IconService;
+use crate::theme::Theme;
 use crate::ui::layout::LayoutManager;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     widgets::Clear,
     Frame,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub fn render_project_creation_dialog(
     f: &mut Frame,
     area: Rect,
@@ -16,11 +17,12 @@ pub fn render_project_creation_dialog(
     cursor_position: usize,
     root_projects: &[&crate::entities::project::Model],
     selected_parent_index: Option<usize>,
+    theme: &Theme,
 ) {
     let dialog_area = LayoutManager::centered_rect_lines(65, 12, area);
     f.render_widget(Clear, dialog_area);
 
-    let main_block = common::create_dialog_block("New Project", Color::Magenta);
+    let main_block = common::create_dialog_block("New Project", theme.project_accent);
 
     // Create layout for content
     let inner_area = main_block.inner(dialog_area);
@@ -35,7 +37,7 @@ pub fn render_project_creation_dialog(
         ])
         .split(inner_area);
 
-    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Project Name");
+    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Project Name", theme);
 
     // Parent project selection field
     let parent_project_name = match selected_parent_index {
@@ -49,17 +51,17 @@ pub fn render_project_creation_dialog(
         }
     };
 
-    let parent_paragraph = common::create_selection_paragraph(parent_project_name, "Parent Project");
+    let parent_paragraph = common::create_selection_paragraph(parent_project_name, "Parent Project", theme);
 
     let instructions = [
-        ("Enter", Color::Green, " Create Project"),
-        shortcuts::SEPARATOR,
-        shortcuts::TAB_SELECT,
-        (" Parent", Color::Gray, ""),
-        shortcuts::SEPARATOR,
-        shortcuts::ESC_CANCEL,
+        ("Enter", theme.success, " Create Project"),
+        shortcuts::separator(theme),
+        shortcuts::tab_select(theme),
+        (" Parent", theme.border_dim, ""),
+        shortcuts::separator(theme),
+        shortcuts::esc_cancel(theme),
     ];
-    let instructions_paragraph = common::create_instructions_paragraph(&instructions);
+    let instructions_paragraph = common::create_instructions_paragraph(&instructions, theme);
 
     // Render all components
     f.render_widget(main_block, dialog_area);
@@ -81,11 +83,12 @@ pub fn render_project_edit_dialog(
     _icons: &IconService,
     input_buffer: &str,
     cursor_position: usize,
+    theme: &Theme,
 ) {
     let dialog_area = LayoutManager::centered_rect_lines(65, 9, area);
     f.render_widget(Clear, dialog_area);
 
-    let main_block = common::create_dialog_block("Edit Project", Color::Yellow);
+    let main_block = common::create_dialog_block("Edit Project", theme.warning);
 
     // Create layout for content
     let inner_area = main_block.inner(dialog_area);
@@ -99,14 +102,14 @@ pub fn render_project_edit_dialog(
         ])
         .split(inner_area);
 
-    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Project Name");
+    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Project Name", theme);
 
     let instructions = [
-        ("Enter", Color::Green, " Save Changes"),
-        shortcuts::SEPARATOR,
-        shortcuts::ESC_CANCEL,
+        ("Enter", theme.success, " Save Changes"),
+        shortcuts::separator(theme),
+        shortcuts::esc_cancel(theme),
     ];
-    let instructions_paragraph = common::create_instructions_paragraph(&instructions);
+    let instructions_paragraph = common::create_instructions_paragraph(&instructions, theme);
 
     // Render all components
     f.render_widget(main_block, dialog_area);

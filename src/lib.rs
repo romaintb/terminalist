@@ -46,6 +46,9 @@ pub mod storage;
 /// Synchronization engine for keeping local and remote data in sync
 pub mod sync;
 
+/// Theme configuration (semantic color palette) for the TUI
+pub mod theme;
+
 /// Todoist API client and data models
 pub mod todoist;
 

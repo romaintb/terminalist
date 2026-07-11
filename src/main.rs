@@ -85,10 +85,14 @@ async fn main() -> Result<()> {
     }
 
     // Load configuration
-    let config = config::Config::load()?;
+    let (config, theme_warnings) = config::Config::load()?;
 
     // Initialize logger
     logger::init_logger(config.logging.enabled)?;
+
+    for warning in &theme_warnings {
+        log::warn!("{warning}");
+    }
 
     // Check if API token is set
     if std::env::var("TODOIST_API_TOKEN").is_err() {
@@ -129,7 +133,7 @@ async fn main() -> Result<()> {
     .await
     {
         Ok(Ok(sync_service)) => {
-            ui::run_app(sync_service, config).await?;
+            ui::run_app(sync_service, config, theme_warnings).await?;
         }
         Ok(Err(e)) => {
             return Err(e);

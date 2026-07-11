@@ -1,5 +1,6 @@
 use crate::config::Config;
 use crate::sync::SyncService;
+use crate::theme::ThemeWarning;
 use crate::ui::app_component::AppComponent;
 use crate::ui::core::{Component, EventHandler, EventType};
 use crossterm::{
@@ -15,7 +16,11 @@ use std::io;
 use tokio::time::{interval, Duration};
 
 /// Enhanced async event loop with proper background task support
-pub async fn run_app(sync_service: SyncService, config: Config) -> anyhow::Result<()> {
+pub async fn run_app(
+    sync_service: SyncService,
+    config: Config,
+    theme_warnings: Vec<ThemeWarning>,
+) -> anyhow::Result<()> {
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -33,7 +38,7 @@ pub async fn run_app(sync_service: SyncService, config: Config) -> anyhow::Resul
     terminal.show_cursor()?;
 
     // Initialize application components
-    let mut app = AppComponent::new(sync_service, config.clone());
+    let mut app = AppComponent::new(sync_service, config.clone(), theme_warnings);
     let mut event_handler = EventHandler::new();
 
     // Start initial sync automatically

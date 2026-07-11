@@ -8,6 +8,7 @@ use crate::config::DisplayConfig;
 use crate::entities::{label, project, task};
 use crate::icons::IconService;
 use crate::sync::SyncService;
+use crate::theme::Theme;
 use crate::ui::components::task_list_item_component::{ListItem as TaskListItem, TaskItem};
 use crate::ui::core::{
     actions::{Action, DialogType},
@@ -60,6 +61,7 @@ pub struct DialogComponent {
     pub search_results: Vec<task::Model>,
     pub sync_service: Option<SyncService>,
     pub display_config: DisplayConfig,
+    pub theme: Theme,
 }
 
 impl Default for DialogComponent {
@@ -88,11 +90,16 @@ impl DialogComponent {
             search_results: Vec::new(),
             sync_service: None,
             display_config: DisplayConfig::default(),
+            theme: Theme::default(),
         }
     }
 
     pub fn update_display_config(&mut self, display_config: DisplayConfig) {
         self.display_config = display_config;
+    }
+
+    pub fn update_theme(&mut self, theme: Theme) {
+        self.theme = theme;
     }
 
     pub fn update_data(&mut self, projects: Vec<project::Model>, labels: Vec<label::Model>) {
@@ -319,6 +326,7 @@ impl DialogComponent {
             self.cursor_position,
             &task_projects,
             self.selected_task_project_index,
+            &self.theme,
         );
     }
 
@@ -332,19 +340,41 @@ impl DialogComponent {
             self.cursor_position,
             &root_projects,
             self.selected_parent_project_index,
+            &self.theme,
         );
     }
 
     fn render_project_edit_dialog(&self, f: &mut Frame, area: Rect) {
-        project_dialogs::render_project_edit_dialog(f, area, &self.icons, &self.input_buffer, self.cursor_position);
+        project_dialogs::render_project_edit_dialog(
+            f,
+            area,
+            &self.icons,
+            &self.input_buffer,
+            self.cursor_position,
+            &self.theme,
+        );
     }
 
     fn render_label_creation_dialog(&self, f: &mut Frame, area: Rect) {
-        label_dialogs::render_label_creation_dialog(f, area, &self.icons, &self.input_buffer, self.cursor_position);
+        label_dialogs::render_label_creation_dialog(
+            f,
+            area,
+            &self.icons,
+            &self.input_buffer,
+            self.cursor_position,
+            &self.theme,
+        );
     }
 
     fn render_label_edit_dialog(&self, f: &mut Frame, area: Rect) {
-        label_dialogs::render_label_edit_dialog(f, area, &self.icons, &self.input_buffer, self.cursor_position);
+        label_dialogs::render_label_edit_dialog(
+            f,
+            area,
+            &self.icons,
+            &self.input_buffer,
+            self.cursor_position,
+            &self.theme,
+        );
     }
 
     fn render_task_edit_dialog(&self, f: &mut Frame, area: Rect) {
@@ -365,11 +395,12 @@ impl DialogComponent {
             self.cursor_position,
             &task_projects,
             current_project_index,
+            &self.theme,
         );
     }
 
     fn render_delete_confirmation_dialog(&self, f: &mut Frame, area: Rect, item_type: &str) {
-        system_dialogs::render_delete_confirmation_dialog(f, area, &self.icons, item_type);
+        system_dialogs::render_delete_confirmation_dialog(f, area, &self.icons, item_type, &self.theme);
     }
 
     fn render_info_dialog(&mut self, f: &mut Frame, area: Rect, message: &str) {
@@ -380,6 +411,7 @@ impl DialogComponent {
             message,
             self.scroll_offset,
             &mut self.scrollbar_state,
+            &self.theme,
         );
     }
 
@@ -391,17 +423,18 @@ impl DialogComponent {
             message,
             self.scroll_offset,
             &mut self.scrollbar_state,
+            &self.theme,
         );
     }
 
     fn render_help_dialog(&mut self, f: &mut Frame, area: Rect) {
-        system_dialogs::render_help_dialog(f, area, self.scroll_offset, &mut self.scrollbar_state);
+        system_dialogs::render_help_dialog(f, area, self.scroll_offset, &mut self.scrollbar_state, &self.theme);
     }
 
     fn render_task_search_dialog(&self, f: &mut Frame, area: Rect) {
         use ratatui::{
             layout::{Constraint, Layout, Margin},
-            style::{Color, Style},
+            style::Style,
             widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
         };
 
@@ -434,7 +467,7 @@ impl DialogComponent {
         let main_block = Block::default()
             .title(" Search Tasks ")
             .borders(Borders::ALL)
-            .style(Style::default().fg(Color::Gray));
+            .style(Style::default().fg(self.theme.border_dim));
         f.render_widget(main_block, popup_area);
 
         // Render input field
@@ -442,7 +475,7 @@ impl DialogComponent {
             Block::default()
                 .borders(Borders::ALL)
                 .title("Query")
-                .style(Style::default().fg(Color::Gray)),
+                .style(Style::default().fg(self.theme.border_dim)),
         );
         f.render_widget(input_paragraph, layout[0]);
 
@@ -478,21 +511,21 @@ impl DialogComponent {
                 );
 
                 // Use the same render method as main task list
-                TaskListItem::render(&task_item, false, &self.display_config)
+                TaskListItem::render(&task_item, false, &self.display_config, &self.theme)
             })
             .collect();
 
         let results_block = Block::default()
             .borders(Borders::ALL)
             .title(results_text)
-            .style(Style::default().fg(Color::Gray));
+            .style(Style::default().fg(self.theme.border_dim));
 
         let results_list_widget = List::new(results_list).block(results_block);
         f.render_widget(results_list_widget, layout[1]);
     }
 
     fn render_logs_dialog(&mut self, f: &mut Frame, area: Rect) {
-        system_dialogs::render_logs_dialog(f, area, self.scroll_offset, &mut self.scrollbar_state);
+        system_dialogs::render_logs_dialog(f, area, self.scroll_offset, &mut self.scrollbar_state, &self.theme);
     }
 }
 

@@ -5,9 +5,10 @@
 
 use crate::entities::{label, project};
 use crate::icons::IconService;
+use crate::theme::Theme;
 use crate::ui::core::SidebarSelection;
 use ratatui::{
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::ListItem,
 };
@@ -51,6 +52,7 @@ pub trait SidebarItem {
         icons: &'a IconService,
         current_selection: &'a SidebarSelection,
         is_selected: bool,
+        theme: &'a Theme,
     ) -> ListItem<'a>;
 
     /// Whether this item can be selected (navigated to)
@@ -72,14 +74,15 @@ impl SidebarItem for SidebarItemType {
         icons: &'a IconService,
         current_selection: &'a SidebarSelection,
         _is_selected: bool,
+        theme: &'a Theme,
     ) -> ListItem<'a> {
         match self {
             SidebarItemType::SpecialView { name, selection } => {
                 let is_selected = current_selection == selection;
                 let style = if is_selected {
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(Color::White)
+                    Style::default().fg(theme.text)
                 };
 
                 let icon = match selection {
@@ -96,7 +99,7 @@ impl SidebarItem for SidebarItemType {
             }
 
             SidebarItemType::AccountFolder { name, is_expanded, .. } => {
-                let style = Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD);
+                let style = Style::default().fg(theme.info).add_modifier(Modifier::BOLD);
                 let arrow = if *is_expanded { "▼" } else { "▶" };
                 let icon = "📦";
 
@@ -121,9 +124,9 @@ impl SidebarItem for SidebarItemType {
                     SidebarSelection::Project(idx) if idx == original_index
                 );
                 let style = if is_selected {
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(Color::White)
+                    Style::default().fg(theme.text)
                 };
 
                 let tree_prefix = if *depth > 0 {
@@ -151,7 +154,7 @@ impl SidebarItem for SidebarItemType {
                 }
 
                 if !tree_prefix.is_empty() {
-                    spans.push(Span::styled(tree_prefix, Style::default().fg(Color::DarkGray)));
+                    spans.push(Span::styled(tree_prefix, Style::default().fg(theme.text_muted)));
                 }
                 spans.push(Span::styled(icon.to_string(), style));
                 spans.push(Span::styled(project.name.clone(), style));
@@ -167,9 +170,9 @@ impl SidebarItem for SidebarItemType {
                     SidebarSelection::Label(idx) if idx == original_index
                 );
                 let style = if is_selected {
-                    Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+                    Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
                 } else {
-                    Style::default().fg(Color::White)
+                    Style::default().fg(theme.text)
                 };
 
                 ListItem::new(Line::from(vec![

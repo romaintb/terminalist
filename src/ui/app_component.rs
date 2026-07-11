@@ -2,6 +2,7 @@ use crate::config::Config;
 use crate::constants::*;
 use crate::entities::{label, project, section, task};
 use crate::sync::{SyncService, SyncStatus};
+use crate::theme::{self, ThemeWarning};
 use crate::ui::components::{DialogComponent, SidebarComponent, TaskListComponent};
 use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
@@ -88,7 +89,7 @@ pub struct AppComponent {
 }
 
 impl AppComponent {
-    pub fn new(sync_service: SyncService, config: Config) -> Self {
+    pub fn new(sync_service: SyncService, config: Config, theme_warnings: Vec<ThemeWarning>) -> Self {
         let sidebar = SidebarComponent::new();
         let task_list = TaskListComponent::new();
         let (task_manager, background_action_rx) = TaskManager::new();
@@ -98,10 +99,15 @@ impl AppComponent {
             ..Default::default()
         };
 
+        let mut dialog = DialogComponent::new();
+        if let Some(message) = theme::format_warnings(&theme_warnings) {
+            dialog.update(Action::ShowDialog(DialogType::Info(message)));
+        }
+
         Self {
             sidebar,
             task_list,
-            dialog: DialogComponent::new(),
+            dialog,
             state,
             sync_service,
             task_manager,
@@ -208,9 +214,11 @@ impl AppComponent {
         // Update sidebar
         self.sidebar.update_data(self.state.projects.clone(), self.state.labels.clone());
         self.sidebar.selection = self.state.sidebar_selection.clone();
+        self.sidebar.update_theme(self.config.theme.clone());
 
         // Update task list
         self.task_list.update_display_config(self.config.display.clone());
+        self.task_list.update_theme(self.config.theme.clone());
         self.task_list.update_data(
             self.state.tasks.clone(),
             self.state.sections.clone(),
@@ -221,6 +229,7 @@ impl AppComponent {
 
         // Update dialog
         self.dialog.update_display_config(self.config.display.clone());
+        self.dialog.update_theme(self.config.theme.clone());
         self.dialog.update_data_with_tasks(
             self.state.projects.clone(),
             self.state.labels.clone(),
@@ -1272,7 +1281,7 @@ impl AppComponent {
     fn render_sync_status_impl(&self, f: &mut Frame, rect: Rect) {
         use ratatui::{
             layout::{Alignment, Constraint, Layout},
-            style::{Color, Style},
+            style::Style,
             text::{Line, Span},
             widgets::{Block, Borders, Clear, Paragraph},
         };
@@ -1296,10 +1305,14 @@ impl AppComponent {
         let spinner = "⟳";
         let content = Paragraph::new(Line::from(Span::styled(
             format!("{} {}…", spinner, title),
-            Style::default().fg(Color::Yellow),
+            Style::default().fg(self.config.theme.warning),
         )))
         .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL).style(Style::default().fg(Color::Yellow)));
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .style(Style::default().fg(self.config.theme.warning)),
+        );
 
         f.render_widget(Clear, popup_area);
         f.render_widget(content, popup_area);
