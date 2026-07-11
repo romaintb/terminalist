@@ -35,14 +35,14 @@
 //! use tokio::sync::Mutex;
 //!
 //! # async fn example() -> anyhow::Result<()> {
-//! let config = Config::load()?;
+//! let (config, theme_warnings) = Config::load()?;
 //! let storage = Arc::new(Mutex::new(LocalStorage::new(false).await?));
 //! let backend_registry = Arc::new(BackendRegistry::new(storage));
 //! // ... initialize and load backends ...
 //! # let backend_uuid = uuid::Uuid::new_v4();
 //! let sync_service = SyncService::new(backend_registry, backend_uuid, false).await?;
 //!
-//! run_app(sync_service, config).await?;
+//! run_app(sync_service, config, theme_warnings).await?;
 //! # Ok(())
 //! # }
 //! ```

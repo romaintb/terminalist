@@ -3,6 +3,7 @@
 //! This module handles loading, parsing, and validation of configuration files.
 
 use crate::constants::{CONFIG_GENERATED, SIDEBAR_DEFAULT_WIDTH, SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH};
+use crate::theme::{RawTheme, Theme, ThemeWarning};
 use crate::utils::datetime;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -16,6 +17,19 @@ pub struct Config {
     pub sync: SyncConfig,
     pub display: DisplayConfig,
     pub logging: LoggingConfig,
+    pub theme: Theme,
+}
+
+/// Mirrors [`Config`], but with `theme` left unvalidated so a malformed color value
+/// doesn't fail the whole config load. Used only by [`Config::load_from_file`].
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+struct RawConfig {
+    ui: UiConfig,
+    sync: SyncConfig,
+    display: DisplayConfig,
+    logging: LoggingConfig,
+    theme: RawTheme,
 }
 
 /// UI configuration
@@ -100,27 +114,46 @@ impl Default for DisplayConfig {
 }
 
 impl Config {
-    /// Load configuration from file or return defaults
-    pub fn load() -> Result<Self> {
+    /// Load configuration from file or return defaults.
+    ///
+    /// Returns any [`ThemeWarning`]s produced by falling back to default colors for
+    /// individual `[theme]` values that were missing, malformed, or the wrong type.
+    pub fn load() -> Result<(Self, Vec<ThemeWarning>)> {
         let config_path = Self::find_config_file()?;
 
         if let Some(path) = config_path {
             Self::load_from_file(&path)
         } else {
-            Ok(Self::default())
+            Ok((Self::default(), Vec::new()))
         }
     }
 
-    /// Load configuration from a specific file
-    pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+    /// Load configuration from a specific file.
+    ///
+    /// The `[ui]`, `[sync]`, `[display]`, and `[logging]` sections are parsed strictly, same
+    /// as before — a malformed value there still fails the whole load. The `[theme]` section
+    /// is parsed leniently: any color that's missing, malformed, or the wrong type falls
+    /// back to its built-in default rather than failing the load, and is reported as a
+    /// [`ThemeWarning`] instead.
+    pub fn load_from_file<P: AsRef<Path>>(path: P) -> Result<(Self, Vec<ThemeWarning>)> {
         let content = std::fs::read_to_string(&path)
             .with_context(|| format!("Failed to read config file: {}", path.as_ref().display()))?;
 
-        let config: Config = toml::from_str(&content)
+        let raw: RawConfig = toml::from_str(&content)
             .with_context(|| format!("Failed to parse config file: {}", path.as_ref().display()))?;
 
+        let (theme, warnings) = Theme::from_raw(raw.theme, &content);
+
+        let config = Config {
+            ui: raw.ui,
+            sync: raw.sync,
+            display: raw.display,
+            logging: raw.logging,
+            theme,
+        };
+
         config.validate()?;
-        Ok(config)
+        Ok((config, warnings))
     }
 
     /// Find configuration file in order of precedence

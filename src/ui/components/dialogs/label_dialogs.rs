@@ -1,9 +1,9 @@
 use super::common::{self, shortcuts};
 use crate::icons::IconService;
+use crate::theme::Theme;
 use crate::ui::layout::LayoutManager;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::Color,
     widgets::Clear,
     Frame,
 };
@@ -15,12 +15,13 @@ fn render_label_dialog(
     input_buffer: &str,
     cursor_position: usize,
     is_editing: bool,
+    theme: &Theme,
 ) {
     let dialog_area = LayoutManager::centered_rect_lines(65, 9, area);
     f.render_widget(Clear, dialog_area);
 
     let title = if is_editing { "Edit Label" } else { "New Label" };
-    let main_block = common::create_dialog_block(title, Color::Cyan);
+    let main_block = common::create_dialog_block(title, theme.info);
 
     // Create layout for content
     let inner_area = main_block.inner(dialog_area);
@@ -34,17 +35,17 @@ fn render_label_dialog(
         ])
         .split(inner_area);
 
-    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Label Name");
+    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Label Name", theme);
 
     // Instructions based on mode
     let action = if is_editing {
-        ("Enter", Color::Green, " Save Label")
+        ("Enter", theme.success, " Save Label")
     } else {
-        ("Enter", Color::Green, " Create Label")
+        ("Enter", theme.success, " Create Label")
     };
 
-    let instructions = [action, shortcuts::SEPARATOR, shortcuts::ESC_CANCEL];
-    let instructions_paragraph = common::create_instructions_paragraph(&instructions);
+    let instructions = [action, shortcuts::separator(theme), shortcuts::esc_cancel(theme)];
+    let instructions_paragraph = common::create_instructions_paragraph(&instructions, theme);
 
     // Render all components
     f.render_widget(main_block, dialog_area);
@@ -65,8 +66,9 @@ pub fn render_label_creation_dialog(
     icons: &IconService,
     input_buffer: &str,
     cursor_position: usize,
+    theme: &Theme,
 ) {
-    render_label_dialog(f, area, icons, input_buffer, cursor_position, false);
+    render_label_dialog(f, area, icons, input_buffer, cursor_position, false, theme);
 }
 
 pub fn render_label_edit_dialog(
@@ -75,6 +77,7 @@ pub fn render_label_edit_dialog(
     icons: &IconService,
     input_buffer: &str,
     cursor_position: usize,
+    theme: &Theme,
 ) {
-    render_label_dialog(f, area, icons, input_buffer, cursor_position, true);
+    render_label_dialog(f, area, icons, input_buffer, cursor_position, true, theme);
 }

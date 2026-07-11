@@ -109,3 +109,73 @@ fn test_generate_config_creates_directory() {
     // Clean up
     let _ = fs::remove_dir_all(&temp_dir);
 }
+
+#[test]
+fn test_load_from_file_with_missing_theme_section_uses_defaults() {
+    use std::fs;
+    use terminalist::theme::Theme;
+
+    let path = std::env::temp_dir().join("terminalist_test_no_theme.toml");
+    fs::write(&path, "[ui]\nsidebar_width = 35\n").unwrap();
+
+    let (config, warnings) = Config::load_from_file(&path).unwrap();
+
+    assert_eq!(config.ui.sidebar_width, 35);
+    assert_eq!(config.theme, Theme::default());
+    assert!(warnings.is_empty());
+
+    let _ = fs::remove_file(&path);
+}
+
+#[test]
+fn test_load_from_file_with_malformed_color_falls_back_and_warns() {
+    use std::fs;
+    use terminalist::theme::Theme;
+
+    let path = std::env::temp_dir().join("terminalist_test_bad_theme.toml");
+    fs::write(
+        &path,
+        "[theme]\naccent = \"Magenta\"\ndanger = \"notacolor\"\nborder = 5\n",
+    )
+    .unwrap();
+
+    let (config, warnings) = Config::load_from_file(&path).unwrap();
+
+    // Valid override applied, invalid ones fell back to defaults instead of crashing.
+    assert_eq!(config.theme.accent, ratatui::style::Color::Magenta);
+    assert_eq!(config.theme.danger, Theme::default().danger);
+    assert_eq!(config.theme.border, Theme::default().border);
+
+    // Other sections were unaffected.
+    assert_eq!(config.ui.sidebar_width, terminalist::constants::SIDEBAR_DEFAULT_WIDTH);
+
+    assert_eq!(warnings.len(), 2);
+    assert!(warnings.iter().any(|w| w.field == "danger" && w.line == 3));
+    assert!(warnings.iter().any(|w| w.field == "border" && w.line == 4));
+
+    let _ = fs::remove_file(&path);
+}
+
+#[test]
+fn test_load_from_file_with_malformed_ui_section_still_fails() {
+    use std::fs;
+
+    // Unrelated (non-theme) sections must keep their existing strict behavior.
+    let path = std::env::temp_dir().join("terminalist_test_bad_ui.toml");
+    fs::write(&path, "[ui]\nsidebar_width = \"not a number\"\n").unwrap();
+
+    let result = Config::load_from_file(&path);
+    assert!(result.is_err());
+
+    let _ = fs::remove_file(&path);
+}
+
+#[test]
+fn test_generate_default_config_includes_theme_section() {
+    let config = Config::default();
+    let toml_str = toml::to_string_pretty(&config).unwrap();
+
+    assert!(toml_str.contains("[theme]"));
+    assert!(toml_str.contains("accent = \"Yellow\""));
+    assert!(toml_str.contains("danger = \"Red\""));
+}

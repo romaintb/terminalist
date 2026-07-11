@@ -102,20 +102,20 @@ impl ScrollbarHelper {
     /// - Vertical orientation on the right side
     /// - Up/down arrow symbols at the ends
     /// - Vertical bar track symbol
-    /// - Dark gray styling for unobtrusive appearance
     ///
     /// # Arguments
     /// * `f` - The frame to render to
     /// * `scrollbar_area` - The area to render the scrollbar in (if Some)
-    pub fn render(&mut self, f: &mut Frame, scrollbar_area: Option<Rect>) {
+    /// * `color` - The color to use for the track and thumb
+    pub fn render(&mut self, f: &mut Frame, scrollbar_area: Option<Rect>, color: Color) {
         if let Some(area) = scrollbar_area {
             let scrollbar = Scrollbar::new(ScrollbarOrientation::VerticalRight)
                 .begin_symbol(Some("↑"))
                 .end_symbol(Some("↓"))
                 .track_symbol(Some("│"))
                 .thumb_symbol("█")
-                .style(Style::default().fg(Color::DarkGray))
-                .thumb_style(Style::default().fg(Color::DarkGray));
+                .style(Style::default().fg(color))
+                .thumb_style(Style::default().fg(color));
 
             f.render_stateful_widget(scrollbar, area, &mut self.state);
         }

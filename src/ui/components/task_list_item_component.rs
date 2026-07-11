@@ -1,10 +1,11 @@
 use crate::config::DisplayConfig;
 use crate::entities::{project, task};
 use crate::icons::IconService;
+use crate::theme::Theme;
 use crate::ui::components::badge::{create_priority_badge, create_task_badges};
 use crate::utils::datetime::{format_human_date, format_human_datetime};
 use ratatui::{
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::ListItem as RatatuiListItem,
 };
@@ -15,7 +16,7 @@ const INDENT_WIDTH: usize = 2;
 /// Trait for items that can be displayed in a task list
 pub trait ListItem {
     /// Render this item as a ratatui ListItem
-    fn render(&self, selected: bool, display_config: &DisplayConfig) -> RatatuiListItem<'static>;
+    fn render(&self, selected: bool, display_config: &DisplayConfig, theme: &Theme) -> RatatuiListItem<'static>;
 
     /// Whether this item can be selected by the user
     fn is_selectable(&self) -> bool;
@@ -33,11 +34,11 @@ pub enum TaskListItemType {
 }
 
 impl ListItem for TaskListItemType {
-    fn render(&self, selected: bool, display_config: &DisplayConfig) -> RatatuiListItem<'static> {
+    fn render(&self, selected: bool, display_config: &DisplayConfig, theme: &Theme) -> RatatuiListItem<'static> {
         match self {
-            Self::Task(item) => item.render(selected, display_config),
-            Self::Header(item) => item.render(selected, display_config),
-            Self::Separator(item) => item.render(selected, display_config),
+            Self::Task(item) => item.render(selected, display_config, theme),
+            Self::Header(item) => item.render(selected, display_config, theme),
+            Self::Separator(item) => item.render(selected, display_config, theme),
         }
     }
 
@@ -100,7 +101,7 @@ impl TaskItem {
 }
 
 impl ListItem for TaskItem {
-    fn render(&self, selected: bool, display_config: &DisplayConfig) -> RatatuiListItem<'static> {
+    fn render(&self, selected: bool, display_config: &DisplayConfig, theme: &Theme) -> RatatuiListItem<'static> {
         // Choose the appropriate icon based on task state
         let status_icon = if self.task.is_deleted {
             self.icons.task_deleted()
@@ -122,22 +123,22 @@ impl ListItem for TaskItem {
             // Add tree connector for the current level
             indent_str.push_str("└─");
 
-            line_spans.push(Span::styled(indent_str, Style::default().fg(Color::DarkGray)));
+            line_spans.push(Span::styled(indent_str, Style::default().fg(theme.text_muted)));
         }
 
         // Status icon with state-based styling
         let status_style = if self.task.is_deleted {
-            // Deleted tasks: red icon
-            Style::default().fg(Color::Red)
+            // Deleted tasks: danger color
+            Style::default().fg(theme.danger)
         } else if self.task.is_completed {
-            // Completed tasks: green icon for the tick mark
-            Style::default().fg(Color::Green)
+            // Completed tasks: success color for the tick mark
+            Style::default().fg(theme.success)
         } else if selected {
-            // Selected active tasks: yellow and bold
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            // Selected active tasks: accent and bold
+            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
         } else {
-            // Normal active tasks: white
-            Style::default().fg(Color::White)
+            // Normal active tasks: default text color
+            Style::default().fg(theme.text)
         };
         line_spans.push(Span::styled(format!("{} ", status_icon), status_style));
 
@@ -149,24 +150,24 @@ impl ListItem for TaskItem {
 
         // Task content with selection styling and deleted/completed styling
         let content_style = if self.task.is_deleted {
-            // Deleted tasks: red with strikethrough
-            Style::default().fg(Color::Red).add_modifier(Modifier::CROSSED_OUT)
+            // Deleted tasks: danger color with strikethrough
+            Style::default().fg(theme.danger).add_modifier(Modifier::CROSSED_OUT)
         } else if self.task.is_completed {
-            // Completed tasks: gray with strikethrough
-            Style::default().fg(Color::DarkGray).add_modifier(Modifier::CROSSED_OUT)
+            // Completed tasks: muted with strikethrough
+            Style::default().fg(theme.text_muted).add_modifier(Modifier::CROSSED_OUT)
         } else if selected {
-            // Selected active tasks: yellow and bold
-            Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
+            // Selected active tasks: accent and bold
+            Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
         } else {
-            // Normal active tasks: white
-            Style::default().fg(Color::White)
+            // Normal active tasks: default text color
+            Style::default().fg(theme.text)
         };
         line_spans.push(Span::styled(self.task.content.clone(), content_style));
 
         // Child task count (for tasks with children)
         if self.child_count > 0 {
             let progress_text = format!(" ({})", self.child_count);
-            let progress_style = Style::default().fg(Color::Gray);
+            let progress_style = Style::default().fg(theme.border_dim);
             line_spans.push(Span::styled(progress_text, progress_style));
         }
 
@@ -174,10 +175,10 @@ impl ListItem for TaskItem {
         if let Some(project) = self.projects.iter().find(|p| p.uuid == self.task.project_uuid) {
             line_spans.push(Span::raw(" "));
             let project_style = if display_config.show_project_colors {
-                // Use project color if available, otherwise cyan
-                Style::default().fg(Color::Cyan)
+                // Use project color if available, otherwise the theme's project tag color
+                Style::default().fg(theme.project_tag)
             } else {
-                Style::default().fg(Color::Cyan)
+                Style::default().fg(theme.project_tag)
             };
             line_spans.push(Span::styled(format!("#{}", project.name), project_style));
         }
@@ -193,10 +194,7 @@ impl ListItem for TaskItem {
                 self.format_due_date(due_date)
             };
 
-            line_spans.push(Span::styled(
-                formatted_date,
-                Style::default().fg(Color::Rgb(255, 165, 0)), // Orange color
-            ));
+            line_spans.push(Span::styled(formatted_date, Style::default().fg(theme.due_date)));
         }
 
         // Metadata badges (only if configured to show)
@@ -210,6 +208,7 @@ impl ListItem for TaskItem {
                     None
                 },
                 if display_config.show_labels { &self.labels } else { &[] },
+                theme,
             );
 
             for badge in metadata_badges {
@@ -226,11 +225,11 @@ impl ListItem for TaskItem {
                     // Get first line of description
                     let description_line = desc.lines().next().unwrap_or("");
 
-                    // Add the description with separator and grey styling
+                    // Add the description with separator and muted styling
                     line_spans.push(Span::raw(" - "));
                     line_spans.push(Span::styled(
                         description_line.to_string(),
-                        Style::default().fg(Color::DarkGray).add_modifier(Modifier::ITALIC),
+                        Style::default().fg(theme.text_muted).add_modifier(Modifier::ITALIC),
                     ));
                 }
             }
@@ -262,11 +261,11 @@ impl HeaderItem {
 }
 
 impl ListItem for HeaderItem {
-    fn render(&self, _selected: bool, _display_config: &DisplayConfig) -> RatatuiListItem<'static> {
+    fn render(&self, _selected: bool, _display_config: &DisplayConfig, theme: &Theme) -> RatatuiListItem<'static> {
         let indent_str = " ".repeat(self.indent * INDENT_WIDTH);
         RatatuiListItem::new(Line::from(Span::styled(
             format!("{}{}", indent_str, self.text),
-            Style::default().add_modifier(Modifier::BOLD).fg(Color::Cyan),
+            Style::default().add_modifier(Modifier::BOLD).fg(theme.info),
         )))
     }
 
@@ -292,13 +291,13 @@ impl SeparatorItem {
 }
 
 impl ListItem for SeparatorItem {
-    fn render(&self, _selected: bool, _display_config: &DisplayConfig) -> RatatuiListItem<'static> {
+    fn render(&self, _selected: bool, _display_config: &DisplayConfig, theme: &Theme) -> RatatuiListItem<'static> {
         let indent_str = " ".repeat(self.indent * INDENT_WIDTH);
         let separator = " ";
 
         RatatuiListItem::new(Line::from(Span::styled(
             format!("{}{}", indent_str, separator),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(theme.text_muted),
         )))
     }
 

@@ -6,6 +6,7 @@
 
 use crate::entities::{label, project};
 use crate::icons::IconService;
+use crate::theme::Theme;
 use crate::ui::components::scrollbar_helper::ScrollbarHelper;
 use crate::ui::components::sidebar_item_component::{SidebarItem, SidebarItemType};
 use crate::ui::core::SidebarSelection;
@@ -13,7 +14,7 @@ use crate::ui::core::{actions::Action, Component};
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
+    style::Style,
     widgets::{Block, BorderType, Borders, List, ListItem, ListState},
     Frame,
 };
@@ -43,6 +44,7 @@ pub struct SidebarComponent {
     list_state: ListState,
     scroll_position: usize, // Virtual scroll position for view
     scrollbar_helper: ScrollbarHelper,
+    theme: Theme,
 }
 
 impl Default for SidebarComponent {
@@ -65,7 +67,12 @@ impl SidebarComponent {
             list_state,
             scroll_position: 0,
             scrollbar_helper: ScrollbarHelper::new(),
+            theme: Theme::default(),
         }
+    }
+
+    pub fn update_theme(&mut self, theme: Theme) {
+        self.theme = theme;
     }
 
     pub fn update_data(&mut self, projects: Vec<project::Model>, labels: Vec<label::Model>) {
@@ -484,7 +491,7 @@ impl Component for SidebarComponent {
         let all_items: Vec<ListItem> = self
             .items
             .iter()
-            .map(|item| item.render(&self.icons, &self.selection, false))
+            .map(|item| item.render(&self.icons, &self.selection, false, &self.theme))
             .collect();
 
         // Calculate areas for list and scrollbar using helper
@@ -503,14 +510,14 @@ impl Component for SidebarComponent {
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
                     .title("Navigation")
-                    .title_style(Style::default().fg(Color::White))
-                    .border_style(Style::default().fg(Color::DarkGray)),
+                    .title_style(Style::default().fg(self.theme.text))
+                    .border_style(Style::default().fg(self.theme.border)),
             )
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(self.theme.text));
 
         f.render_stateful_widget(list, list_area, &mut self.list_state);
 
         // Render scrollbar using helper
-        self.scrollbar_helper.render(f, scrollbar_area);
+        self.scrollbar_helper.render(f, scrollbar_area, self.theme.text_muted);
     }
 }
