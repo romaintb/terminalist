@@ -8,7 +8,7 @@
 //!
 //! * `-h, --help` - Show help message
 //! * `-V, --version` - Show version information
-//! * `-d, --debug` - Use file-backed SQLite database for debugging
+//! * `-d, --debug` - Start from cached data without an initial remote sync
 //! * `--generate-config` - Generate a default configuration file
 //!
 //! # Environment Variables
@@ -60,7 +60,7 @@ async fn main() -> Result<()> {
         println!("OPTIONS:");
         println!("    -h, --help           Show this help message");
         println!("    -V, --version        Show version information");
-        println!("    -d, --debug          Debug mode: keep database file and skip initial sync");
+        println!("    -d, --debug          Start from cached data and skip initial sync");
         println!("    --generate-config    Generate a default configuration file");
         println!();
         println!("ENVIRONMENT VARIABLES:");
@@ -111,18 +111,32 @@ async fn main() -> Result<()> {
     // Initialize backend registry
     let backend_registry = Arc::new(backend_registry::BackendRegistry::new(local_storage.clone()));
 
-    // Create initial Todoist backend (DB is always fresh at startup)
+    // Reuse the persisted Todoist backend when present. Updating its credentials also
+    // creates the in-memory backend instance needed by the sync service.
     let api_token = std::env::var("TODOIST_API_TOKEN")?;
     let credentials = serde_json::json!({ "api_token": api_token }).to_string();
 
-    let backend_uuid = backend_registry
-        .add_backend(
-            "todoist".to_string(),
-            "My Todoist".to_string(),
-            credentials,
-            "{}".to_string(),
-        )
-        .await?;
+    let existing_todoist = backend_registry
+        .list_backends()
+        .await?
+        .into_iter()
+        .find(|backend| backend.backend_type == "todoist");
+
+    let backend_uuid = if let Some(backend) = existing_todoist {
+        backend_registry
+            .update_backend(&backend.uuid, None, Some(credentials), None)
+            .await?;
+        backend.uuid
+    } else {
+        backend_registry
+            .add_backend(
+                "todoist".to_string(),
+                "My Todoist".to_string(),
+                credentials,
+                "{}".to_string(),
+            )
+            .await?
+    };
 
     // Create sync service with timeout
     let timeout = tokio::time::Duration::from_secs(10);
