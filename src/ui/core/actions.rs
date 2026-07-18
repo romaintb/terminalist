@@ -25,10 +25,10 @@ pub enum TaskDueDate {
 pub enum SidebarSelection {
     #[default]
     Today, // Today view (special view)
-    Tomorrow,       // Tomorrow view (special view)
-    Upcoming,       // Upcoming view (tasks with future due dates)
-    Label(usize),   // Index into labels vector
-    Project(usize), // Index into projects vector
+    Tomorrow, // Tomorrow view (special view)
+    Upcoming, // Upcoming view (tasks with future due dates)
+    Label(Uuid),
+    Project(Uuid),
 }
 
 #[derive(Debug, Clone)]
@@ -87,21 +87,11 @@ pub enum Action {
     RefreshLocalData, // Debug mode: refresh from local DB without API sync
     SyncCompleted(SyncStatus),
     SyncFailed(String),
-    InitialDataLoaded {
-        projects: Vec<crate::entities::project::Model>,
-        labels: Vec<crate::entities::label::Model>,
-        sections: Vec<crate::entities::section::Model>,
-        tasks: Vec<crate::entities::task::Model>,
-        all_tasks: Vec<crate::entities::task::Model>,
-        navigation_counts: NavigationCounts,
-    },
-    DataLoaded {
-        projects: Vec<crate::entities::project::Model>,
-        labels: Vec<crate::entities::label::Model>,
-        sections: Vec<crate::entities::section::Model>,
-        tasks: Vec<crate::entities::task::Model>,
-        all_tasks: Vec<crate::entities::task::Model>,
-        navigation_counts: NavigationCounts,
+    DataLoaded(Box<crate::ui::core::ViewSnapshot>),
+    DataLoadFailed {
+        generation: u64,
+        selection: SidebarSelection,
+        message: String,
     },
     SearchTasks(String), // Query for task search
     SearchResultsLoaded {

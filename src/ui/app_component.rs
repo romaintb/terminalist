@@ -3,7 +3,6 @@ use crate::constants::*;
 use crate::entities::{label, project, section, task};
 use crate::sync::{SyncService, SyncStatus};
 use crate::ui::components::{DialogComponent, SidebarComponent, TaskListComponent};
-use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
     actions::{Action, DialogType, NavigationCounts, TaskDueDate},
     event_handler::EventType,
@@ -11,6 +10,7 @@ use crate::ui::core::{
     task_manager::{TaskId, TaskManager},
     Component,
 };
+use crate::ui::core::{SidebarSelection, ViewSnapshot};
 use crate::utils::datetime;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use log::info;
@@ -86,6 +86,9 @@ pub struct AppComponent {
     should_quit: bool,
     active_sync_task: Option<TaskId>,
     is_initial_sync: bool,
+    next_load_generation: u64,
+    latest_requested_generation: u64,
+    latest_applied_generation: u64,
 
     // Layout state
     sidebar_visible: bool,
@@ -129,6 +132,9 @@ impl AppComponent {
             should_quit: false,
             active_sync_task: None,
             is_initial_sync: false,
+            next_load_generation: 1,
+            latest_requested_generation: 0,
+            latest_applied_generation: 0,
             sidebar_width: 30, // Default width
             sidebar_width_override,
             resizing_sidebar: false,
@@ -188,8 +194,8 @@ impl AppComponent {
         let selection = match self.config.ui.default_project.as_str() {
             "inbox" => {
                 // Find inbox project
-                if let Some(inbox_index) = self.state.projects.iter().position(|p| p.is_inbox_project) {
-                    SidebarSelection::Project(inbox_index)
+                if let Some(inbox) = self.state.projects.iter().find(|p| p.is_inbox_project) {
+                    SidebarSelection::Project(inbox.uuid)
                 } else {
                     SidebarSelection::Today
                 }
@@ -200,19 +206,15 @@ impl AppComponent {
             project_id_or_name => {
                 // Try to find project by ID first (parse as UUID), then by name
                 if let Ok(uuid) = Uuid::parse_str(project_id_or_name) {
-                    if let Some(project_index) = self.state.projects.iter().position(|p| p.uuid == uuid) {
-                        SidebarSelection::Project(project_index)
-                    } else if let Some(project_index) =
-                        self.state.projects.iter().position(|p| p.name == project_id_or_name)
-                    {
-                        SidebarSelection::Project(project_index)
+                    if let Some(project) = self.state.projects.iter().find(|p| p.uuid == uuid) {
+                        SidebarSelection::Project(project.uuid)
+                    } else if let Some(project) = self.state.projects.iter().find(|p| p.name == project_id_or_name) {
+                        SidebarSelection::Project(project.uuid)
                     } else {
                         SidebarSelection::Today
                     }
-                } else if let Some(project_index) =
-                    self.state.projects.iter().position(|p| p.name == project_id_or_name)
-                {
-                    SidebarSelection::Project(project_index)
+                } else if let Some(project) = self.state.projects.iter().find(|p| p.name == project_id_or_name) {
+                    SidebarSelection::Project(project.uuid)
                 } else {
                     SidebarSelection::Today
                 }
@@ -300,8 +302,8 @@ impl AppComponent {
             KeyCode::Char('D') => {
                 // Delete current project (only if a project is selected)
                 match &self.state.sidebar_selection {
-                    SidebarSelection::Project(index) => {
-                        if let Some(project) = self.state.projects.get(*index) {
+                    SidebarSelection::Project(uuid) => {
+                        if let Some(project) = self.state.projects.iter().find(|project| project.uuid == *uuid) {
                             info!(
                                 "Global key: 'D' - deleting project '{}' (ID: {})",
                                 project.name, project.uuid
@@ -327,8 +329,8 @@ impl AppComponent {
                         info!("Global key: 'D' - cannot delete Upcoming view");
                         Action::ShowDialog(DialogType::Info("Cannot delete the Upcoming view".to_string()))
                     }
-                    SidebarSelection::Label(index) => {
-                        if let Some(label) = self.state.labels.get(*index) {
+                    SidebarSelection::Label(uuid) => {
+                        if let Some(label) = self.state.labels.iter().find(|label| label.uuid == *uuid) {
                             info!("Global key: 'D' - deleting label '{}' (ID: {})", label.name, label.uuid);
                             Action::ShowDialog(DialogType::DeleteConfirmation {
                                 item_type: "label".to_string(),
@@ -344,8 +346,8 @@ impl AppComponent {
             KeyCode::Char('E') => {
                 // Edit current sidebar selection (project or label)
                 match &self.state.sidebar_selection {
-                    SidebarSelection::Project(index) => {
-                        if let Some(project) = self.state.projects.get(*index) {
+                    SidebarSelection::Project(uuid) => {
+                        if let Some(project) = self.state.projects.iter().find(|project| project.uuid == *uuid) {
                             info!(
                                 "Global key: 'E' - editing project '{}' (ID: {})",
                                 project.name, project.uuid
@@ -371,8 +373,8 @@ impl AppComponent {
                         info!("Global key: 'E' - cannot edit Upcoming view");
                         Action::ShowDialog(DialogType::Info("Cannot edit the Upcoming view".to_string()))
                     }
-                    SidebarSelection::Label(index) => {
-                        if let Some(label) = self.state.labels.get(*index) {
+                    SidebarSelection::Label(uuid) => {
+                        if let Some(label) = self.state.labels.iter().find(|label| label.uuid == *uuid) {
                             info!("Global key: 'E' - editing label '{}' (ID: {})", label.name, label.uuid);
                             Action::ShowDialog(DialogType::LabelEdit {
                                 label_uuid: label.uuid,
@@ -526,18 +528,18 @@ impl AppComponent {
                     SidebarSelection::Today => "Today".to_string(),
                     SidebarSelection::Tomorrow => "Tomorrow".to_string(),
                     SidebarSelection::Upcoming => "Upcoming".to_string(),
-                    SidebarSelection::Project(index) => {
-                        if let Some(project) = self.state.projects.get(*index) {
-                            format!("Project({}) '{}'", index, project.name)
+                    SidebarSelection::Project(uuid) => {
+                        if let Some(project) = self.state.projects.iter().find(|project| project.uuid == *uuid) {
+                            format!("Project({}) '{}'", uuid, project.name)
                         } else {
-                            format!("Project({}) [unknown]", index)
+                            format!("Project({}) [unknown]", uuid)
                         }
                     }
-                    SidebarSelection::Label(index) => {
-                        if let Some(label) = self.state.labels.get(*index) {
-                            format!("Label({}) '{}'", index, label.name)
+                    SidebarSelection::Label(uuid) => {
+                        if let Some(label) = self.state.labels.iter().find(|label| label.uuid == *uuid) {
+                            format!("Label({}) '{}'", uuid, label.name)
                         } else {
-                            format!("Label({}) [unknown]", index)
+                            format!("Label({}) [unknown]", uuid)
                         }
                     }
                 };
@@ -794,60 +796,48 @@ impl AppComponent {
                 self.spawn_operation(Operation::Label(LabelOperation::Edit { label_uuid, name }));
                 Action::None
             }
-            Action::InitialDataLoaded {
-                projects,
-                labels,
-                sections,
-                tasks,
-                all_tasks,
-                navigation_counts,
-            } => {
+            Action::DataLoaded(snapshot) => {
+                if snapshot.generation != self.latest_requested_generation
+                    || snapshot.selection != self.state.sidebar_selection
+                {
+                    info!(
+                        "Data: Ignoring stale generation {} for {:?}; latest is {} for {:?}",
+                        snapshot.generation,
+                        snapshot.selection,
+                        self.latest_requested_generation,
+                        self.state.sidebar_selection
+                    );
+                    return Action::None;
+                }
                 info!(
-                    "InitialData: Loaded {} projects, {} labels, {} sections, {} tasks",
-                    projects.len(),
-                    labels.len(),
-                    sections.len(),
-                    tasks.len()
+                    "Data: Applying generation {} with {} projects, {} labels, {} sections, {} tasks",
+                    snapshot.generation,
+                    snapshot.projects.len(),
+                    snapshot.labels.len(),
+                    snapshot.sections.len(),
+                    snapshot.tasks.len()
                 );
-
-                // Update app state with loaded data
-                self.state
-                    .update_data(projects, labels, sections, tasks, all_tasks, navigation_counts);
-
-                // Set initial sidebar selection based on config (now we have projects loaded)
-                self.set_initial_sidebar_selection();
-                info!("AppComponent: Set initial sidebar selection after initial data load");
-
-                // Fetch data for the newly selected sidebar item
-                self.schedule_data_fetch();
-                info!("AppComponent: Scheduled data fetch for initial sidebar selection");
-
+                let was_initial = snapshot.is_initial;
+                self.apply_snapshot(*snapshot);
                 self.sync_component_data();
-                info!("InitialData: Updated all component data after initial data load");
+                if was_initial {
+                    self.set_initial_sidebar_selection();
+                    self.schedule_data_fetch();
+                }
                 Action::None
             }
-            Action::DataLoaded {
-                projects,
-                labels,
-                sections,
-                tasks,
-                all_tasks,
-                navigation_counts,
+            Action::DataLoadFailed {
+                generation,
+                selection,
+                message,
             } => {
-                info!(
-                    "Data: Loaded {} projects, {} labels, {} sections, {} tasks",
-                    projects.len(),
-                    labels.len(),
-                    sections.len(),
-                    tasks.len()
-                );
-
-                // Update app state with loaded data
-                self.state
-                    .update_data(projects, labels, sections, tasks, all_tasks, navigation_counts);
-                self.sync_component_data();
-                info!("Data: Updated all component data after data load");
-                Action::None
+                if generation != self.latest_requested_generation || selection != self.state.sidebar_selection {
+                    info!("Data: Ignoring stale failure for generation {}", generation);
+                    return Action::None;
+                }
+                self.state.loading = false;
+                self.state.error_message = Some(message.clone());
+                Action::ShowDialog(DialogType::Error(message))
             }
             Action::SearchTasks(query) => {
                 info!("Search: Starting database search for '{}'", query);
@@ -944,18 +934,47 @@ impl AppComponent {
         }
     }
 
+    fn apply_snapshot(&mut self, snapshot: ViewSnapshot) {
+        self.latest_applied_generation = snapshot.generation;
+        self.state.loading = false;
+        self.state.update_data(
+            snapshot.projects,
+            snapshot.labels,
+            snapshot.sections,
+            snapshot.tasks,
+            snapshot.all_tasks,
+            snapshot.navigation_counts,
+        );
+    }
+
+    fn next_load_generation(&mut self) -> u64 {
+        let generation = self.next_load_generation;
+        self.next_load_generation += 1;
+        self.latest_requested_generation = generation;
+        self.state.loading = true;
+        generation
+    }
+
     /// Schedule a background task to fetch initial data after sync completion
     fn schedule_initial_data_fetch(&mut self) {
-        let _task_id =
-            self.task_manager
-                .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection.clone(), true);
+        let generation = self.next_load_generation();
+        let _task_id = self.task_manager.spawn_data_load(
+            self.sync_service.clone(),
+            self.state.sidebar_selection.clone(),
+            generation,
+            true,
+        );
     }
 
     /// Schedule a background task to fetch data after navigation or changes
     fn schedule_data_fetch(&mut self) {
-        let _task_id =
-            self.task_manager
-                .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection.clone(), false);
+        let generation = self.next_load_generation();
+        let _task_id = self.task_manager.spawn_data_load(
+            self.sync_service.clone(),
+            self.state.sidebar_selection.clone(),
+            generation,
+            false,
+        );
     }
 
     /// Process background actions from task manager
@@ -1240,6 +1259,87 @@ mod tests {
     use sea_orm::{EntityTrait, Set};
     use std::sync::Arc;
     use tokio::sync::Mutex;
+
+    async fn test_app() -> (AppComponent, Arc<Mutex<LocalStorage>>, std::path::PathBuf) {
+        let db_path = std::env::temp_dir().join(format!("terminalist-snapshot-{}.db", Uuid::new_v4()));
+        let storage = Arc::new(Mutex::new(LocalStorage::new_at(db_path.clone()).await.unwrap()));
+        let sync_service = SyncService::new_for_test(storage.clone(), Uuid::new_v4());
+        (AppComponent::new(sync_service, Config::default()), storage, db_path)
+    }
+
+    fn snapshot(generation: u64, selection: SidebarSelection, projects: Vec<project::Model>) -> ViewSnapshot {
+        ViewSnapshot {
+            generation,
+            selection,
+            is_initial: false,
+            projects,
+            labels: Vec::new(),
+            sections: Vec::new(),
+            tasks: Vec::new(),
+            all_tasks: Vec::new(),
+            navigation_counts: NavigationCounts::default(),
+        }
+    }
+
+    fn project_named(name: &str) -> project::Model {
+        project::Model {
+            uuid: Uuid::new_v4(),
+            backend_uuid: Uuid::new_v4(),
+            remote_id: name.to_string(),
+            name: name.to_string(),
+            is_favorite: false,
+            is_inbox_project: false,
+            order_index: 0,
+            parent_uuid: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn stale_view_snapshot_cannot_replace_the_latest_navigation_result() {
+        let (mut app, storage, db_path) = test_app().await;
+        app.latest_requested_generation = 2;
+        app.state.sidebar_selection = SidebarSelection::Tomorrow;
+
+        app.handle_app_action(Action::DataLoaded(Box::new(snapshot(
+            2,
+            SidebarSelection::Tomorrow,
+            vec![project_named("Latest")],
+        ))))
+        .await;
+        app.handle_app_action(Action::DataLoaded(Box::new(snapshot(
+            1,
+            SidebarSelection::Today,
+            vec![project_named("Stale")],
+        ))))
+        .await;
+
+        assert_eq!(app.latest_applied_generation, 2);
+        assert_eq!(app.state.projects[0].name, "Latest");
+        storage.lock().await.conn.clone().close().await.unwrap();
+        std::fs::remove_file(db_path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn current_load_failure_preserves_the_last_accepted_snapshot() {
+        let (mut app, storage, db_path) = test_app().await;
+        app.latest_requested_generation = 3;
+        app.state.sidebar_selection = SidebarSelection::Upcoming;
+        app.state.projects = vec![project_named("Still visible")];
+
+        let follow_up = app
+            .handle_app_action(Action::DataLoadFailed {
+                generation: 3,
+                selection: SidebarSelection::Upcoming,
+                message: "offline".to_string(),
+            })
+            .await;
+
+        assert!(matches!(follow_up, Action::ShowDialog(DialogType::Error(_))));
+        assert_eq!(app.state.projects[0].name, "Still visible");
+        assert_eq!(app.state.error_message.as_deref(), Some("offline"));
+        storage.lock().await.conn.clone().close().await.unwrap();
+        std::fs::remove_file(db_path).unwrap();
+    }
 
     #[tokio::test]
     async fn startup_loads_cached_data_when_the_backend_is_unavailable() {

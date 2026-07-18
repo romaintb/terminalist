@@ -49,12 +49,13 @@ fn task(content: &str, project_uuid: Uuid, is_completed: bool) -> task::Model {
 
 fn component_with_tasks(tasks: Vec<task::Model>, project: project::Model) -> TaskListComponent {
     let mut component = TaskListComponent::new();
+    let project_uuid = project.uuid;
     component.update_data(
         tasks,
         Vec::new(),
         vec![project],
         Vec::new(),
-        SidebarSelection::Project(0),
+        SidebarSelection::Project(project_uuid),
     );
     component
 }

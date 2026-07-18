@@ -168,11 +168,10 @@ impl SidebarComponent {
         let account_id = "main".to_string();
 
         // Add labels
-        for (index, label) in self.labels.iter().enumerate() {
+        for label in &self.labels {
             self.items.push(SidebarItemType::Label {
                 label: label.clone(),
                 account_id: account_id.clone(),
-                original_index: index,
             });
         }
 
@@ -192,7 +191,7 @@ impl SidebarComponent {
             }
         }
 
-        for (i, (original_index, project)) in sorted_projects.iter().enumerate() {
+        for (i, (_, project)) in sorted_projects.iter().enumerate() {
             // Check if this project is a child of a collapsed parent
             if let Some(parent_uuid) = project.parent_uuid {
                 let parent_key = parent_uuid.to_string();
@@ -213,7 +212,6 @@ impl SidebarComponent {
             self.items.push(SidebarItemType::Project {
                 project: project.clone(),
                 account_id: account_id.clone(),
-                original_index: *original_index,
                 depth,
                 is_last_sibling,
                 has_children,
