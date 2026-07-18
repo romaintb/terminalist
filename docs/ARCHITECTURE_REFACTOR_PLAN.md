@@ -1,7 +1,27 @@
 # Architecture Refactor Plan
 
-Status: Proposed
+Status: In progress
 Scope: UI operations, background loading, local storage, navigation counts, and Todoist transport
+
+## Implementation Status
+
+The correctness-focused work has been implemented and validated in a stacked branch series:
+
+1. `codex/ui-navigation-improvements` establishes the user-visible baseline.
+2. `codex/preserve-local-cache` preserves SQLite data across startup and synchronization
+   failures and writes remote snapshots transactionally.
+3. `codex/typed-operations` replaces delimiter-encoded commands with typed operations.
+4. `codex/versioned-view-snapshots` adds stable UUID selections, load generations, stale-result
+   rejection, and last-good-view retention.
+5. `codex/test-full-stack` integrates those branches with `codex/search-input-footer` for
+   end-to-end manual testing.
+
+The integrated branch passes `cargo fmt --check`, strict Clippy, the full test suite, and
+`cargo build`. It is a validation branch, not a replacement for the focused review history.
+
+Phase 1 is mostly complete. Query-error propagation remains incomplete because task and count
+queries can still convert errors to empty collections with `unwrap_or_default()`. Phase 2 has
+not been implemented.
 
 ## Why This Work Is Needed
 
@@ -27,7 +47,7 @@ This plan consolidates those responsibilities while preserving current user-faci
 
 ## Current Problems
 
-### 1. Stringly Typed Operations
+### 1. Stringly Typed Operations — Completed
 
 Typed actions are converted into delimiter-separated strings before execution. Task content or project names containing delimiters such as `|` can be parsed as operation metadata.
 
@@ -37,7 +57,7 @@ Target design:
 - Pass typed values or typed closures directly to the background task manager.
 - Remove the central string parser from `AppComponent`.
 
-### 2. Silent Empty-State Failures
+### 2. Silent Empty-State Failures — Partially Completed
 
 Several data queries use `unwrap_or_default()`. A failed query therefore becomes a successful empty view and can reset navigation counts to zero.
 
@@ -47,7 +67,14 @@ Target design:
 - Retain and continue rendering the last valid snapshot.
 - Show a non-destructive error state without replacing good data.
 
-### 3. Unversioned Navigation Loads
+Current state:
+
+- Top-level project, label, and section load failures are explicit and retain the last
+  accepted view.
+- Selected-view task loads, the all-task load, and per-label count loads still use
+  `unwrap_or_default()` and must be changed to propagate errors.
+
+### 3. Unversioned Navigation Loads — Completed
 
 Every navigation change starts a background load, but results do not identify the request that produced them. An older request can arrive after a newer one.
 
@@ -58,7 +85,7 @@ Target design:
 - Apply a result only if it still matches the active generation and selection.
 - Replace project and label vector indices in `SidebarSelection` with UUIDs.
 
-### 4. Destructive Startup Cache Handling
+### 4. Destructive Startup Cache Handling — Completed
 
 Normal startup deletes the SQLite database before confirming that synchronization can succeed.
 
@@ -69,7 +96,7 @@ Target design:
 - Preserve the previous snapshot when authentication, networking, or synchronization fails.
 - If full replacement remains necessary, build a temporary database and swap it only after successful validation.
 
-### 5. N+1 Navigation Count Queries
+### 5. N+1 Navigation Count Queries — Not Started
 
 Navigation loading performs one query per label in addition to the main task queries.
 
@@ -79,7 +106,7 @@ Target design:
 - Derive project and date-view counts from the same canonical task snapshot or grouped query.
 - Define count semantics once: visible actionable tasks, including matching subtasks.
 
-### 6. Excessive Component Rebuilding
+### 6. Excessive Component Rebuilding — Not Started
 
 Every input event clones the complete data model and rebuilds component item trees. The sidebar also rebuilds during rendering.
 
@@ -90,7 +117,7 @@ Target design:
 - Build task hierarchy indices once per snapshot.
 - Make rendering read-only with respect to derived item collections.
 
-### 7. Split Todoist Transport
+### 7. Split Todoist Transport — Not Started
 
 Due-date clearing currently bypasses the Todoist wrapper with a separate HTTP client and hardcoded endpoint.
 
@@ -108,18 +135,21 @@ Use a stable baseline branch followed by stacked, independently reviewable branc
 
 1. `codex/ui-navigation-improvements`
    - Checkpoint the current user-facing UI, task-count, subtask, date-handling, focus, and processing-state work.
-2. `codex/typed-operations`
-   - Remove delimiter-based operation parsing and add regression tests.
-3. `codex/versioned-view-snapshots`
-   - Add UUID selections, request generations, stale-result rejection, and explicit load errors.
-4. `codex/preserve-local-cache`
+2. `codex/preserve-local-cache`
    - Add transactional startup refresh and offline/failure tests.
+3. `codex/typed-operations`
+   - Remove delimiter-based operation parsing and add regression tests.
+4. `codex/versioned-view-snapshots`
+   - Add UUID selections, request generations, stale-result rejection, and explicit load errors.
 5. `codex/navigation-query-performance`
    - Add grouped counts, hierarchy indexing, and dependency-aware component updates.
 6. `codex/unified-todoist-transport`
    - Remove the second HTTP client and hardcoded endpoint.
 
-Branches 2–6 may be stacked while dependencies exist. Rebase each branch onto `main` after its predecessor merges. Keep each pull request focused on one architectural boundary and include its acceptance criteria in the PR description.
+Branches 2–4 have been implemented as stacked pull requests on the fork. Branches 5–6 remain
+planned. Rebase each branch onto `main` after its predecessor merges. Keep each pull request
+focused on one architectural boundary and include its acceptance criteria in the PR
+description.
 
 #### Current Worktree Checkpoint
 
@@ -138,17 +168,22 @@ Do not mix the architectural phases into the current UI pull request. The baseli
 
 ### Phase 1: Correctness and State Ownership
 
-1. Add typed operation enums and remove delimiter parsing.
-2. Replace index-based sidebar selections with stable UUIDs.
-3. Introduce a versioned `ViewSnapshot` containing:
+1. [x] Add typed operation enums and remove delimiter parsing.
+2. [x] Replace index-based sidebar selections with stable UUIDs.
+3. [ ] Partially complete: introduce a versioned `ViewSnapshot` containing:
    - generation ID;
    - requested selection;
    - projects, labels, sections, and tasks;
    - navigation counts;
    - load status or error.
-4. Reject stale load results.
-5. Preserve the last good snapshot on load failure.
-6. Replace destructive startup deletion with transactional cache refresh.
+
+   Snapshot data is grouped and versioned. Load errors currently use a separate typed action
+   rather than being stored in `ViewSnapshot`.
+4. [x] Reject stale load results.
+5. [x] Preserve the last good snapshot on load failure.
+6. [x] Replace destructive startup deletion with transactional cache refresh.
+7. [ ] Propagate selected-view, all-task, and count-query failures instead of converting them
+   to empty results.
 
 Phase 1 acceptance criteria:
 
@@ -159,12 +194,12 @@ Phase 1 acceptance criteria:
 
 ### Phase 2: Performance and Transport Consolidation
 
-1. Add grouped repository queries for navigation counts.
-2. Remove per-label count queries.
-3. Add task hierarchy indices keyed by task and parent UUID.
-4. Stop rebuilding components after unrelated input events.
-5. Move nullable due-date updates into the shared Todoist transport.
-6. Remove the extra HTTP client and hardcoded Todoist endpoint.
+1. [ ] Add grouped repository queries for navigation counts.
+2. [ ] Remove per-label count queries.
+3. [ ] Add task hierarchy indices keyed by task and parent UUID.
+4. [ ] Stop rebuilding components after unrelated input events.
+5. [ ] Move nullable due-date updates into the shared Todoist transport.
+6. [ ] Remove the extra HTTP client and hardcoded Todoist endpoint.
 
 Phase 2 acceptance criteria:
 
