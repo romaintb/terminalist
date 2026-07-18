@@ -12,7 +12,7 @@ use crate::ui::components::scrollbar_helper::ScrollbarHelper;
 use crate::ui::components::task_list_item_component::{ListItem, TaskItem, TaskListItemType};
 use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
-    actions::{Action, DialogType},
+    actions::{Action, DialogType, TaskDueDate},
     Component,
 };
 use crate::utils::datetime;
@@ -21,9 +21,10 @@ use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKin
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
-    widgets::{Block, BorderType, Borders, List, ListItem as RatatuiListItem, ListState},
+    widgets::{Block, BorderType, Borders, List, ListItem as RatatuiListItem, ListState, Paragraph, Wrap},
     Frame,
 };
+use std::collections::HashSet;
 use uuid::Uuid;
 
 /// Main task list component that displays tasks in various view modes.
@@ -48,8 +49,12 @@ pub struct TaskListComponent {
     pub icons: IconService,
     // Keep raw task data for building items
     pub tasks: Vec<task::Model>,
+    all_tasks: Vec<task::Model>,
     pub display_config: DisplayConfig,
+    pub marked_task_ids: HashSet<Uuid>,
     scrollbar_helper: ScrollbarHelper,
+    focused: bool,
+    processing_message: Option<String>,
 }
 
 impl Default for TaskListComponent {
@@ -63,6 +68,7 @@ impl TaskListComponent {
         Self {
             items: Vec::new(),
             tasks: Vec::new(),
+            all_tasks: Vec::new(),
             selected_index: 0,
             list_state: ListState::default(),
             sidebar_selection: SidebarSelection::Today,
@@ -71,12 +77,27 @@ impl TaskListComponent {
             labels: Vec::new(),
             icons: IconService::default(),
             display_config: DisplayConfig::default(),
+            marked_task_ids: HashSet::new(),
             scrollbar_helper: ScrollbarHelper::new(),
+            focused: true,
+            processing_message: None,
         }
     }
 
     pub fn update_display_config(&mut self, display_config: DisplayConfig) {
         self.display_config = display_config;
+    }
+
+    pub fn update_all_tasks(&mut self, all_tasks: Vec<task::Model>) {
+        self.all_tasks = all_tasks;
+    }
+
+    pub fn set_focused(&mut self, focused: bool) {
+        self.focused = focused;
+    }
+
+    pub fn set_processing(&mut self, message: Option<String>) {
+        self.processing_message = message;
     }
 
     pub fn update_data(
@@ -87,11 +108,16 @@ impl TaskListComponent {
         labels: Vec<label::Model>,
         sidebar_selection: SidebarSelection,
     ) {
+        if self.sidebar_selection != sidebar_selection {
+            self.marked_task_ids.clear();
+        }
         self.tasks = tasks;
         self.sections = sections;
         self.projects = projects;
         self.labels = labels;
         self.sidebar_selection = sidebar_selection;
+        let visible_task_ids: HashSet<Uuid> = self.tasks.iter().map(|task| task.uuid).collect();
+        self.marked_task_ids.retain(|uuid| visible_task_ids.contains(uuid));
 
         // Build the flat list of items from the hierarchical task data
         self.build_item_list();
@@ -130,6 +156,19 @@ impl TaskListComponent {
         }
     }
 
+    /// Tasks whose parent is not part of the current filtered result start a visible tree.
+    fn visible_roots(&self) -> Vec<task::Model> {
+        let task_ids: HashSet<Uuid> = self.tasks.iter().map(|task| task.uuid).collect();
+        self.tasks
+            .iter()
+            .filter(|task| match task.parent_uuid {
+                Some(parent) => !task_ids.contains(&parent),
+                None => true,
+            })
+            .cloned()
+            .collect()
+    }
+
     /// Build items for Today view (with Overdue and Today sections)
     fn build_today_items(&mut self) {
         use crate::ui::components::task_list_item_component::{HeaderItem, SeparatorItem};
@@ -138,14 +177,14 @@ impl TaskListComponent {
         let mut overdue_tasks = Vec::new();
         let mut today_tasks = Vec::new();
 
-        // Separate tasks by date (only root tasks - subtasks will be added recursively)
-        for task in self.tasks.iter().filter(|t| t.parent_uuid.is_none()) {
+        // Separate visible hierarchy roots by date; orphaned subtasks remain visible.
+        for task in self.visible_roots() {
             if let Some(due_date_str) = &task.due_date {
                 if let Ok(due_date) = datetime::parse_date(due_date_str) {
                     if due_date < now {
-                        overdue_tasks.push(task.clone());
+                        overdue_tasks.push(task);
                     } else if due_date == now {
-                        today_tasks.push(task.clone());
+                        today_tasks.push(task);
                     }
                 }
             }
@@ -190,11 +229,10 @@ impl TaskListComponent {
         let today = Local::now().date_naive();
         let tomorrow = today + Duration::days(1);
 
-        // Filter for root tasks due tomorrow
+        // Filter visible hierarchy roots due tomorrow.
         let tasks: Vec<task::Model> = self
-            .tasks
-            .iter()
-            .filter(|t| t.parent_uuid.is_none())
+            .visible_roots()
+            .into_iter()
             .filter(|t| {
                 if let Some(due_date_str) = &t.due_date {
                     if let Ok(due_date) = datetime::parse_date(due_date_str) {
@@ -206,7 +244,6 @@ impl TaskListComponent {
                     false
                 }
             })
-            .cloned()
             .collect();
 
         // SQL already provides proper ordering (completion status -> priority -> order_index)
@@ -225,14 +262,14 @@ impl TaskListComponent {
         let mut overdue_tasks = Vec::new();
         let mut future_tasks_by_date: BTreeMap<chrono::NaiveDate, Vec<task::Model>> = BTreeMap::new();
 
-        // Group tasks by date (only root tasks - subtasks will be added recursively)
-        for task in self.tasks.iter().filter(|t| t.parent_uuid.is_none()) {
+        // Group visible hierarchy roots by date; orphaned subtasks remain visible.
+        for task in self.visible_roots() {
             if let Some(due_date_str) = &task.due_date {
                 if let Ok(due_date) = datetime::parse_date(due_date_str) {
                     if due_date < today {
-                        overdue_tasks.push(task.clone());
+                        overdue_tasks.push(task);
                     } else {
-                        future_tasks_by_date.entry(due_date).or_default().push(task.clone());
+                        future_tasks_by_date.entry(due_date).or_default().push(task);
                     }
                 }
             }
@@ -287,11 +324,11 @@ impl TaskListComponent {
             .cloned()
             .collect();
 
-        // Group tasks by section (only root tasks - subtasks will be added recursively)
+        // Group visible hierarchy roots by section.
         let mut tasks_by_section: HashMap<Option<Uuid>, Vec<task::Model>> = HashMap::new();
-        for task in self.tasks.iter().filter(|t| t.parent_uuid.is_none()) {
+        for task in self.visible_roots() {
             if &task.project_uuid == project_id {
-                tasks_by_section.entry(task.section_uuid).or_default().push(task.clone());
+                tasks_by_section.entry(task.section_uuid).or_default().push(task);
             }
         }
 
@@ -323,13 +360,8 @@ impl TaskListComponent {
 
     /// Build items for Label view
     fn build_label_items(&mut self, _label_id: &Uuid) {
-        // Filter tasks that have the specific label (only root tasks - subtasks will be added recursively)
-        let filtered_tasks: Vec<task::Model> = self
-            .tasks
-            .iter()
-            .filter(|task| task.parent_uuid.is_none()) // TODO: Add label filtering
-            .cloned()
-            .collect();
+        // The query already filters by label; preserve orphaned subtasks as visible roots.
+        let filtered_tasks = self.visible_roots();
 
         for task in filtered_tasks {
             self.add_task_and_children_to_items(task, 0);
@@ -339,7 +371,7 @@ impl TaskListComponent {
     /// Build simple items (no sectioning)
     fn build_simple_items(&mut self) {
         // SQL already provides proper ordering (completion status -> priority -> order_index)
-        let root_tasks: Vec<task::Model> = self.tasks.iter().filter(|t| t.parent_uuid.is_none()).cloned().collect();
+        let root_tasks = self.visible_roots();
 
         // Add each root task and its children recursively
         for task in root_tasks {
@@ -357,7 +389,7 @@ impl TaskListComponent {
         let task_labels = Vec::new();
 
         // Create and add the task item
-        let task_item = TaskItem::new(
+        let mut task_item = TaskItem::new(
             task.clone(),
             depth,
             child_count,
@@ -365,6 +397,15 @@ impl TaskListComponent {
             self.projects.clone(),
             task_labels,
         );
+        if depth == 0 {
+            task_item.parent_context = task.parent_uuid.and_then(|parent_uuid| {
+                self.all_tasks
+                    .iter()
+                    .find(|candidate| candidate.uuid == parent_uuid)
+                    .map(|parent| parent.content.clone())
+            });
+        }
+        task_item.marked = self.marked_task_ids.contains(&task.uuid);
         self.items.push(TaskListItemType::Task(Box::new(task_item)));
 
         // Find and add children
@@ -450,6 +491,55 @@ impl TaskListComponent {
             }
         }
         None
+    }
+
+    pub fn marked_task_count(&self) -> usize {
+        self.marked_task_ids.len()
+    }
+
+    pub fn visible_task_count(&self) -> usize {
+        self.items
+            .iter()
+            .filter(|item| matches!(item, TaskListItemType::Task(_)))
+            .count()
+    }
+
+    fn toggle_current_task_mark(&mut self) {
+        if let Some(task_uuid) = self.get_selected_task().map(|task| task.uuid) {
+            if !self.marked_task_ids.remove(&task_uuid) {
+                self.marked_task_ids.insert(task_uuid);
+            }
+            self.build_item_list();
+            self.update_list_state();
+        }
+    }
+
+    fn clear_marked_tasks(&mut self) {
+        if !self.marked_task_ids.is_empty() {
+            self.marked_task_ids.clear();
+            self.build_item_list();
+            self.update_list_state();
+        }
+    }
+
+    fn target_tasks(&self) -> Vec<&task::Model> {
+        if self.marked_task_ids.is_empty() {
+            self.get_selected_task().into_iter().collect()
+        } else {
+            self.tasks
+                .iter()
+                .filter(|task| self.marked_task_ids.contains(&task.uuid))
+                .collect()
+        }
+    }
+
+    fn due_date_action(&mut self, due_date: TaskDueDate) -> Action {
+        let task_ids = self.target_tasks().into_iter().map(|task| task.uuid).collect::<Vec<_>>();
+        if task_ids.is_empty() {
+            return Action::None;
+        }
+        self.clear_marked_tasks();
+        Action::SetTasksDueDate { task_ids, due_date }
     }
 
     /// Handle mouse events
@@ -538,6 +628,14 @@ impl TaskListComponent {
 impl Component for TaskListComponent {
     fn handle_key_events(&mut self, key: KeyEvent) -> Action {
         match key.code {
+            KeyCode::Char('x') => {
+                self.toggle_current_task_mark();
+                Action::None
+            }
+            KeyCode::Esc if !self.marked_task_ids.is_empty() => {
+                self.clear_marked_tasks();
+                Action::Consumed
+            }
             KeyCode::Up | KeyCode::Char('k') => {
                 self.previous_task();
                 Action::None
@@ -547,17 +645,22 @@ impl Component for TaskListComponent {
                 Action::None
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
-                if let Some(task) = self.get_selected_task() {
-                    // Smart toggle: restore if deleted/completed, otherwise complete
-                    if task.is_deleted || task.is_completed {
-                        Action::RestoreTask(task.uuid.to_string())
-                    } else {
-                        Action::CompleteTask(task.uuid.to_string())
-                    }
-                } else {
-                    Action::None
+                let tasks = self
+                    .target_tasks()
+                    .into_iter()
+                    .map(|task| (task.uuid, task.is_deleted || task.is_completed))
+                    .collect::<Vec<_>>();
+                if tasks.is_empty() {
+                    return Action::None;
                 }
+                self.clear_marked_tasks();
+                Action::ToggleTasks(tasks)
             }
+            KeyCode::Char('u') => self.due_date_action(TaskDueDate::None),
+            KeyCode::Char('t') => self.due_date_action(TaskDueDate::Today),
+            KeyCode::Char('T') => self.due_date_action(TaskDueDate::Tomorrow),
+            KeyCode::Char('w') => self.due_date_action(TaskDueDate::NextWeek),
+            KeyCode::Char('W') => self.due_date_action(TaskDueDate::Weekend),
             KeyCode::Char('a') => {
                 // When viewing a specific project, preselect it as the default project
                 let default_project_uuid = match &self.sidebar_selection {
@@ -624,36 +727,47 @@ impl Component for TaskListComponent {
         // Calculate areas for list and scrollbar using helper
         let (list_area, scrollbar_area) = ScrollbarHelper::calculate_areas(rect, total_items);
 
-        let tasks_list = if self.items.is_empty() {
+        let pane_color = if self.focused { Color::Cyan } else { Color::DarkGray };
+        let empty_message = if self.items.is_empty() {
             // Show contextual empty state message
-            let empty_message = match &self.sidebar_selection {
+            Some(match &self.sidebar_selection {
                 SidebarSelection::Today => "No tasks due today. Press 'a' to create a task or 'r' to sync.",
                 SidebarSelection::Tomorrow => "No tasks due tomorrow. Press 'a' to create a task or 'r' to sync.",
                 _ if self.projects.is_empty() => "No projects available. Press 'r' to sync or 'A' to create a project.",
                 _ => "No tasks in this view. Press 'a' to create a task.",
-            };
-
-            List::new(vec![RatatuiListItem::new(empty_message)])
+            })
         } else {
-            List::new(self.create_list_items(list_area))
+            None
+        };
+        let block = Block::default()
+            .borders(Borders::ALL)
+            .border_type(BorderType::Rounded)
+            .title(if self.marked_task_ids.is_empty() {
+                self.processing_message
+                    .as_ref()
+                    .map_or_else(|| "Tasks".to_string(), |message| format!("Tasks — ⟳ {message}…"))
+            } else {
+                format!("Tasks — {} selected", self.marked_task_ids.len())
+            })
+            .title_style(Style::default().fg(pane_color))
+            .border_style(Style::default().fg(pane_color));
+
+        if let Some(message) = empty_message {
+            let message_area = block.inner(list_area);
+            f.render_widget(block, list_area);
+            f.render_widget(Paragraph::new(message).wrap(Wrap { trim: true }), message_area);
+        } else {
+            let tasks_list = List::new(self.create_list_items(list_area))
                 .highlight_style(Style::default().bg(Color::DarkGray).add_modifier(Modifier::BOLD))
+                .block(block);
+            f.render_stateful_widget(tasks_list, list_area, &mut self.list_state);
         }
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_type(BorderType::Rounded)
-                .title("Tasks")
-                .title_style(Style::default().fg(Color::White))
-                .border_style(Style::default().fg(Color::DarkGray)),
-        );
 
         // Update scrollbar state with current position and viewport info
         let available_height = rect.height.saturating_sub(2) as usize;
         let current_position = self.list_state.selected().unwrap_or(0);
         self.scrollbar_helper
             .update_state(total_items, current_position, Some(available_height));
-
-        f.render_stateful_widget(tasks_list, list_area, &mut self.list_state);
 
         // Render scrollbar using helper
         self.scrollbar_helper.render(f, scrollbar_area);

@@ -10,14 +10,20 @@ This document lists all available keyboard shortcuts and TUI controls.
 
 ## Task Management
 
-- **`Space`** or **`Enter`** Complete task
+- **`x`** Mark or unmark a task for bulk actions
+- **`Esc`** Clear all marked tasks
+- **`Space`** or **`Enter`** Toggle completion for marked tasks, or the current task when none are marked
 - **`a`** Create new task
 - **`d`** Delete selected task (with confirmation)
 - **`p`** Cycle task priority
-- **`t`** Set task due date to today
-- **`T`** Set task due date to tomorrow
-- **`w`** Set task due date to next week (Monday)
-- **`W`** Set task due date to next week end (Saturday)
+- **`u`** Remove the due date from marked tasks, or the current task when none are marked
+- **`t`** Set marked tasks due today
+- **`T`** Set marked tasks due tomorrow
+- **`w`** Set marked tasks due next week (Monday)
+- **`W`** Set marked tasks due next week end (Saturday)
+
+When no tasks are marked, due-date and completion shortcuts operate on the
+currently highlighted task.
 
 ## Project Management
 
@@ -39,7 +45,8 @@ This document lists all available keyboard shortcuts and TUI controls.
 
 - **`/`** Open search dialog
 - **Type** Search across all tasks by content
-- **`Enter`** Close search dialog
+- **`j/k`** or **`↑/↓`** Select a search result
+- **`t`** Set the selected result's due date to today
 - **`Esc`** Close search dialog
 - **`Backspace/Delete`** Edit search query
 - **`Left/Right`** Move cursor in search box
@@ -63,6 +70,7 @@ This document lists all available keyboard shortcuts and TUI controls.
   - Takes remaining width after projects list
   - Displays task content, priority, labels, and status
 - **Help Panel**: Modal overlay accessible with `?` key
+- **Shortcut Bar**: Common controls shown along the bottom (configurable with `shortcut_bar_visible`)
 
 ### Task Display Features
 Tasks are displayed with:

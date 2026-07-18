@@ -1,4 +1,4 @@
-use super::actions::{Action, SidebarSelection};
+use super::actions::{Action, NavigationCounts, SidebarSelection};
 use crate::constants::UI_LOADING_DATA_FROM_STORAGE;
 use crate::sync::{SyncService, SyncStatus};
 use std::collections::HashMap;
@@ -25,6 +25,8 @@ pub enum TaskResult {
         labels: Vec<crate::entities::label::Model>,
         sections: Vec<crate::entities::section::Model>,
         tasks: Vec<crate::entities::task::Model>,
+        all_tasks: Vec<crate::entities::task::Model>,
+        navigation_counts: NavigationCounts,
     },
     SearchCompleted {
         query: String,
@@ -168,6 +170,27 @@ impl TaskManager {
         self.tasks.values().any(|task| task.description.contains("sync"))
     }
 
+    pub fn has_blocking_work(&self) -> bool {
+        self.tasks.values().any(|task| !task.description.starts_with("Searching tasks"))
+    }
+
+    pub fn processing_description(&self) -> Option<String> {
+        self.tasks
+            .values()
+            .find(|task| {
+                task.description != UI_LOADING_DATA_FROM_STORAGE
+                    && task.description != "Background sync"
+                    && !task.description.starts_with("Searching tasks")
+            })
+            .map(|task| task.description.clone())
+            .or_else(|| {
+                self.tasks
+                    .values()
+                    .any(|task| task.description == UI_LOADING_DATA_FROM_STORAGE)
+                    .then(|| "Refreshing tasks".to_string())
+            })
+    }
+
     /// Cancel all running tasks
     pub fn cancel_all_tasks(&mut self) {
         for (_, task) in self.tasks.drain() {
@@ -220,12 +243,39 @@ impl TaskManager {
                             }
                         }
                     };
+                    let all_tasks = sync_service.get_all_tasks().await.unwrap_or_default();
+                    let today = chrono::Local::now().date_naive();
+                    let tomorrow = today + chrono::Duration::days(1);
+                    let upcoming_end = today + chrono::Duration::days(90);
+                    let mut navigation_counts = NavigationCounts::default();
+                    for task in all_tasks.iter().filter(|task| !task.is_completed && !task.is_deleted) {
+                        if let Some(due) = &task.due_date {
+                            if let Ok(due) = crate::utils::datetime::parse_date(due) {
+                                navigation_counts.today += usize::from(due <= today);
+                                navigation_counts.tomorrow += usize::from(due == tomorrow);
+                                navigation_counts.upcoming += usize::from(due <= upcoming_end);
+                            }
+                        }
+                        *navigation_counts.projects.entry(task.project_uuid).or_default() += 1;
+                    }
+                    for label in &labels {
+                        let count = sync_service
+                            .get_tasks_with_label(label.uuid)
+                            .await
+                            .unwrap_or_default()
+                            .iter()
+                            .filter(|task| !task.is_completed && !task.is_deleted)
+                            .count();
+                        navigation_counts.labels.insert(label.uuid, count);
+                    }
 
                     let result = TaskResult::DataLoadCompleted {
                         projects: projects.clone(),
                         labels: labels.clone(),
                         sections: sections.clone(),
                         tasks: tasks.clone(),
+                        all_tasks: all_tasks.clone(),
+                        navigation_counts: navigation_counts.clone(),
                     };
 
                     let action = if is_initial_load {
@@ -234,6 +284,8 @@ impl TaskManager {
                             labels,
                             sections,
                             tasks,
+                            all_tasks,
+                            navigation_counts,
                         }
                     } else {
                         Action::DataLoaded {
@@ -241,6 +293,8 @@ impl TaskManager {
                             labels,
                             sections,
                             tasks,
+                            all_tasks,
+                            navigation_counts,
                         }
                     };
                     let _ = action_sender.send(action);

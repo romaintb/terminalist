@@ -58,6 +58,7 @@ pub struct DialogComponent {
     pub scrollbar_state: ScrollbarState,
     // Task search state
     pub search_results: Vec<task::Model>,
+    pub search_selected_index: usize,
     pub sync_service: Option<SyncService>,
     pub display_config: DisplayConfig,
 }
@@ -86,6 +87,7 @@ impl DialogComponent {
             scroll_offset: 0,
             scrollbar_state: ScrollbarState::new(0),
             search_results: Vec::new(),
+            search_selected_index: 0,
             sync_service: None,
             display_config: DisplayConfig::default(),
         }
@@ -136,6 +138,7 @@ impl DialogComponent {
         // Only update if this is for the current query (avoid race conditions)
         if query == self.input_buffer {
             self.search_results = results;
+            self.search_selected_index = self.search_selected_index.min(self.search_results.len().saturating_sub(1));
         }
     }
 
@@ -463,7 +466,8 @@ impl DialogComponent {
         let results_list: Vec<ListItem> = self
             .search_results
             .iter()
-            .map(|task| {
+            .enumerate()
+            .map(|(index, task)| {
                 // TODO: Load task-label relationships from database
                 let task_labels = Vec::new();
 
@@ -478,7 +482,7 @@ impl DialogComponent {
                 );
 
                 // Use the same render method as main task list
-                TaskListItem::render(&task_item, false, &self.display_config)
+                TaskListItem::render(&task_item, self.search_selected_index == index, &self.display_config)
             })
             .collect();
 
@@ -602,7 +606,21 @@ impl Component for DialogComponent {
             },
             Some(DialogType::TaskSearch) => match key.code {
                 KeyCode::Esc => Action::HideDialog,
-                KeyCode::Enter => Action::HideDialog,
+                KeyCode::Enter => Action::None,
+                KeyCode::Down | KeyCode::Char('j') => {
+                    if self.search_selected_index + 1 < self.search_results.len() {
+                        self.search_selected_index += 1;
+                    }
+                    Action::None
+                }
+                KeyCode::Up | KeyCode::Char('k') => {
+                    self.search_selected_index = self.search_selected_index.saturating_sub(1);
+                    Action::None
+                }
+                KeyCode::Char('t') => self
+                    .search_results
+                    .get(self.search_selected_index)
+                    .map_or(Action::None, |task| Action::SetTaskDueToday(task.uuid)),
                 KeyCode::Char(c) => {
                     let byte_pos: usize = self
                         .input_buffer
@@ -835,6 +853,7 @@ impl Component for DialogComponent {
                         self.input_buffer.clear();
                         self.cursor_position = 0;
                         self.search_results.clear();
+                        self.search_selected_index = 0;
                     }
                     _ => {
                         self.input_buffer.clear();

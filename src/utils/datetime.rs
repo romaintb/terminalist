@@ -16,7 +16,8 @@ pub const TODOIST_DATE_FORMAT: &str = "%Y-%m-%d";
 /// # Returns
 /// * `Result<NaiveDate, chrono::ParseError>` - Parsed date or parse error
 pub fn parse_date(date_str: &str) -> Result<NaiveDate, chrono::ParseError> {
-    NaiveDate::parse_from_str(date_str, TODOIST_DATE_FORMAT)
+    let date_part = date_str.split(['T', ' ']).next().unwrap_or(date_str);
+    NaiveDate::parse_from_str(date_part, TODOIST_DATE_FORMAT)
 }
 
 /// Format a NaiveDate to YYYY-MM-DD string

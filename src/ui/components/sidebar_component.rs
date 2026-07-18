@@ -4,17 +4,21 @@
 //! between different views (Today, Tomorrow, Upcoming) and browse projects and labels.
 //! It handles keyboard and mouse navigation with proper visual feedback.
 
+use crate::constants::{SIDEBAR_MAX_WIDTH, SIDEBAR_MIN_WIDTH};
 use crate::entities::{label, project};
 use crate::icons::IconService;
 use crate::ui::components::scrollbar_helper::ScrollbarHelper;
 use crate::ui::components::sidebar_item_component::{SidebarItem, SidebarItemType};
 use crate::ui::core::SidebarSelection;
-use crate::ui::core::{actions::Action, Component};
+use crate::ui::core::{
+    actions::{Action, NavigationCounts},
+    Component,
+};
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
     style::{Color, Style},
-    widgets::{Block, BorderType, Borders, List, ListItem, ListState},
+    widgets::{Block, BorderType, Borders, List, ListItem, ListState, Paragraph},
     Frame,
 };
 use std::collections::HashMap;
@@ -43,6 +47,9 @@ pub struct SidebarComponent {
     list_state: ListState,
     scroll_position: usize, // Virtual scroll position for view
     scrollbar_helper: ScrollbarHelper,
+    navigation_counts: NavigationCounts,
+    current_view_count: usize,
+    focused: bool,
 }
 
 impl Default for SidebarComponent {
@@ -65,17 +72,78 @@ impl SidebarComponent {
             list_state,
             scroll_position: 0,
             scrollbar_helper: ScrollbarHelper::new(),
+            navigation_counts: NavigationCounts::default(),
+            current_view_count: 0,
+            focused: false,
         }
     }
 
-    pub fn update_data(&mut self, projects: Vec<project::Model>, labels: Vec<label::Model>) {
+    pub fn update_data(
+        &mut self,
+        projects: Vec<project::Model>,
+        labels: Vec<label::Model>,
+        navigation_counts: NavigationCounts,
+        current_view_count: usize,
+    ) {
         self.projects = projects;
         self.labels = labels;
+        self.navigation_counts = navigation_counts;
+        self.current_view_count = current_view_count;
         // Rebuild items list when data changes
         self.build_item_list();
         // Reset scroll when data changes
         self.scroll_position = 0;
         self.update_list_state();
+    }
+
+    pub fn preferred_width(&self) -> u16 {
+        let longest = self
+            .projects
+            .iter()
+            .map(|project| project.name.chars().count() + 4)
+            .chain(self.labels.iter().map(|label| label.name.chars().count() + 2))
+            .chain(["Today", "Tomorrow", "Upcoming"].into_iter().map(|name| name.len() + 1))
+            .max()
+            .unwrap_or(10);
+        let count_width = self
+            .navigation_counts
+            .projects
+            .values()
+            .chain(self.navigation_counts.labels.values())
+            .chain([
+                &self.navigation_counts.today,
+                &self.navigation_counts.tomorrow,
+                &self.navigation_counts.upcoming,
+            ])
+            .map(|count| count.to_string().len())
+            .max()
+            .unwrap_or(1);
+        (longest + count_width + 3).clamp(SIDEBAR_MIN_WIDTH as usize, SIDEBAR_MAX_WIDTH as usize) as u16
+    }
+
+    pub fn set_focused(&mut self, focused: bool) {
+        self.focused = focused;
+    }
+
+    fn item_count(&self, item: &SidebarItemType) -> usize {
+        if item.get_selection().as_ref() == Some(&self.selection) {
+            return self.current_view_count;
+        }
+        match item {
+            SidebarItemType::SpecialView { selection, .. } => match selection {
+                SidebarSelection::Today => self.navigation_counts.today,
+                SidebarSelection::Tomorrow => self.navigation_counts.tomorrow,
+                SidebarSelection::Upcoming => self.navigation_counts.upcoming,
+                _ => 0,
+            },
+            SidebarItemType::Project { project, .. } => {
+                self.navigation_counts.projects.get(&project.uuid).copied().unwrap_or(0)
+            }
+            SidebarItemType::Label { label, .. } => {
+                self.navigation_counts.labels.get(&label.uuid).copied().unwrap_or(0)
+            }
+            _ => 0,
+        }
     }
 
     /// Build the flattened list of sidebar items, respecting folder expanded/collapsed states
@@ -409,7 +477,7 @@ impl Component for SidebarComponent {
                 }
                 Action::None
             }
-            KeyCode::Char('J') | KeyCode::Down if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            KeyCode::Char('J') | KeyCode::Down if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                 // Move to next selectable item, skipping non-selectable items (folders)
                 let current_index = self.list_state.selected().unwrap_or(0);
 
@@ -427,7 +495,7 @@ impl Component for SidebarComponent {
                 }
                 Action::None
             }
-            KeyCode::Char('K') | KeyCode::Up if key.modifiers.contains(KeyModifiers::SHIFT) => {
+            KeyCode::Char('K') | KeyCode::Up if !key.modifiers.contains(KeyModifiers::CONTROL) => {
                 // Move to previous selectable item, skipping non-selectable items (folders)
                 let current_index = self.list_state.selected().unwrap_or(0);
 
@@ -497,20 +565,87 @@ impl Component for SidebarComponent {
         self.scrollbar_helper
             .update_state(total_items, current_position, Some(available_height));
 
+        let pane_color = if self.focused { Color::Cyan } else { Color::DarkGray };
         let list = List::new(all_items)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
                     .border_type(BorderType::Rounded)
                     .title("Navigation")
-                    .title_style(Style::default().fg(Color::White))
-                    .border_style(Style::default().fg(Color::DarkGray)),
+                    .title_style(Style::default().fg(pane_color))
+                    .border_style(Style::default().fg(pane_color)),
             )
-            .style(Style::default().fg(Color::White));
+            .style(Style::default().fg(Color::White))
+            .highlight_style(Style::default().bg(Color::DarkGray));
 
         f.render_stateful_widget(list, list_area, &mut self.list_state);
 
+        let first = self.list_state.offset();
+        for (row, item) in self.items.iter().skip(first).take(available_height).enumerate() {
+            let count_area = Rect::new(rect.x + 1, rect.y + 1 + row as u16, rect.width.saturating_sub(3), 1);
+            let count_style = if item.get_selection().as_ref() == Some(&self.selection) {
+                Style::default()
+                    .fg(Color::Yellow)
+                    .bg(Color::DarkGray)
+                    .add_modifier(ratatui::style::Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::DarkGray)
+            };
+            f.render_widget(
+                Paragraph::new(self.item_count(item).to_string())
+                    .alignment(ratatui::layout::Alignment::Right)
+                    .style(count_style),
+                count_area,
+            );
+        }
+
         // Render scrollbar using helper
         self.scrollbar_helper.render(f, scrollbar_area);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::{backend::TestBackend, Terminal};
+
+    #[test]
+    fn refreshed_today_count_replaces_the_previous_value() {
+        let mut sidebar = SidebarComponent::new();
+        sidebar.update_data(
+            Vec::new(),
+            Vec::new(),
+            NavigationCounts {
+                today: 14,
+                ..NavigationCounts::default()
+            },
+            14,
+        );
+        let backend = TestBackend::new(30, 10);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|frame| sidebar.render(frame, frame.area())).unwrap();
+
+        sidebar.update_data(
+            Vec::new(),
+            Vec::new(),
+            NavigationCounts {
+                today: 14,
+                ..NavigationCounts::default()
+            },
+            0,
+        );
+        terminal.draw(|frame| sidebar.render(frame, frame.area())).unwrap();
+
+        let row = terminal
+            .backend()
+            .buffer()
+            .content
+            .iter()
+            .skip(30)
+            .take(30)
+            .map(|cell| cell.symbol())
+            .collect::<String>();
+        assert!(row.contains('0'));
+        assert!(!row.contains("14"));
     }
 }

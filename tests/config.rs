@@ -5,6 +5,7 @@ use terminalist::utils::datetime;
 fn test_default_config() {
     let config = Config::default();
     assert_eq!(config.ui.default_project, "today");
+    assert!(config.ui.shortcut_bar_visible);
     assert_eq!(config.sync.auto_sync_interval_minutes, 5);
     assert!(config.display.show_descriptions);
     assert!(!config.display.show_project_colors);
@@ -56,6 +57,7 @@ enabled = true
     // Check that unspecified values use defaults
     assert_eq!(config.ui.default_project, "today"); // default value
     assert!(config.ui.mouse_enabled); // default value
+    assert!(config.ui.shortcut_bar_visible); // default value
     assert_eq!(config.sync.auto_sync_interval_minutes, 5); // default value
     assert_eq!(config.display.date_format, datetime::TODOIST_DATE_FORMAT); // default value
     assert!(config.display.show_descriptions); // default value
@@ -105,6 +107,7 @@ fn test_generate_config_creates_directory() {
     let content = fs::read_to_string(&config_path).unwrap();
     assert!(content.contains("# Terminalist Configuration File"));
     assert!(content.contains("default_project = \"today\""));
+    assert!(content.contains("shortcut_bar_visible = true"));
 
     // Clean up
     let _ = fs::remove_dir_all(&temp_dir);

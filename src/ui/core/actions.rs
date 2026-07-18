@@ -1,5 +1,24 @@
 use crate::sync::SyncStatus;
+use std::collections::HashMap;
 use uuid::Uuid;
+
+#[derive(Debug, Clone, Default)]
+pub struct NavigationCounts {
+    pub today: usize,
+    pub tomorrow: usize,
+    pub upcoming: usize,
+    pub projects: HashMap<Uuid, usize>,
+    pub labels: HashMap<Uuid, usize>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TaskDueDate {
+    None,
+    Today,
+    Tomorrow,
+    NextWeek,
+    Weekend,
+}
 
 /// Represents the currently selected item in the sidebar
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -21,12 +40,17 @@ pub enum Action {
 
     // Task operations
     CompleteTask(String),
+    ToggleTasks(Vec<(Uuid, bool)>),
     DeleteTask(String),
     CyclePriority(String),
     SetTaskDueToday(Uuid),
     SetTaskDueTomorrow(Uuid),
     SetTaskDueNextWeek(Uuid),
     SetTaskDueWeekEnd(Uuid),
+    SetTasksDueDate {
+        task_ids: Vec<Uuid>,
+        due_date: TaskDueDate,
+    },
     CreateTask {
         content: String,
         project_uuid: Option<Uuid>,
@@ -68,12 +92,16 @@ pub enum Action {
         labels: Vec<crate::entities::label::Model>,
         sections: Vec<crate::entities::section::Model>,
         tasks: Vec<crate::entities::task::Model>,
+        all_tasks: Vec<crate::entities::task::Model>,
+        navigation_counts: NavigationCounts,
     },
     DataLoaded {
         projects: Vec<crate::entities::project::Model>,
         labels: Vec<crate::entities::label::Model>,
         sections: Vec<crate::entities::section::Model>,
         tasks: Vec<crate::entities::task::Model>,
+        all_tasks: Vec<crate::entities::task::Model>,
+        navigation_counts: NavigationCounts,
     },
     SearchTasks(String), // Query for task search
     SearchResultsLoaded {
@@ -94,6 +122,7 @@ pub enum Action {
     HelpScrollDown,
     HelpScrollToTop,
     HelpScrollToBottom,
+    Consumed,
 
     // App control
     Quit,

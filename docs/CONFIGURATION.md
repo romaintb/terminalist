@@ -26,6 +26,7 @@ This creates a config file at `~/.config/terminalist/config.toml` with all avail
 default_project = "today"         # Options: "inbox", "today", "tomorrow", "upcoming", project ID, or project name
 mouse_enabled = true              # Enable mouse support
 sidebar_width = 30                # Sidebar width in columns (15-50)
+shortcut_bar_visible = true       # Show common keyboard shortcuts along the bottom
 
 [sync]
 auto_sync_interval_minutes = 5    # Auto-sync interval (0 = disabled)
@@ -48,6 +49,7 @@ enabled = false                   # Enable logging to file
   - Options: `"inbox"`, `"today"`, `"tomorrow"`, `"upcoming"`, a specific project ID, or project name
 - **mouse_enabled**: Enable or disable mouse support
 - **sidebar_width**: Width of the sidebar in columns (must be between 15-50)
+- **shortcut_bar_visible**: Show or hide the common keyboard-shortcut bar at the bottom
 
 ### Sync Configuration
 

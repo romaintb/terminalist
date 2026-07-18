@@ -8,6 +8,14 @@ fn test_format_ymd() {
 }
 
 #[test]
+fn test_parse_date_accepts_todoist_datetime() {
+    assert_eq!(
+        parse_date("2026-07-17T09:30:00").unwrap(),
+        NaiveDate::from_ymd_opt(2026, 7, 17).unwrap()
+    );
+}
+
+#[test]
 fn test_next_weekday() {
     let monday = NaiveDate::from_ymd_opt(2025, 1, 13).unwrap(); // Monday
     let friday = next_weekday(monday, Weekday::Fri);

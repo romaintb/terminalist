@@ -67,6 +67,8 @@ pub struct TaskItem {
     pub icons: IconService,
     pub projects: Vec<project::Model>,
     pub labels: Vec<crate::entities::label::Model>,
+    pub marked: bool,
+    pub parent_context: Option<String>,
 }
 
 impl TaskItem {
@@ -85,6 +87,8 @@ impl TaskItem {
             icons,
             projects,
             labels,
+            marked: false,
+            parent_context: None,
         }
     }
 
@@ -111,6 +115,15 @@ impl ListItem for TaskItem {
         };
         let mut line_spans = Vec::new();
 
+        if self.marked {
+            line_spans.push(Span::styled(
+                "× ",
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD),
+            ));
+        } else {
+            line_spans.push(Span::raw("  "));
+        }
+
         // Add hierarchical indentation for subtasks
         if self.depth > 0 {
             let mut indent_str = String::new();
@@ -132,7 +145,7 @@ impl ListItem for TaskItem {
         } else if self.task.is_completed {
             // Completed tasks: green icon for the tick mark
             Style::default().fg(Color::Green)
-        } else if selected {
+        } else if self.marked || selected {
             // Selected active tasks: yellow and bold
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
@@ -154,13 +167,19 @@ impl ListItem for TaskItem {
         } else if self.task.is_completed {
             // Completed tasks: gray with strikethrough
             Style::default().fg(Color::DarkGray).add_modifier(Modifier::CROSSED_OUT)
-        } else if selected {
+        } else if self.marked || selected {
             // Selected active tasks: yellow and bold
             Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
         } else {
             // Normal active tasks: white
             Style::default().fg(Color::White)
         };
+        if let Some(parent) = &self.parent_context {
+            line_spans.push(Span::styled(
+                format!("{} › ", parent),
+                Style::default().fg(Color::DarkGray),
+            ));
+        }
         line_spans.push(Span::styled(self.task.content.clone(), content_style));
 
         // Child task count (for tasks with children)

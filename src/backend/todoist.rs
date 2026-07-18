@@ -10,13 +10,17 @@ use async_trait::async_trait;
 /// Todoist backend implementation.
 pub struct TodoistBackend {
     wrapper: TodoistWrapper,
+    api_token: String,
+    client: reqwest::Client,
 }
 
 impl TodoistBackend {
     /// Create a new Todoist backend with the provided API token.
     pub fn new(api_token: String) -> Self {
         Self {
-            wrapper: TodoistWrapper::new(api_token),
+            wrapper: TodoistWrapper::new(api_token.clone()),
+            api_token,
+            client: reqwest::Client::new(),
         }
     }
 
@@ -34,6 +38,15 @@ impl TodoistBackend {
 
     // Helper: Transform Todoist API task → Backend task
     fn task_to_backend(api_task: &crate::todoist::Task) -> BackendTask {
+        let due_datetime = api_task.due.as_ref().and_then(|due| {
+            due.datetime
+                .clone()
+                .or_else(|| due.date.contains('T').then(|| due.date.clone()))
+        });
+        let due_date = api_task
+            .due
+            .as_ref()
+            .and_then(|due| due.date.split('T').next().map(str::to_string));
         BackendTask {
             remote_id: api_task.id.clone(),
             content: api_task.content.clone(),
@@ -43,8 +56,8 @@ impl TodoistBackend {
             parent_remote_id: api_task.parent_id.clone(),
             priority: api_task.priority,
             order_index: 0, // order field removed from API v1
-            due_date: api_task.due.as_ref().map(|d| d.date.clone()),
-            due_datetime: api_task.due.as_ref().and_then(|d| d.datetime.clone()),
+            due_date,
+            due_datetime,
             is_recurring: api_task.due.as_ref().map(|d| d.is_recurring).unwrap_or(false),
             deadline: None, // Todoist doesn't have deadline
             duration: api_task.duration.as_ref().map(|d| format!("{} {}", d.amount, d.unit)),
@@ -248,10 +261,32 @@ impl Backend for TodoistBackend {
     }
 
     async fn update_task(&self, remote_id: &str, args: UpdateTaskArgs) -> Result<BackendTask, BackendError> {
+        if args.clear_due_date {
+            let response = self
+                .client
+                .post(format!("https://api.todoist.com/api/v1/tasks/{remote_id}"))
+                .bearer_auth(&self.api_token)
+                .json(&serde_json::json!({ "due_string": "no date" }))
+                .send()
+                .await
+                .map_err(|error| BackendError::Network(error.to_string()))?;
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                return Err(BackendError::Other(format!("Todoist returned {status}: {body}")));
+            }
+            let task = response
+                .json::<crate::todoist::Task>()
+                .await
+                .map_err(|error| BackendError::InvalidData(error.to_string()))?;
+            return Ok(Self::task_to_backend(&task));
+        }
+
         let todoist_args = crate::todoist::UpdateTaskArgs {
             content: args.content,
             description: args.description,
             priority: args.priority,
+            due_string: None,
             due_date: args.due_date,
             due_datetime: args.due_datetime,
             labels: args.labels,

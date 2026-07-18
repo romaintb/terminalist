@@ -252,6 +252,7 @@ impl SyncService {
             priority: None,
             due_date: None,
             due_datetime: None,
+            clear_due_date: false,
             duration: None,
             labels: None,
         };
@@ -289,10 +290,11 @@ impl SyncService {
             priority: None,
             due_date: due_date.map(std::string::ToString::to_string),
             due_datetime: None,
+            clear_due_date: due_date.is_none(),
             duration: None,
             labels: None,
         };
-        let _task = self
+        let updated_task = self
             .get_backend()
             .await?
             .update_task(&remote_id, task_args)
@@ -304,7 +306,8 @@ impl SyncService {
 
         if let Some(task) = TaskRepository::get_by_id(&storage.conn, task_uuid).await? {
             let mut active_model: task::ActiveModel = task.into_active_model();
-            active_model.due_date = ActiveValue::Set(due_date.map(|s| s.to_string()));
+            active_model.due_date = ActiveValue::Set(updated_task.due_date);
+            active_model.due_datetime = ActiveValue::Set(updated_task.due_datetime);
             TaskRepository::update(&storage.conn, active_model).await?;
         }
 
@@ -326,6 +329,7 @@ impl SyncService {
             priority: Some(priority),
             due_date: None,
             due_datetime: None,
+            clear_due_date: false,
             duration: None,
             labels: None,
         };

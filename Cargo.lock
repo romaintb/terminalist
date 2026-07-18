@@ -3357,6 +3357,7 @@ dependencies = [
  "log",
  "once_cell",
  "ratatui",
+ "reqwest",
  "sea-orm",
  "serde",
  "serde_json",

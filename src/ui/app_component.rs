@@ -5,7 +5,7 @@ use crate::sync::{SyncService, SyncStatus};
 use crate::ui::components::{DialogComponent, SidebarComponent, TaskListComponent};
 use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
-    actions::{Action, DialogType},
+    actions::{Action, DialogType, NavigationCounts, TaskDueDate},
     event_handler::EventType,
     task_manager::{TaskId, TaskManager},
     Component,
@@ -25,6 +25,7 @@ use uuid::Uuid;
 pub struct AppState {
     pub projects: Vec<project::Model>,
     pub tasks: Vec<task::Model>,
+    pub all_tasks: Vec<task::Model>,
     pub labels: Vec<label::Model>,
     pub sections: Vec<section::Model>,
     pub sidebar_selection: SidebarSelection,
@@ -32,6 +33,7 @@ pub struct AppState {
     pub error_message: Option<String>,
     pub info_message: Option<String>,
     pub show_help: bool,
+    pub navigation_counts: NavigationCounts,
     /// didnt we just got rid of custom scrolling ?
     pub help_scroll_offset: usize,
 }
@@ -44,11 +46,15 @@ impl AppState {
         labels: Vec<label::Model>,
         sections: Vec<section::Model>,
         tasks: Vec<task::Model>,
+        all_tasks: Vec<task::Model>,
+        navigation_counts: NavigationCounts,
     ) {
         self.projects = projects;
         self.labels = labels;
         self.sections = sections;
         self.tasks = tasks;
+        self.all_tasks = all_tasks;
+        self.navigation_counts = navigation_counts;
     }
 
     /// Clear any transient messages
@@ -83,8 +89,17 @@ pub struct AppComponent {
     // Layout state
     sidebar_visible: bool,
     sidebar_width: u16,
+    sidebar_width_override: Option<u16>,
+    resizing_sidebar: bool,
+    active_pane: ActivePane,
     screen_width: u16,
     screen_height: u16,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum ActivePane {
+    Navigation,
+    Tasks,
 }
 
 impl AppComponent {
@@ -92,6 +107,8 @@ impl AppComponent {
         let sidebar = SidebarComponent::new();
         let task_list = TaskListComponent::new();
         let (task_manager, background_action_rx) = TaskManager::new();
+        let sidebar_width_override =
+            (config.ui.sidebar_width != SIDEBAR_DEFAULT_WIDTH).then_some(config.ui.sidebar_width);
 
         let state = AppState {
             loading: true,
@@ -112,6 +129,9 @@ impl AppComponent {
             active_sync_task: None,
             is_initial_sync: false,
             sidebar_width: 30, // Default width
+            sidebar_width_override,
+            resizing_sidebar: false,
+            active_pane: ActivePane::Tasks,
             screen_width: 100, // Default width
             screen_height: 50, // Default height
         }
@@ -205,18 +225,24 @@ impl AppComponent {
 
     /// Update all components with current data
     fn sync_component_data(&mut self) {
-        // Update sidebar
-        self.sidebar.update_data(self.state.projects.clone(), self.state.labels.clone());
-        self.sidebar.selection = self.state.sidebar_selection.clone();
-
         // Update task list
         self.task_list.update_display_config(self.config.display.clone());
+        self.task_list.update_all_tasks(self.state.all_tasks.clone());
         self.task_list.update_data(
             self.state.tasks.clone(),
             self.state.sections.clone(),
             self.state.projects.clone(),
             self.state.labels.clone(),
             self.state.sidebar_selection.clone(),
+        );
+
+        // Update sidebar after the task list so its selected count matches rendered task rows.
+        self.sidebar.selection = self.state.sidebar_selection.clone();
+        self.sidebar.update_data(
+            self.state.projects.clone(),
+            self.state.labels.clone(),
+            self.state.navigation_counts.clone(),
+            self.task_list.visible_task_count(),
         );
 
         // Update dialog
@@ -547,6 +573,24 @@ impl AppComponent {
                 }
                 Action::None
             }
+            Action::ToggleTasks(tasks) => {
+                let count = tasks.len();
+                let sync_service = self.sync_service.clone();
+                self.task_manager.spawn_task_operation(
+                    move || async move {
+                        for (task_uuid, should_restore) in tasks {
+                            if should_restore {
+                                sync_service.restore_task(&task_uuid).await?;
+                            } else {
+                                sync_service.complete_task(&task_uuid).await?;
+                            }
+                        }
+                        Ok(format!("Updated {} task(s)", count))
+                    },
+                    format!("Toggle {} selected task(s)", count),
+                );
+                Action::None
+            }
             Action::CyclePriority(task_id) => {
                 // Find task and cycle its priority
                 let sync_service = self.sync_service.clone();
@@ -645,6 +689,43 @@ impl AppComponent {
                 self.spawn_task_operation("Set task due weekend".to_string(), format!("{}|weekend", task_id_str));
                 Action::None
             }
+            Action::SetTasksDueDate { task_ids, due_date } => {
+                let count = task_ids.len();
+                let operation = match due_date {
+                    TaskDueDate::None => "Unscheduling",
+                    TaskDueDate::Today => "Scheduling for today",
+                    TaskDueDate::Tomorrow => "Scheduling for tomorrow",
+                    TaskDueDate::NextWeek => "Scheduling for next week",
+                    TaskDueDate::Weekend => "Scheduling for the weekend",
+                };
+                let sync_service = self.sync_service.clone();
+                self.task_manager.spawn_task_operation(
+                    move || async move {
+                        let due_date_value = match due_date {
+                            TaskDueDate::None => None,
+                            TaskDueDate::Today => Some(datetime::format_today()),
+                            TaskDueDate::Tomorrow => Some(datetime::format_date_with_offset(1)),
+                            TaskDueDate::NextWeek => {
+                                let today = chrono::Local::now().date_naive();
+                                let date = datetime::next_weekday(today, chrono::Weekday::Mon);
+                                Some(datetime::format_ymd(date))
+                            }
+                            TaskDueDate::Weekend => {
+                                let today = chrono::Local::now().date_naive();
+                                let date = datetime::next_weekday(today, chrono::Weekday::Sat);
+                                Some(datetime::format_ymd(date))
+                            }
+                        };
+
+                        for task_uuid in task_ids {
+                            sync_service.update_task_due_date(&task_uuid, due_date_value.as_deref()).await?;
+                        }
+                        Ok(format!("Updated due date for {} task(s)", count))
+                    },
+                    format!("{operation} {count} task(s)"),
+                );
+                Action::None
+            }
             Action::EditTask { task_uuid, content } => {
                 info!("Task: Editing task UUID {} with new content '{}'", task_uuid, content);
                 self.spawn_task_operation("Edit task".to_string(), format!("{}: {}", task_uuid, content));
@@ -724,6 +805,8 @@ impl AppComponent {
                 labels,
                 sections,
                 tasks,
+                all_tasks,
+                navigation_counts,
             } => {
                 info!(
                     "InitialData: Loaded {} projects, {} labels, {} sections, {} tasks",
@@ -734,7 +817,8 @@ impl AppComponent {
                 );
 
                 // Update app state with loaded data
-                self.state.update_data(projects, labels, sections, tasks);
+                self.state
+                    .update_data(projects, labels, sections, tasks, all_tasks, navigation_counts);
 
                 // Set initial sidebar selection based on config (now we have projects loaded)
                 self.set_initial_sidebar_selection();
@@ -753,6 +837,8 @@ impl AppComponent {
                 labels,
                 sections,
                 tasks,
+                all_tasks,
+                navigation_counts,
             } => {
                 info!(
                     "Data: Loaded {} projects, {} labels, {} sections, {} tasks",
@@ -763,7 +849,8 @@ impl AppComponent {
                 );
 
                 // Update app state with loaded data
-                self.state.update_data(projects, labels, sections, tasks);
+                self.state
+                    .update_data(projects, labels, sections, tasks, all_tasks, navigation_counts);
                 self.sync_component_data();
                 info!("Data: Updated all component data after data load");
                 Action::None
@@ -1077,7 +1164,7 @@ impl AppComponent {
 
                 result.map_err(|e: String| anyhow::anyhow!(e))
             },
-            description,
+            operation_name,
         );
     }
 
@@ -1139,11 +1226,34 @@ impl AppComponent {
         let action = match event_type {
             EventType::Mouse(mouse) => {
                 if !self.dialog.is_visible() {
-                    if self.sidebar_visible && mouse.column < self.sidebar_width {
+                    if self.resizing_sidebar {
+                        if matches!(mouse.kind, crossterm::event::MouseEventKind::Drag(_)) {
+                            self.sidebar_width_override = Some(
+                                mouse
+                                    .column
+                                    .clamp(SIDEBAR_MIN_WIDTH, self.screen_width.saturating_sub(MAIN_AREA_MIN_WIDTH)),
+                            );
+                        }
+                        if matches!(mouse.kind, crossterm::event::MouseEventKind::Up(_)) {
+                            self.resizing_sidebar = false;
+                        }
+                        Action::None
+                    } else if self.sidebar_visible
+                        && mouse.column.abs_diff(self.sidebar_width) <= 1
+                        && matches!(
+                            mouse.kind,
+                            crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
+                        )
+                    {
+                        self.resizing_sidebar = true;
+                        Action::None
+                    } else if self.sidebar_visible && mouse.column < self.sidebar_width {
+                        self.active_pane = ActivePane::Navigation;
                         // Mouse is in sidebar area
                         let sidebar_area = Rect::new(0, 0, self.sidebar_width, self.screen_height);
                         self.sidebar.handle_mouse(mouse, sidebar_area)
                     } else {
+                        self.active_pane = ActivePane::Tasks;
                         // Mouse is in task list area - calculate proper width
                         let task_list_width = self.screen_width.saturating_sub(self.sidebar_width).max(1);
                         let task_list_area = Rect::new(self.sidebar_width, 0, task_list_width, self.screen_height);
@@ -1158,22 +1268,29 @@ impl AppComponent {
                 if self.dialog.is_visible() {
                     // Dialog has priority when visible
                     self.dialog.handle_key_events(key)
-                } else {
-                    // Try sidebar first (for J/K navigation)
-                    let sidebar_action = self.sidebar.handle_key_events(key);
-
-                    if !matches!(sidebar_action, Action::None) {
-                        sidebar_action
-                    } else {
-                        // Then try task list (for j/k and other task operations)
-                        let task_list_action = self.task_list.handle_key_events(key);
-
-                        if !matches!(task_list_action, Action::None) {
-                            task_list_action
-                        } else {
-                            // Finally try global keys
+                } else if self.task_manager.has_blocking_work() {
+                    match key.code {
+                        KeyCode::Char('q') | KeyCode::Char('?') | KeyCode::Char('h') => self.handle_global_key(key),
+                        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                             self.handle_global_key(key)
                         }
+                        _ => Action::None,
+                    }
+                } else if key.code == KeyCode::Left && self.sidebar_visible {
+                    self.active_pane = ActivePane::Navigation;
+                    Action::None
+                } else if key.code == KeyCode::Right {
+                    self.active_pane = ActivePane::Tasks;
+                    Action::None
+                } else {
+                    let pane_action = match self.active_pane {
+                        ActivePane::Navigation => self.sidebar.handle_key_events(key),
+                        ActivePane::Tasks => self.task_list.handle_key_events(key),
+                    };
+                    if matches!(pane_action, Action::None) {
+                        self.handle_global_key(key)
+                    } else {
+                        pane_action
                     }
                 }
             }
@@ -1213,7 +1330,7 @@ impl AppComponent {
 impl AppComponent {
     /// Calculate sidebar width based on configured columns
     fn calculate_sidebar_width(&self, screen_width: u16) -> u16 {
-        let sidebar_columns = self.config.ui.sidebar_width;
+        let sidebar_columns = self.sidebar_width_override.unwrap_or_else(|| self.sidebar.preferred_width());
         let max_sidebar_width = screen_width.saturating_sub(MAIN_AREA_MIN_WIDTH);
         sidebar_columns.min(max_sidebar_width)
     }
@@ -1235,9 +1352,16 @@ impl Component for AppComponent {
     }
 
     fn render(&mut self, f: &mut Frame, rect: Rect) {
+        let page_chunks = if self.config.ui.shortcut_bar_visible {
+            Layout::vertical([Constraint::Min(0), Constraint::Length(1)]).split(rect)
+        } else {
+            Layout::vertical([Constraint::Min(0), Constraint::Length(0)]).split(rect)
+        };
+        let content_rect = page_chunks[0];
+
         // Create layout: sidebar (configurable width) | task list (remainder)
         let sidebar_width = if self.sidebar_visible {
-            self.calculate_sidebar_width(rect.width)
+            self.calculate_sidebar_width(content_rect.width)
         } else {
             0
         };
@@ -1247,13 +1371,21 @@ impl Component for AppComponent {
         self.screen_width = rect.width;
         self.screen_height = rect.height;
 
-        let main_chunks = Layout::horizontal([Constraint::Length(sidebar_width), Constraint::Min(0)]).split(rect);
+        let main_chunks =
+            Layout::horizontal([Constraint::Length(sidebar_width), Constraint::Min(0)]).split(content_rect);
 
         // Render components
         if self.sidebar_visible {
+            self.sidebar.set_focused(self.active_pane == ActivePane::Navigation);
             self.sidebar.render(f, main_chunks[0]);
         }
+        self.task_list.set_focused(self.active_pane == ActivePane::Tasks);
+        self.task_list.set_processing(self.task_manager.processing_description());
         self.task_list.render(f, main_chunks[1]);
+
+        if self.config.ui.shortcut_bar_visible {
+            Self::render_shortcut_bar(f, page_chunks[1]);
+        }
 
         // Render sync status if syncing or loading
         if self.state.loading || self.is_syncing() {
@@ -1268,6 +1400,38 @@ impl Component for AppComponent {
 }
 
 impl AppComponent {
+    fn render_shortcut_bar(f: &mut Frame, rect: Rect) {
+        use ratatui::{
+            style::{Color, Style},
+            text::{Line, Span},
+            widgets::Paragraph,
+        };
+
+        let shortcuts = [
+            ("j/k", "navigate"),
+            ("x", "select"),
+            ("u", "unschedule"),
+            ("a", "add"),
+            ("t", "today"),
+            ("/", "search"),
+            ("r", "sync"),
+            ("?", "help"),
+            ("q", "quit"),
+        ];
+        let mut spans = Vec::new();
+        for (index, (key, label)) in shortcuts.iter().enumerate() {
+            if index > 0 {
+                spans.push(Span::raw("  "));
+            }
+            spans.push(Span::styled(*key, Style::default().fg(Color::Cyan)));
+            spans.push(Span::styled(
+                format!(" {}", label),
+                Style::default().fg(Color::DarkGray),
+            ));
+        }
+        f.render_widget(Paragraph::new(Line::from(spans)), rect);
+    }
+
     /// Render sync status indicator
     fn render_sync_status_impl(&self, f: &mut Frame, rect: Rect) {
         use ratatui::{

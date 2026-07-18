@@ -206,6 +206,8 @@ D           Delete selected item (project or label)
 TASK MANAGEMENT
 --------------
 Space       Toggle task completion
+x           Mark/unmark task for bulk actions
+Esc         Clear marked tasks
 a           Create new task
 e           Edit selected task
 d           Delete task (with confirmation)
@@ -214,6 +216,7 @@ t           Set task due date to today
 T           Set task due date to tomorrow
 w           Set task due date to next week (Monday)
 W           Set task due date to next week end (Saturday)
+u           Remove task due date
 
 SYNC & DATA
 -----------
