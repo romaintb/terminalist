@@ -23,14 +23,22 @@ impl LocalStorage {
         Ok(app_data_dir.join("terminalist.db"))
     }
 
-    /// Initialize the local storage with SQLite database
-    pub async fn new(debug_mode: bool) -> Result<Self> {
+    /// Initialize the local storage with the application SQLite database.
+    ///
+    /// The database is retained between runs and refreshed by the sync layer. Deleting it
+    /// here would invalidate connections held by another running Terminalist process.
+    pub async fn new(_debug_mode: bool) -> Result<Self> {
         let db_path = Self::get_db_path()?;
+        Self::new_at(db_path).await
+    }
 
-        // In normal mode, always delete the database file to start fresh
-        // In debug mode, keep the database file if it exists (for debugging without re-syncing)
-        if !debug_mode && db_path.exists() {
-            std::fs::remove_file(&db_path)?;
+    /// Open local storage at an explicit path.
+    ///
+    /// This is public so integration tests and alternate frontends can use an isolated
+    /// database without touching the user's application data.
+    pub async fn new_at(db_path: PathBuf) -> Result<Self> {
+        if let Some(parent) = db_path.parent() {
+            std::fs::create_dir_all(parent).context("Failed to create database directory")?;
         }
 
         let database_url = format!("sqlite:{}?mode=rwc", db_path.display());
@@ -72,7 +80,8 @@ impl LocalStorage {
             schema.create_table_from_entity(task_label::Entity),
         ];
 
-        for statement in table_statements {
+        for mut statement in table_statements {
+            statement.if_not_exists();
             self.conn.execute(backend.build(&statement)).await?;
         }
 

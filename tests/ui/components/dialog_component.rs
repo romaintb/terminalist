@@ -42,15 +42,33 @@ fn test_search_result_navigation_is_bounded() {
     dialog.dialog_type = Some(DialogType::TaskSearch);
     dialog.search_results = vec![search_task("first"), search_task("second")];
 
-    dialog.handle_key_events(key(KeyCode::Char('j')));
+    dialog.handle_key_events(key(KeyCode::Down));
+    assert!(dialog.search_results_focused);
+    assert_eq!(dialog.search_selected_index, 0);
+    dialog.handle_key_events(key(KeyCode::Down));
     assert_eq!(dialog.search_selected_index, 1);
     dialog.handle_key_events(key(KeyCode::Down));
     assert_eq!(dialog.search_selected_index, 1);
 
-    dialog.handle_key_events(key(KeyCode::Char('k')));
-    assert_eq!(dialog.search_selected_index, 0);
     dialog.handle_key_events(key(KeyCode::Up));
     assert_eq!(dialog.search_selected_index, 0);
+    dialog.handle_key_events(key(KeyCode::Up));
+    assert!(!dialog.search_results_focused);
+    assert_eq!(dialog.search_selected_index, 0);
+}
+
+#[test]
+fn test_all_letters_are_entered_while_search_input_is_focused() {
+    let mut dialog = DialogComponent::new();
+    dialog.dialog_type = Some(DialogType::TaskSearch);
+
+    for character in 'a'..='z' {
+        let action = dialog.handle_key_events(key(KeyCode::Char(character)));
+        assert!(matches!(action, Action::SearchTasks(_)));
+    }
+
+    assert_eq!(dialog.input_buffer, "abcdefghijklmnopqrstuvwxyz");
+    assert_eq!(dialog.cursor_position, 26);
 }
 
 #[test]
@@ -59,9 +77,18 @@ fn test_t_sets_selected_search_result_due_today() {
     dialog.dialog_type = Some(DialogType::TaskSearch);
     dialog.search_results = vec![search_task("first"), search_task("second")];
     dialog.search_selected_index = 1;
+    dialog.search_results_focused = true;
     let selected_uuid = dialog.search_results[1].uuid;
 
     let action = dialog.handle_key_events(key(KeyCode::Char('t')));
 
     assert!(matches!(action, Action::SetTaskDueToday(uuid) if uuid == selected_uuid));
+}
+
+#[test]
+fn test_enter_has_no_search_action() {
+    let mut dialog = DialogComponent::new();
+    dialog.dialog_type = Some(DialogType::TaskSearch);
+
+    assert!(matches!(dialog.handle_key_events(key(KeyCode::Enter)), Action::None));
 }

@@ -4,6 +4,12 @@ Status: Ready for review
 Branch: `codex/ui-navigation-improvements`
 Base: `main` at `81c680e`
 
+Implementation note: the correctness refactors that follow this baseline now exist on the
+stacked `codex/preserve-local-cache`, `codex/typed-operations`, and
+`codex/versioned-view-snapshots` branches. `codex/test-full-stack` combines the complete stack
+with `codex/search-input-footer` for manual testing. See the architecture refactor plan for
+the current completion ledger and remaining work.
+
 ## Purpose
 
 This branch checkpoints the current user-facing work before the architecture refactors in
@@ -108,12 +114,11 @@ Recommended manual checks:
 
 ## Known Follow-Up Work
 
-The current implementation intentionally establishes behavior before improving its internal
-structure. The architecture refactor plan tracks:
+The baseline intentionally establishes behavior before improving its internal structure.
+The architecture refactor plan records the completed correctness work and tracks the remaining
+performance and transport work:
 
-- typed operations instead of delimiter-separated strings;
-- versioned view snapshots and stale-result rejection;
-- preservation of the last valid local cache on failures;
+- propagate all data-load errors without silently producing empty views;
 - grouped navigation-count queries;
 - dependency-aware component updates;
 - one shared Todoist transport, including due-date clearing.

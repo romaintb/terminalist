@@ -133,26 +133,12 @@ impl TaskListComponent {
         }
 
         // Handle different sidebar selections with appropriate sectioning
-        match &self.sidebar_selection {
+        match self.sidebar_selection.clone() {
             SidebarSelection::Today => self.build_today_items(),
             SidebarSelection::Tomorrow => self.build_tomorrow_items(),
             SidebarSelection::Upcoming => self.build_upcoming_items(),
-            SidebarSelection::Project(index) => {
-                if let Some(project) = self.projects.get(*index) {
-                    let project_id = project.uuid;
-                    self.build_project_items(&project_id);
-                } else {
-                    self.build_simple_items();
-                }
-            }
-            SidebarSelection::Label(index) => {
-                if let Some(label) = self.labels.get(*index) {
-                    let label_id = label.uuid;
-                    self.build_label_items(&label_id);
-                } else {
-                    self.build_simple_items();
-                }
-            }
+            SidebarSelection::Project(project_id) => self.build_project_items(&project_id),
+            SidebarSelection::Label(label_id) => self.build_label_items(&label_id),
         }
     }
 
@@ -364,17 +350,6 @@ impl TaskListComponent {
         let filtered_tasks = self.visible_roots();
 
         for task in filtered_tasks {
-            self.add_task_and_children_to_items(task, 0);
-        }
-    }
-
-    /// Build simple items (no sectioning)
-    fn build_simple_items(&mut self) {
-        // SQL already provides proper ordering (completion status -> priority -> order_index)
-        let root_tasks = self.visible_roots();
-
-        // Add each root task and its children recursively
-        for task in root_tasks {
             self.add_task_and_children_to_items(task, 0);
         }
     }
@@ -664,7 +639,7 @@ impl Component for TaskListComponent {
             KeyCode::Char('a') => {
                 // When viewing a specific project, preselect it as the default project
                 let default_project_uuid = match &self.sidebar_selection {
-                    SidebarSelection::Project(index) => self.projects.get(*index).map(|p| p.uuid),
+                    SidebarSelection::Project(project_id) => Some(*project_id),
                     _ => None,
                 };
                 Action::ShowDialog(DialogType::TaskCreation { default_project_uuid })
@@ -684,7 +659,7 @@ impl Component for TaskListComponent {
                 if let Some(task) = self.get_selected_task() {
                     // If task is already deleted, restore it; otherwise show delete confirmation
                     if task.is_deleted {
-                        Action::RestoreTask(task.uuid.to_string())
+                        Action::RestoreTask(task.uuid)
                     } else {
                         Action::ShowDialog(DialogType::DeleteConfirmation {
                             item_type: "task".to_string(),
@@ -697,7 +672,7 @@ impl Component for TaskListComponent {
             }
             KeyCode::Char('p') => {
                 if let Some(task) = self.get_selected_task() {
-                    Action::CyclePriority(task.uuid.to_string())
+                    Action::CyclePriority(task.uuid)
                 } else {
                     Action::None
                 }

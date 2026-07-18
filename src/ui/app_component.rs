@@ -3,13 +3,14 @@ use crate::constants::*;
 use crate::entities::{label, project, section, task};
 use crate::sync::{SyncService, SyncStatus};
 use crate::ui::components::{DialogComponent, SidebarComponent, TaskListComponent};
-use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
     actions::{Action, DialogType, NavigationCounts, TaskDueDate},
     event_handler::EventType,
+    operations::{LabelOperation, Operation, ProjectOperation, TaskOperation},
     task_manager::{TaskId, TaskManager},
     Component,
 };
+use crate::ui::core::{SidebarSelection, ViewSnapshot};
 use crate::utils::datetime;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use log::info;
@@ -85,6 +86,9 @@ pub struct AppComponent {
     should_quit: bool,
     active_sync_task: Option<TaskId>,
     is_initial_sync: bool,
+    next_load_generation: u64,
+    latest_requested_generation: u64,
+    latest_applied_generation: u64,
 
     // Layout state
     sidebar_visible: bool,
@@ -128,6 +132,9 @@ impl AppComponent {
             should_quit: false,
             active_sync_task: None,
             is_initial_sync: false,
+            next_load_generation: 1,
+            latest_requested_generation: 0,
+            latest_applied_generation: 0,
             sidebar_width: 30, // Default width
             sidebar_width_override,
             resizing_sidebar: false,
@@ -170,12 +177,14 @@ impl AppComponent {
             self.schedule_initial_data_fetch();
             self.is_initial_sync = false;
         } else {
-            info!("AppComponent: Starting initial sync");
+            info!("AppComponent: Loading cached data before initial sync");
             if self.active_sync_task.is_none() {
                 self.is_initial_sync = true;
+                self.schedule_initial_data_fetch();
                 self.start_background_sync();
-                // Data fetch will be triggered automatically when sync completes
-                info!("AppComponent: Initial sync scheduled");
+                // A successful sync refreshes the view again. A failed sync leaves the
+                // already-scheduled cached snapshot visible.
+                info!("AppComponent: Cached data load and initial sync scheduled");
             }
         }
     }
@@ -185,8 +194,8 @@ impl AppComponent {
         let selection = match self.config.ui.default_project.as_str() {
             "inbox" => {
                 // Find inbox project
-                if let Some(inbox_index) = self.state.projects.iter().position(|p| p.is_inbox_project) {
-                    SidebarSelection::Project(inbox_index)
+                if let Some(inbox) = self.state.projects.iter().find(|p| p.is_inbox_project) {
+                    SidebarSelection::Project(inbox.uuid)
                 } else {
                     SidebarSelection::Today
                 }
@@ -197,19 +206,15 @@ impl AppComponent {
             project_id_or_name => {
                 // Try to find project by ID first (parse as UUID), then by name
                 if let Ok(uuid) = Uuid::parse_str(project_id_or_name) {
-                    if let Some(project_index) = self.state.projects.iter().position(|p| p.uuid == uuid) {
-                        SidebarSelection::Project(project_index)
-                    } else if let Some(project_index) =
-                        self.state.projects.iter().position(|p| p.name == project_id_or_name)
-                    {
-                        SidebarSelection::Project(project_index)
+                    if let Some(project) = self.state.projects.iter().find(|p| p.uuid == uuid) {
+                        SidebarSelection::Project(project.uuid)
+                    } else if let Some(project) = self.state.projects.iter().find(|p| p.name == project_id_or_name) {
+                        SidebarSelection::Project(project.uuid)
                     } else {
                         SidebarSelection::Today
                     }
-                } else if let Some(project_index) =
-                    self.state.projects.iter().position(|p| p.name == project_id_or_name)
-                {
-                    SidebarSelection::Project(project_index)
+                } else if let Some(project) = self.state.projects.iter().find(|p| p.name == project_id_or_name) {
+                    SidebarSelection::Project(project.uuid)
                 } else {
                     SidebarSelection::Today
                 }
@@ -297,8 +302,8 @@ impl AppComponent {
             KeyCode::Char('D') => {
                 // Delete current project (only if a project is selected)
                 match &self.state.sidebar_selection {
-                    SidebarSelection::Project(index) => {
-                        if let Some(project) = self.state.projects.get(*index) {
+                    SidebarSelection::Project(uuid) => {
+                        if let Some(project) = self.state.projects.iter().find(|project| project.uuid == *uuid) {
                             info!(
                                 "Global key: 'D' - deleting project '{}' (ID: {})",
                                 project.name, project.uuid
@@ -324,8 +329,8 @@ impl AppComponent {
                         info!("Global key: 'D' - cannot delete Upcoming view");
                         Action::ShowDialog(DialogType::Info("Cannot delete the Upcoming view".to_string()))
                     }
-                    SidebarSelection::Label(index) => {
-                        if let Some(label) = self.state.labels.get(*index) {
+                    SidebarSelection::Label(uuid) => {
+                        if let Some(label) = self.state.labels.iter().find(|label| label.uuid == *uuid) {
                             info!("Global key: 'D' - deleting label '{}' (ID: {})", label.name, label.uuid);
                             Action::ShowDialog(DialogType::DeleteConfirmation {
                                 item_type: "label".to_string(),
@@ -341,8 +346,8 @@ impl AppComponent {
             KeyCode::Char('E') => {
                 // Edit current sidebar selection (project or label)
                 match &self.state.sidebar_selection {
-                    SidebarSelection::Project(index) => {
-                        if let Some(project) = self.state.projects.get(*index) {
+                    SidebarSelection::Project(uuid) => {
+                        if let Some(project) = self.state.projects.iter().find(|project| project.uuid == *uuid) {
                             info!(
                                 "Global key: 'E' - editing project '{}' (ID: {})",
                                 project.name, project.uuid
@@ -368,8 +373,8 @@ impl AppComponent {
                         info!("Global key: 'E' - cannot edit Upcoming view");
                         Action::ShowDialog(DialogType::Info("Cannot edit the Upcoming view".to_string()))
                     }
-                    SidebarSelection::Label(index) => {
-                        if let Some(label) = self.state.labels.get(*index) {
+                    SidebarSelection::Label(uuid) => {
+                        if let Some(label) = self.state.labels.iter().find(|label| label.uuid == *uuid) {
                             info!("Global key: 'E' - editing label '{}' (ID: {})", label.name, label.uuid);
                             Action::ShowDialog(DialogType::LabelEdit {
                                 label_uuid: label.uuid,
@@ -483,13 +488,21 @@ impl AppComponent {
                 self.active_sync_task = None;
                 self.state.loading = false;
 
-                // Extract data from sync status and update components
-                self.update_data_from_sync(status);
-                self.sync_component_data();
-
-                self.state.info_message = Some(SUCCESS_SYNC_COMPLETED.to_string());
-                info!("Sync: Showing completion info dialog");
-                Action::ShowDialog(DialogType::Info(self.state.info_message.clone().unwrap()))
+                match status {
+                    SyncStatus::Success => {
+                        self.update_data_from_sync(SyncStatus::Success);
+                        self.sync_component_data();
+                        self.state.info_message = Some(SUCCESS_SYNC_COMPLETED.to_string());
+                        info!("Sync: Showing completion info dialog");
+                        Action::ShowDialog(DialogType::Info(self.state.info_message.clone().unwrap()))
+                    }
+                    SyncStatus::Error { message } => {
+                        self.is_initial_sync = false;
+                        self.state.error_message = Some(message);
+                        Action::ShowDialog(DialogType::Error(self.state.error_message.clone().unwrap_or_default()))
+                    }
+                    SyncStatus::Idle | SyncStatus::InProgress => Action::None,
+                }
             }
             Action::SyncFailed(error) => {
                 info!("Sync: Failed with error: {}", error);
@@ -515,18 +528,18 @@ impl AppComponent {
                     SidebarSelection::Today => "Today".to_string(),
                     SidebarSelection::Tomorrow => "Tomorrow".to_string(),
                     SidebarSelection::Upcoming => "Upcoming".to_string(),
-                    SidebarSelection::Project(index) => {
-                        if let Some(project) = self.state.projects.get(*index) {
-                            format!("Project({}) '{}'", index, project.name)
+                    SidebarSelection::Project(uuid) => {
+                        if let Some(project) = self.state.projects.iter().find(|project| project.uuid == *uuid) {
+                            format!("Project({}) '{}'", uuid, project.name)
                         } else {
-                            format!("Project({}) [unknown]", index)
+                            format!("Project({}) [unknown]", uuid)
                         }
                     }
-                    SidebarSelection::Label(index) => {
-                        if let Some(label) = self.state.labels.get(*index) {
-                            format!("Label({}) '{}'", index, label.name)
+                    SidebarSelection::Label(uuid) => {
+                        if let Some(label) = self.state.labels.iter().find(|label| label.uuid == *uuid) {
+                            format!("Label({}) '{}'", uuid, label.name)
                         } else {
-                            format!("Label({}) [unknown]", index)
+                            format!("Label({}) [unknown]", uuid)
                         }
                     }
                 };
@@ -546,30 +559,21 @@ impl AppComponent {
                 };
                 info!("Task: Creating task with content '{}'{}", content, project_desc);
 
-                // Format task info to include both content and project_uuid
-                let task_info = match project_uuid {
-                    Some(pid) => format!("{}|{}", content, pid),
-                    None => content,
-                };
-                self.spawn_task_operation("Create task".to_string(), task_info);
+                self.spawn_operation(Operation::Task(TaskOperation::Create { content, project_uuid }));
                 Action::None
             }
             Action::CompleteTask(task_id) => {
                 // Find the task being completed
                 let sync_service = self.sync_service.clone();
-                if let Ok(task_uuid) = Uuid::parse_str(&task_id) {
-                    if let Ok(Some(task)) = sync_service.get_task_by_id(&task_uuid).await {
-                        let task_desc = format!("ID {} '{}'", task_id, task.content);
+                if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
+                    let task_desc = format!("ID {} '{}'", task_id, task.content);
 
-                        info!("Task: Completing task {}", task_desc);
+                    info!("Task: Completing task {}", task_desc);
 
-                        // Todoist API automatically handles subtasks when parent is completed
-                        self.spawn_task_operation("Complete task".to_string(), task_id);
-                    } else {
-                        info!("Task: Cannot complete - task {} not found", task_id);
-                    }
+                    // Todoist API automatically handles subtasks when parent is completed
+                    self.spawn_operation(Operation::Task(TaskOperation::Complete(task_id)));
                 } else {
-                    info!("Task: Cannot complete - invalid UUID {}", task_id);
+                    info!("Task: Cannot complete - task {} not found", task_id);
                 }
                 Action::None
             }
@@ -594,99 +598,96 @@ impl AppComponent {
             Action::CyclePriority(task_id) => {
                 // Find task and cycle its priority
                 let sync_service = self.sync_service.clone();
-                if let Ok(task_uuid) = Uuid::parse_str(&task_id) {
-                    if let Ok(Some(task)) = sync_service.get_task_by_id(&task_uuid).await {
-                        // Todoist priorities: 1 (Normal), 2 (High), 3 (Higher), 4 (Highest)
-                        let new_priority = match task.priority {
-                            4 => 1,                 // Highest -> Normal
-                            _ => task.priority + 1, // Normal/High/Higher -> next level
-                        };
-                        let task_desc = format!(
-                            "ID {} '{}' (P{} -> P{})",
-                            task_id, task.content, task.priority, new_priority
-                        );
-                        info!("Task: Cycling priority for task {}", task_desc);
-                        self.spawn_task_operation(
-                            "Cycle priority".to_string(),
-                            format!("{}|{}", task_id, new_priority),
-                        );
-                    } else {
-                        info!("Task: Cannot cycle priority - task {} not found", task_id);
-                    }
+                if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
+                    // Todoist priorities: 1 (Normal), 2 (High), 3 (Higher), 4 (Highest)
+                    let new_priority = match task.priority {
+                        4 => 1,                 // Highest -> Normal
+                        _ => task.priority + 1, // Normal/High/Higher -> next level
+                    };
+                    let task_desc = format!(
+                        "ID {} '{}' (P{} -> P{})",
+                        task_id, task.content, task.priority, new_priority
+                    );
+                    info!("Task: Cycling priority for task {}", task_desc);
+                    self.spawn_operation(Operation::Task(TaskOperation::CyclePriority {
+                        task_uuid: task_id,
+                        priority: new_priority,
+                    }));
                 } else {
-                    info!("Task: Cannot cycle priority - invalid UUID {}", task_id);
+                    info!("Task: Cannot cycle priority - task {} not found", task_id);
                 }
                 Action::None
             }
             Action::DeleteTask(task_id) => {
                 // Find task name for better logging
                 let sync_service = self.sync_service.clone();
-                let task_desc = if let Ok(task_uuid) = Uuid::parse_str(&task_id) {
-                    if let Ok(Some(task)) = sync_service.get_task_by_id(&task_uuid).await {
-                        format!("ID {} '{}'", task_id, task.content)
-                    } else {
-                        format!("ID {} [unknown]", task_id)
-                    }
+                let task_desc = if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
+                    format!("ID {} '{}'", task_id, task.content)
                 } else {
-                    format!("ID {} [invalid UUID]", task_id)
+                    format!("ID {} [unknown]", task_id)
                 };
                 info!("Task: Deleting task {}", task_desc);
-                self.spawn_task_operation("Delete task".to_string(), task_id);
+                self.spawn_operation(Operation::Task(TaskOperation::Delete(task_id)));
                 Action::None
             }
             Action::SetTaskDueToday(task_id) => {
                 // Find task name for better logging
                 let sync_service = self.sync_service.clone();
-                let task_id_str = task_id.to_string();
                 let task_desc = if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
                     format!("ID {} '{}'", task_id, task.content)
                 } else {
                     format!("ID {} [unknown]", task_id)
                 };
                 info!("Task: Setting due date to today for task {}", task_desc);
-                self.spawn_task_operation("Set task due today".to_string(), format!("{}|today", task_id_str));
+                self.spawn_operation(Operation::Task(TaskOperation::SetDueDate {
+                    task_uuid: task_id,
+                    due_date: TaskDueDate::Today,
+                }));
                 Action::None
             }
             Action::SetTaskDueTomorrow(task_id) => {
                 // Find task name for better logging
                 let sync_service = self.sync_service.clone();
-                let task_id_str = task_id.to_string();
                 let task_desc = if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
                     format!("ID {} '{}'", task_id, task.content)
                 } else {
                     format!("ID {} [unknown]", task_id)
                 };
                 info!("Task: Setting due date to tomorrow for task {}", task_desc);
-                self.spawn_task_operation("Set task due tomorrow".to_string(), format!("{}|tomorrow", task_id_str));
+                self.spawn_operation(Operation::Task(TaskOperation::SetDueDate {
+                    task_uuid: task_id,
+                    due_date: TaskDueDate::Tomorrow,
+                }));
                 Action::None
             }
             Action::SetTaskDueNextWeek(task_id) => {
                 // Find task name for better logging
                 let sync_service = self.sync_service.clone();
-                let task_id_str = task_id.to_string();
                 let task_desc = if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
                     format!("ID {} '{}'", task_id, task.content)
                 } else {
                     format!("ID {} [unknown]", task_id)
                 };
                 info!("Task: Setting due date to next week for task {}", task_desc);
-                self.spawn_task_operation(
-                    "Set task due next week".to_string(),
-                    format!("{}|next_week", task_id_str),
-                );
+                self.spawn_operation(Operation::Task(TaskOperation::SetDueDate {
+                    task_uuid: task_id,
+                    due_date: TaskDueDate::NextWeek,
+                }));
                 Action::None
             }
             Action::SetTaskDueWeekEnd(task_id) => {
                 // Find task name for better logging
                 let sync_service = self.sync_service.clone();
-                let task_id_str = task_id.to_string();
                 let task_desc = if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
                     format!("ID {} '{}'", task_id, task.content)
                 } else {
                     format!("ID {} [unknown]", task_id)
                 };
                 info!("Task: Setting due date to weekend for task {}", task_desc);
-                self.spawn_task_operation("Set task due weekend".to_string(), format!("{}|weekend", task_id_str));
+                self.spawn_operation(Operation::Task(TaskOperation::SetDueDate {
+                    task_uuid: task_id,
+                    due_date: TaskDueDate::Weekend,
+                }));
                 Action::None
             }
             Action::SetTasksDueDate { task_ids, due_date } => {
@@ -728,12 +729,12 @@ impl AppComponent {
             }
             Action::EditTask { task_uuid, content } => {
                 info!("Task: Editing task UUID {} with new content '{}'", task_uuid, content);
-                self.spawn_task_operation("Edit task".to_string(), format!("{}: {}", task_uuid, content));
+                self.spawn_operation(Operation::Task(TaskOperation::Edit { task_uuid, content }));
                 Action::None
             }
             Action::RestoreTask(task_id) => {
                 info!("Task: Restoring task {}", task_id);
-                self.spawn_task_operation("Restore task".to_string(), task_id);
+                self.spawn_operation(Operation::Task(TaskOperation::Restore(task_id)));
                 Action::None
             }
             Action::CreateProject { name, parent_uuid } => {
@@ -743,12 +744,7 @@ impl AppComponent {
                 };
                 info!("Project: Creating project '{}'{}", name, parent_desc);
 
-                // Format project info to include both name and parent_uuid
-                let project_info = match parent_uuid {
-                    Some(pid) => format!("{}|{}", name, pid),
-                    None => name,
-                };
-                self.spawn_task_operation("Create project".to_string(), project_info);
+                self.spawn_operation(Operation::Project(ProjectOperation::Create { name, parent_uuid }));
                 Action::None
             }
             Action::DeleteProject(project_id) => {
@@ -759,7 +755,7 @@ impl AppComponent {
                     format!("ID {} [unknown]", project_id)
                 };
                 info!("Project: Deleting project {}", project_desc);
-                self.spawn_task_operation("Delete project".to_string(), project_id.to_string());
+                self.spawn_operation(Operation::Project(ProjectOperation::Delete(project_id)));
                 Action::None
             }
             Action::DeleteLabel(label_id) => {
@@ -770,12 +766,12 @@ impl AppComponent {
                     format!("ID {} [unknown]", label_id)
                 };
                 info!("Label: Deleting label {}", label_desc);
-                self.spawn_task_operation("Delete label".to_string(), label_id.to_string());
+                self.spawn_operation(Operation::Label(LabelOperation::Delete(label_id)));
                 Action::None
             }
             Action::CreateLabel { name } => {
                 info!("Label: Creating label '{}'", name);
-                self.spawn_task_operation("Create label".to_string(), name);
+                self.spawn_operation(Operation::Label(LabelOperation::Create { name }));
                 Action::None
             }
             Action::EditProject { project_uuid, name } => {
@@ -786,7 +782,7 @@ impl AppComponent {
                     format!("UUID {} [unknown] -> '{}'", project_uuid, name)
                 };
                 info!("Project: Editing project {}", project_desc);
-                self.spawn_task_operation("Edit project".to_string(), format!("{}: {}", project_uuid, name));
+                self.spawn_operation(Operation::Project(ProjectOperation::Edit { project_uuid, name }));
                 Action::None
             }
             Action::EditLabel { label_uuid, name } => {
@@ -797,63 +793,51 @@ impl AppComponent {
                     format!("UUID {} [unknown] -> '{}'", label_uuid, name)
                 };
                 info!("Label: Editing label {}", label_desc);
-                self.spawn_task_operation("Edit label".to_string(), format!("{}: {}", label_uuid, name));
+                self.spawn_operation(Operation::Label(LabelOperation::Edit { label_uuid, name }));
                 Action::None
             }
-            Action::InitialDataLoaded {
-                projects,
-                labels,
-                sections,
-                tasks,
-                all_tasks,
-                navigation_counts,
-            } => {
+            Action::DataLoaded(snapshot) => {
+                if snapshot.generation != self.latest_requested_generation
+                    || snapshot.selection != self.state.sidebar_selection
+                {
+                    info!(
+                        "Data: Ignoring stale generation {} for {:?}; latest is {} for {:?}",
+                        snapshot.generation,
+                        snapshot.selection,
+                        self.latest_requested_generation,
+                        self.state.sidebar_selection
+                    );
+                    return Action::None;
+                }
                 info!(
-                    "InitialData: Loaded {} projects, {} labels, {} sections, {} tasks",
-                    projects.len(),
-                    labels.len(),
-                    sections.len(),
-                    tasks.len()
+                    "Data: Applying generation {} with {} projects, {} labels, {} sections, {} tasks",
+                    snapshot.generation,
+                    snapshot.projects.len(),
+                    snapshot.labels.len(),
+                    snapshot.sections.len(),
+                    snapshot.tasks.len()
                 );
-
-                // Update app state with loaded data
-                self.state
-                    .update_data(projects, labels, sections, tasks, all_tasks, navigation_counts);
-
-                // Set initial sidebar selection based on config (now we have projects loaded)
-                self.set_initial_sidebar_selection();
-                info!("AppComponent: Set initial sidebar selection after initial data load");
-
-                // Fetch data for the newly selected sidebar item
-                self.schedule_data_fetch();
-                info!("AppComponent: Scheduled data fetch for initial sidebar selection");
-
+                let was_initial = snapshot.is_initial;
+                self.apply_snapshot(*snapshot);
                 self.sync_component_data();
-                info!("InitialData: Updated all component data after initial data load");
+                if was_initial {
+                    self.set_initial_sidebar_selection();
+                    self.schedule_data_fetch();
+                }
                 Action::None
             }
-            Action::DataLoaded {
-                projects,
-                labels,
-                sections,
-                tasks,
-                all_tasks,
-                navigation_counts,
+            Action::DataLoadFailed {
+                generation,
+                selection,
+                message,
             } => {
-                info!(
-                    "Data: Loaded {} projects, {} labels, {} sections, {} tasks",
-                    projects.len(),
-                    labels.len(),
-                    sections.len(),
-                    tasks.len()
-                );
-
-                // Update app state with loaded data
-                self.state
-                    .update_data(projects, labels, sections, tasks, all_tasks, navigation_counts);
-                self.sync_component_data();
-                info!("Data: Updated all component data after data load");
-                Action::None
+                if generation != self.latest_requested_generation || selection != self.state.sidebar_selection {
+                    info!("Data: Ignoring stale failure for generation {}", generation);
+                    return Action::None;
+                }
+                self.state.loading = false;
+                self.state.error_message = Some(message.clone());
+                Action::ShowDialog(DialogType::Error(message))
             }
             Action::SearchTasks(query) => {
                 info!("Search: Starting database search for '{}'", query);
@@ -925,246 +909,14 @@ impl AppComponent {
         self.active_sync_task = Some(task_id);
     }
 
-    /// Spawn a generic task operation (now with actual API calls and data refresh)
-    fn spawn_task_operation(&mut self, operation_name: String, task_info: String) {
-        let description = format!("{}: {}", operation_name, task_info);
-        let op_name = operation_name.clone();
+    fn spawn_operation(&mut self, operation: Operation) {
+        let description = operation.description();
         let sync_service = self.sync_service.clone();
-        info!("Background: Spawning task operation '{}'", description);
+        info!("Background: Spawning typed operation '{}'", description);
 
-        let _task_id = self.task_manager.spawn_task_operation(
-            move || async move {
-                let result = match op_name.as_str() {
-                    "Complete task" => match Uuid::parse_str(&task_info) {
-                        Ok(task_uuid) => match sync_service.complete_task(&task_uuid).await {
-                            Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_COMPLETED, task_info)),
-                            Err(e) => Err(format!("{}: {}", ERROR_TASK_COMPLETION_FAILED, e)),
-                        },
-                        Err(e) => Err(format!("Invalid task UUID: {}", e)),
-                    },
-                    "Delete task" => match Uuid::parse_str(&task_info) {
-                        Ok(task_uuid) => match sync_service.delete_task(&task_uuid).await {
-                            Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_DELETED, task_info)),
-                            Err(e) => Err(format!("{}: {}", ERROR_TASK_DELETE_FAILED, e)),
-                        },
-                        Err(e) => Err(format!("Invalid task UUID: {}", e)),
-                    },
-                    "Cycle priority" => {
-                        // task_info format: "task_id|new_priority"
-                        if let Some((task_id_str, priority_str)) = task_info.split_once('|') {
-                            match Uuid::parse_str(task_id_str) {
-                                Ok(task_uuid) => {
-                                    if let Ok(priority) = priority_str.parse::<i32>() {
-                                        match sync_service.update_task_priority(&task_uuid, priority).await {
-                                            Ok(()) => Ok(format!(
-                                                "{}{}: {}",
-                                                SUCCESS_TASK_PRIORITY_UPDATED, priority, task_id_str
-                                            )),
-                                            Err(e) => Err(format!("{}: {}", ERROR_TASK_PRIORITY_FAILED, e)),
-                                        }
-                                    } else {
-                                        Err(ERROR_INVALID_PRIORITY_FORMAT.to_string())
-                                    }
-                                }
-                                Err(e) => Err(format!("Invalid task UUID: {}", e)),
-                            }
-                        } else {
-                            Err(ERROR_INVALID_PRIORITY_INFO.to_string())
-                        }
-                    }
-                    "Set task due today" => {
-                        // task_info format: "task_id|today"
-                        if let Some((task_id_str, _)) = task_info.split_once('|') {
-                            match Uuid::parse_str(task_id_str) {
-                                Ok(task_uuid) => {
-                                    let today = datetime::format_today();
-                                    match sync_service.update_task_due_date(&task_uuid, Some(&today)).await {
-                                        Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_DUE_TODAY, task_id_str)),
-                                        Err(e) => Err(format!("{}: {}", ERROR_TASK_DUE_DATE_FAILED, e)),
-                                    }
-                                }
-                                Err(e) => Err(format!("Invalid task UUID: {}", e)),
-                            }
-                        } else {
-                            Err(ERROR_INVALID_DATE_FORMAT.to_string())
-                        }
-                    }
-                    "Set task due tomorrow" => {
-                        // task_info format: "task_id|tomorrow"
-                        if let Some((task_id_str, _)) = task_info.split_once('|') {
-                            match Uuid::parse_str(task_id_str) {
-                                Ok(task_uuid) => {
-                                    let tomorrow = datetime::format_date_with_offset(1);
-                                    match sync_service.update_task_due_date(&task_uuid, Some(&tomorrow)).await {
-                                        Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_DUE_TOMORROW, task_id_str)),
-                                        Err(e) => Err(format!("{}: {}", ERROR_TASK_DUE_DATE_FAILED, e)),
-                                    }
-                                }
-                                Err(e) => Err(format!("Invalid task UUID: {}", e)),
-                            }
-                        } else {
-                            Err(ERROR_INVALID_DATE_FORMAT.to_string())
-                        }
-                    }
-                    "Set task due next week" => {
-                        // task_info format: "task_id|next_week"
-                        if let Some((task_id_str, _)) = task_info.split_once('|') {
-                            match Uuid::parse_str(task_id_str) {
-                                Ok(task_uuid) => {
-                                    let today = chrono::Local::now().date_naive();
-                                    let next_monday = crate::utils::datetime::next_weekday(today, chrono::Weekday::Mon);
-                                    let next_monday_str = crate::utils::datetime::format_ymd(next_monday);
-                                    match sync_service.update_task_due_date(&task_uuid, Some(&next_monday_str)).await {
-                                        Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_DUE_MONDAY, task_id_str)),
-                                        Err(e) => Err(format!("{}: {}", ERROR_TASK_DUE_DATE_FAILED, e)),
-                                    }
-                                }
-                                Err(e) => Err(format!("Invalid task UUID: {}", e)),
-                            }
-                        } else {
-                            Err(ERROR_INVALID_DATE_FORMAT.to_string())
-                        }
-                    }
-                    "Set task due weekend" => {
-                        // task_info format: "task_id|weekend"
-                        if let Some((task_id_str, _)) = task_info.split_once('|') {
-                            match Uuid::parse_str(task_id_str) {
-                                Ok(task_uuid) => {
-                                    let today = chrono::Local::now().date_naive();
-                                    let next_saturday =
-                                        crate::utils::datetime::next_weekday(today, chrono::Weekday::Sat);
-                                    let next_saturday_str = crate::utils::datetime::format_ymd(next_saturday);
-                                    match sync_service.update_task_due_date(&task_uuid, Some(&next_saturday_str)).await
-                                    {
-                                        Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_DUE_SATURDAY, task_id_str)),
-                                        Err(e) => Err(format!("{}: {}", ERROR_TASK_DUE_DATE_FAILED, e)),
-                                    }
-                                }
-                                Err(e) => Err(format!("Invalid task UUID: {}", e)),
-                            }
-                        } else {
-                            Err(ERROR_INVALID_DATE_FORMAT.to_string())
-                        }
-                    }
-                    "Create task" => {
-                        // task_info format: "content|project_id" or just "content" for inbox
-                        if let Some((content, project_id_str)) = task_info.split_once('|') {
-                            // Task has a specific project - parse the UUID
-                            match Uuid::parse_str(project_id_str) {
-                                Ok(project_uuid) => match sync_service.create_task(content, Some(project_uuid)).await {
-                                    Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_CREATED_PROJECT, content)),
-                                    Err(e) => Err(format!("{}: {}", ERROR_TASK_CREATE_FAILED, e)),
-                                },
-                                Err(e) => Err(format!("Invalid project UUID: {}", e)),
-                            }
-                        } else {
-                            // Task goes to inbox (no project_id)
-                            match sync_service.create_task(&task_info, None).await {
-                                Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_CREATED_INBOX, task_info)),
-                                Err(e) => Err(format!("{}: {}", ERROR_TASK_CREATE_FAILED, e)),
-                            }
-                        }
-                    }
-                    "Edit task" => {
-                        // task_info format: "task_id: new_content"
-                        if let Some((task_id_str, content)) = task_info.split_once(": ") {
-                            match Uuid::parse_str(task_id_str) {
-                                Ok(task_uuid) => match sync_service.update_task_content(&task_uuid, content).await {
-                                    Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_UPDATED, task_id_str)),
-                                    Err(e) => Err(format!("{}: {}", ERROR_TASK_UPDATE_FAILED, e)),
-                                },
-                                Err(e) => Err(format!("Invalid task UUID: {}", e)),
-                            }
-                        } else {
-                            Err(ERROR_INVALID_TASK_EDIT_FORMAT.to_string())
-                        }
-                    }
-                    "Restore task" => match Uuid::parse_str(&task_info) {
-                        Ok(task_uuid) => match sync_service.restore_task(&task_uuid).await {
-                            Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_RESTORED, task_info)),
-                            Err(e) => Err(format!("{}: {}", ERROR_TASK_RESTORE_FAILED, e)),
-                        },
-                        Err(e) => Err(format!("Invalid task UUID: {}", e)),
-                    },
-                    "Create project" => {
-                        // project_info format: "name|parent_id" or just "name" for root project
-                        if let Some((name, parent_id_str)) = task_info.split_once('|') {
-                            // Project has a parent - parse the UUID
-                            match Uuid::parse_str(parent_id_str) {
-                                Ok(parent_uuid) => match sync_service.create_project(name, Some(parent_uuid)).await {
-                                    Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_CREATED_PARENT, name)),
-                                    Err(e) => Err(format!("{}: {}", ERROR_PROJECT_CREATE_FAILED, e)),
-                                },
-                                Err(e) => Err(format!("Invalid parent project UUID: {}", e)),
-                            }
-                        } else {
-                            // Root project (no parent)
-                            match sync_service.create_project(&task_info, None).await {
-                                Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_CREATED_ROOT, task_info)),
-                                Err(e) => Err(format!("{}: {}", ERROR_PROJECT_CREATE_FAILED, e)),
-                            }
-                        }
-                    }
-                    "Delete project" => {
-                        // task_info is a UUID string
-                        match Uuid::parse_str(&task_info) {
-                            Ok(project_uuid) => match sync_service.delete_project(&project_uuid).await {
-                                Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_DELETED, task_info)),
-                                Err(e) => Err(format!("{}: {}", ERROR_PROJECT_DELETE_FAILED, e)),
-                            },
-                            Err(e) => Err(format!("Invalid project UUID: {}", e)),
-                        }
-                    }
-                    "Delete label" => {
-                        // task_info is a UUID string
-                        match Uuid::parse_str(&task_info) {
-                            Ok(label_uuid) => match sync_service.delete_label(&label_uuid).await {
-                                Ok(()) => Ok(format!("{}: {}", SUCCESS_LABEL_DELETED, task_info)),
-                                Err(e) => Err(format!("{}: {}", ERROR_LABEL_DELETE_FAILED, e)),
-                            },
-                            Err(e) => Err(format!("Invalid label UUID: {}", e)),
-                        }
-                    }
-                    "Create label" => match sync_service.create_label(&task_info).await {
-                        Ok(()) => Ok(format!("{}: {}", SUCCESS_LABEL_CREATED, task_info)),
-                        Err(e) => Err(format!("{}: {}", ERROR_LABEL_CREATE_FAILED, e)),
-                    },
-                    "Edit project" => {
-                        // task_info format: "project_id: new_name"
-                        if let Some((project_id_str, name)) = task_info.split_once(": ") {
-                            match Uuid::parse_str(project_id_str) {
-                                Ok(project_uuid) => {
-                                    match sync_service.update_project_content(&project_uuid, name).await {
-                                        Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_UPDATED, project_id_str)),
-                                        Err(e) => Err(format!("{}: {}", ERROR_PROJECT_UPDATE_FAILED, e)),
-                                    }
-                                }
-                                Err(e) => Err(format!("Invalid project UUID: {}", e)),
-                            }
-                        } else {
-                            Err(ERROR_INVALID_PROJECT_EDIT_FORMAT.to_string())
-                        }
-                    }
-                    "Edit label" => {
-                        // task_info format: "label_id: new_name"
-                        if let Some((label_id_str, name)) = task_info.split_once(": ") {
-                            match Uuid::parse_str(label_id_str) {
-                                Ok(label_uuid) => match sync_service.update_label_content(&label_uuid, name).await {
-                                    Ok(()) => Ok(format!("{}: {}", SUCCESS_LABEL_UPDATED, label_id_str)),
-                                    Err(e) => Err(format!("{}: {}", ERROR_LABEL_UPDATE_FAILED, e)),
-                                },
-                                Err(e) => Err(format!("Invalid label UUID: {}", e)),
-                            }
-                        } else {
-                            Err(ERROR_INVALID_LABEL_EDIT_FORMAT.to_string())
-                        }
-                    }
-                    _ => Err(format!("{}: {}", ERROR_UNKNOWN_OPERATION, op_name)),
-                };
-
-                result.map_err(|e: String| anyhow::anyhow!(e))
-            },
-            operation_name,
+        self.task_manager.spawn_task_operation(
+            move || async move { operation.execute(&sync_service).await },
+            description,
         );
     }
 
@@ -1182,18 +934,47 @@ impl AppComponent {
         }
     }
 
+    fn apply_snapshot(&mut self, snapshot: ViewSnapshot) {
+        self.latest_applied_generation = snapshot.generation;
+        self.state.loading = false;
+        self.state.update_data(
+            snapshot.projects,
+            snapshot.labels,
+            snapshot.sections,
+            snapshot.tasks,
+            snapshot.all_tasks,
+            snapshot.navigation_counts,
+        );
+    }
+
+    fn next_load_generation(&mut self) -> u64 {
+        let generation = self.next_load_generation;
+        self.next_load_generation += 1;
+        self.latest_requested_generation = generation;
+        self.state.loading = true;
+        generation
+    }
+
     /// Schedule a background task to fetch initial data after sync completion
     fn schedule_initial_data_fetch(&mut self) {
-        let _task_id =
-            self.task_manager
-                .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection.clone(), true);
+        let generation = self.next_load_generation();
+        let _task_id = self.task_manager.spawn_data_load(
+            self.sync_service.clone(),
+            self.state.sidebar_selection.clone(),
+            generation,
+            true,
+        );
     }
 
     /// Schedule a background task to fetch data after navigation or changes
     fn schedule_data_fetch(&mut self) {
-        let _task_id =
-            self.task_manager
-                .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection.clone(), false);
+        let generation = self.next_load_generation();
+        let _task_id = self.task_manager.spawn_data_load(
+            self.sync_service.clone(),
+            self.state.sidebar_selection.clone(),
+            generation,
+            false,
+        );
     }
 
     /// Process background actions from task manager
@@ -1467,5 +1248,152 @@ impl AppComponent {
 
         f.render_widget(Clear, popup_area);
         f.render_widget(content, popup_area);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entities::{backend, project};
+    use crate::storage::LocalStorage;
+    use sea_orm::{EntityTrait, Set};
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    async fn test_app() -> (AppComponent, Arc<Mutex<LocalStorage>>, std::path::PathBuf) {
+        let db_path = std::env::temp_dir().join(format!("terminalist-snapshot-{}.db", Uuid::new_v4()));
+        let storage = Arc::new(Mutex::new(LocalStorage::new_at(db_path.clone()).await.unwrap()));
+        let sync_service = SyncService::new_for_test(storage.clone(), Uuid::new_v4());
+        (AppComponent::new(sync_service, Config::default()), storage, db_path)
+    }
+
+    fn snapshot(generation: u64, selection: SidebarSelection, projects: Vec<project::Model>) -> ViewSnapshot {
+        ViewSnapshot {
+            generation,
+            selection,
+            is_initial: false,
+            projects,
+            labels: Vec::new(),
+            sections: Vec::new(),
+            tasks: Vec::new(),
+            all_tasks: Vec::new(),
+            navigation_counts: NavigationCounts::default(),
+        }
+    }
+
+    fn project_named(name: &str) -> project::Model {
+        project::Model {
+            uuid: Uuid::new_v4(),
+            backend_uuid: Uuid::new_v4(),
+            remote_id: name.to_string(),
+            name: name.to_string(),
+            is_favorite: false,
+            is_inbox_project: false,
+            order_index: 0,
+            parent_uuid: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn stale_view_snapshot_cannot_replace_the_latest_navigation_result() {
+        let (mut app, storage, db_path) = test_app().await;
+        app.latest_requested_generation = 2;
+        app.state.sidebar_selection = SidebarSelection::Tomorrow;
+
+        app.handle_app_action(Action::DataLoaded(Box::new(snapshot(
+            2,
+            SidebarSelection::Tomorrow,
+            vec![project_named("Latest")],
+        ))))
+        .await;
+        app.handle_app_action(Action::DataLoaded(Box::new(snapshot(
+            1,
+            SidebarSelection::Today,
+            vec![project_named("Stale")],
+        ))))
+        .await;
+
+        assert_eq!(app.latest_applied_generation, 2);
+        assert_eq!(app.state.projects[0].name, "Latest");
+        storage.lock().await.conn.clone().close().await.unwrap();
+        std::fs::remove_file(db_path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn current_load_failure_preserves_the_last_accepted_snapshot() {
+        let (mut app, storage, db_path) = test_app().await;
+        app.latest_requested_generation = 3;
+        app.state.sidebar_selection = SidebarSelection::Upcoming;
+        app.state.projects = vec![project_named("Still visible")];
+
+        let follow_up = app
+            .handle_app_action(Action::DataLoadFailed {
+                generation: 3,
+                selection: SidebarSelection::Upcoming,
+                message: "offline".to_string(),
+            })
+            .await;
+
+        assert!(matches!(follow_up, Action::ShowDialog(DialogType::Error(_))));
+        assert_eq!(app.state.projects[0].name, "Still visible");
+        assert_eq!(app.state.error_message.as_deref(), Some("offline"));
+        storage.lock().await.conn.clone().close().await.unwrap();
+        std::fs::remove_file(db_path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn startup_loads_cached_data_when_the_backend_is_unavailable() {
+        let db_path = std::env::temp_dir().join(format!("terminalist-offline-{}.db", Uuid::new_v4()));
+        let storage = LocalStorage::new_at(db_path.clone()).await.unwrap();
+        let backend_uuid = Uuid::new_v4();
+
+        backend::Entity::insert(backend::ActiveModel {
+            uuid: Set(backend_uuid),
+            backend_type: Set("test".to_string()),
+            name: Set("Unavailable backend".to_string()),
+            is_enabled: Set(true),
+            credentials: Set("{}".to_string()),
+            settings: Set("{}".to_string()),
+        })
+        .exec(&storage.conn)
+        .await
+        .unwrap();
+        project::Entity::insert(project::ActiveModel {
+            uuid: Set(Uuid::new_v4()),
+            backend_uuid: Set(backend_uuid),
+            remote_id: Set("cached-project".to_string()),
+            name: Set("Cached project".to_string()),
+            is_favorite: Set(false),
+            is_inbox_project: Set(false),
+            order_index: Set(1),
+            parent_uuid: Set(None),
+        })
+        .exec(&storage.conn)
+        .await
+        .unwrap();
+
+        let storage = Arc::new(Mutex::new(storage));
+        let sync_service = SyncService::new_for_test(storage.clone(), backend_uuid);
+        let mut app = AppComponent::new(sync_service, Config::default());
+        app.trigger_initial_sync();
+
+        for _ in 0..100 {
+            tokio::task::yield_now().await;
+            let actions = app.process_background_actions();
+            for action in actions {
+                app.handle_app_action(action).await;
+            }
+            if app.total_projects() == 1 && app.state.error_message.is_some() {
+                break;
+            }
+        }
+
+        assert_eq!(app.total_projects(), 1);
+        assert_eq!(app.state.projects[0].name, "Cached project");
+        assert!(app.state.error_message.is_some());
+
+        app.task_manager.cancel_all_tasks();
+        storage.lock().await.conn.clone().close().await.unwrap();
+        std::fs::remove_file(db_path).unwrap();
     }
 }

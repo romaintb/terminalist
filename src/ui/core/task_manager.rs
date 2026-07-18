@@ -1,4 +1,5 @@
 use super::actions::{Action, NavigationCounts, SidebarSelection};
+use super::ViewSnapshot;
 use crate::constants::UI_LOADING_DATA_FROM_STORAGE;
 use crate::sync::{SyncService, SyncStatus};
 use std::collections::HashMap;
@@ -20,14 +21,7 @@ pub enum TaskResult {
     SyncCompleted(SyncStatus),
     SyncFailed(String),
     TaskOperationCompleted(String),
-    DataLoadCompleted {
-        projects: Vec<crate::entities::project::Model>,
-        labels: Vec<crate::entities::label::Model>,
-        sections: Vec<crate::entities::section::Model>,
-        tasks: Vec<crate::entities::task::Model>,
-        all_tasks: Vec<crate::entities::task::Model>,
-        navigation_counts: NavigationCounts,
-    },
+    DataLoadCompleted(Box<ViewSnapshot>),
     SearchCompleted {
         query: String,
         results: Vec<crate::entities::task::Model>,
@@ -208,6 +202,7 @@ impl TaskManager {
         &mut self,
         sync_service: SyncService,
         sidebar_selection: SidebarSelection,
+        generation: u64,
         is_initial_load: bool,
     ) -> TaskId {
         let task_id = self.next_task_id;
@@ -224,23 +219,15 @@ impl TaskManager {
             ) {
                 (Ok(projects), Ok(labels), Ok(sections)) => {
                     // Get tasks based on sidebar selection
-                    let tasks = match sidebar_selection {
+                    let tasks = match &sidebar_selection {
                         SidebarSelection::Today => sync_service.get_tasks_for_today().await.unwrap_or_default(),
                         SidebarSelection::Tomorrow => sync_service.get_tasks_for_tomorrow().await.unwrap_or_default(),
                         SidebarSelection::Upcoming => sync_service.get_tasks_for_upcoming().await.unwrap_or_default(),
-                        SidebarSelection::Project(index) => {
-                            if let Some(project) = projects.get(index) {
-                                sync_service.get_tasks_for_project(&project.uuid).await.unwrap_or_default()
-                            } else {
-                                Vec::new()
-                            }
+                        SidebarSelection::Project(project_uuid) => {
+                            sync_service.get_tasks_for_project(project_uuid).await.unwrap_or_default()
                         }
-                        SidebarSelection::Label(index) => {
-                            if let Some(label) = labels.get(index) {
-                                sync_service.get_tasks_with_label(label.uuid).await.unwrap_or_default()
-                            } else {
-                                Vec::new()
-                            }
+                        SidebarSelection::Label(label_uuid) => {
+                            sync_service.get_tasks_with_label(*label_uuid).await.unwrap_or_default()
                         }
                     };
                     let all_tasks = sync_service.get_all_tasks().await.unwrap_or_default();
@@ -269,7 +256,10 @@ impl TaskManager {
                         navigation_counts.labels.insert(label.uuid, count);
                     }
 
-                    let result = TaskResult::DataLoadCompleted {
+                    let snapshot = ViewSnapshot {
+                        generation,
+                        selection: sidebar_selection,
+                        is_initial: is_initial_load,
                         projects: projects.clone(),
                         labels: labels.clone(),
                         sections: sections.clone(),
@@ -277,35 +267,17 @@ impl TaskManager {
                         all_tasks: all_tasks.clone(),
                         navigation_counts: navigation_counts.clone(),
                     };
-
-                    let action = if is_initial_load {
-                        Action::InitialDataLoaded {
-                            projects,
-                            labels,
-                            sections,
-                            tasks,
-                            all_tasks,
-                            navigation_counts,
-                        }
-                    } else {
-                        Action::DataLoaded {
-                            projects,
-                            labels,
-                            sections,
-                            tasks,
-                            all_tasks,
-                            navigation_counts,
-                        }
-                    };
-                    let _ = action_sender.send(action);
-
+                    let result = TaskResult::DataLoadCompleted(Box::new(snapshot.clone()));
+                    let _ = action_sender.send(Action::DataLoaded(Box::new(snapshot)));
                     Ok(result)
                 }
                 (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => {
                     let error_msg = format!("Failed to load data: {}", e);
-                    let _ = action_sender.send(Action::ShowDialog(crate::ui::core::actions::DialogType::Error(
-                        error_msg.clone(),
-                    )));
+                    let _ = action_sender.send(Action::DataLoadFailed {
+                        generation,
+                        selection: sidebar_selection,
+                        message: error_msg.clone(),
+                    });
                     Ok(TaskResult::Other(error_msg))
                 }
             }

@@ -27,18 +27,13 @@ pub enum SidebarItemType {
     Project {
         project: project::Model,
         account_id: String,
-        original_index: usize,
         depth: usize,
         is_last_sibling: bool,
         has_children: bool,
         is_expanded: bool,
     },
     /// Label item (with account affiliation)
-    Label {
-        label: label::Model,
-        account_id: String,
-        original_index: usize,
-    },
+    Label { label: label::Model, account_id: String },
     /// Visual separator
     Separator { indent: usize },
 }
@@ -109,7 +104,6 @@ impl SidebarItem for SidebarItemType {
 
             SidebarItemType::Project {
                 project,
-                original_index,
                 depth,
                 is_last_sibling,
                 has_children,
@@ -118,7 +112,7 @@ impl SidebarItem for SidebarItemType {
             } => {
                 let is_selected = matches!(
                     current_selection,
-                    SidebarSelection::Project(idx) if idx == original_index
+                    SidebarSelection::Project(uuid) if uuid == &project.uuid
                 );
                 let style = if is_selected {
                     Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -159,12 +153,10 @@ impl SidebarItem for SidebarItemType {
                 ListItem::new(Line::from(spans))
             }
 
-            SidebarItemType::Label {
-                label, original_index, ..
-            } => {
+            SidebarItemType::Label { label, .. } => {
                 let is_selected = matches!(
                     current_selection,
-                    SidebarSelection::Label(idx) if idx == original_index
+                    SidebarSelection::Label(uuid) if uuid == &label.uuid
                 );
                 let style = if is_selected {
                     Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)
@@ -217,8 +209,8 @@ impl SidebarItem for SidebarItemType {
         match self {
             SidebarItemType::SpecialView { selection, .. } => Some(selection.clone()),
             SidebarItemType::AccountFolder { .. } => None,
-            SidebarItemType::Project { original_index, .. } => Some(SidebarSelection::Project(*original_index)),
-            SidebarItemType::Label { original_index, .. } => Some(SidebarSelection::Label(*original_index)),
+            SidebarItemType::Project { project, .. } => Some(SidebarSelection::Project(project.uuid)),
+            SidebarItemType::Label { label, .. } => Some(SidebarSelection::Label(label.uuid)),
             SidebarItemType::Separator { .. } => None,
         }
     }
