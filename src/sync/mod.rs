@@ -95,6 +95,17 @@ pub enum SyncStatus {
 }
 
 impl SyncService {
+    #[cfg(test)]
+    pub(crate) fn new_for_test(storage: Arc<Mutex<LocalStorage>>, backend_uuid: Uuid) -> Self {
+        Self {
+            backend_registry: Arc::new(crate::backend_registry::BackendRegistry::new(storage.clone())),
+            backend_uuid,
+            storage,
+            sync_in_progress: Arc::new(Mutex::new(false)),
+            debug_mode: false,
+        }
+    }
+
     /// Creates a new `SyncService` instance with the provided backend registry.
     ///
     /// This creates a sync service that manages synchronization for a specific backend.
@@ -256,44 +267,13 @@ impl SyncService {
             let storage = self.storage.lock().await;
             info!("💾 Storing data in local database...");
 
-            // Store projects
-            if let Err(e) = self.store_projects_batch(&storage, &projects).await {
-                error!("❌ Failed to store projects: {e}");
+            if let Err(e) = self.store_snapshot(&storage, &projects, &labels, &sections, &tasks).await {
+                error!("❌ Failed to refresh local cache: {e:#}");
                 return Ok(SyncStatus::Error {
-                    message: format!("Failed to store projects: {e}"),
+                    message: format!("Failed to refresh local cache: {e:#}"),
                 });
             }
-            info!("✅ Stored projects in database");
-
-            // Store labels BEFORE tasks so task-label relationships can be created
-            if let Err(e) = self.store_labels_batch(&storage, &labels).await {
-                error!("❌ Failed to store labels: {e}");
-                return Ok(SyncStatus::Error {
-                    message: format!("Failed to store labels: {e}"),
-                });
-            }
-            info!("✅ Stored labels in database");
-
-            // Store sections BEFORE tasks since tasks have foreign key references to sections
-            if !sections.is_empty() {
-                if let Err(e) = self.store_sections_batch(&storage, &sections).await {
-                    error!("❌ Failed to store sections: {e}");
-                    return Ok(SyncStatus::Error {
-                        message: format!("Failed to store sections: {e}"),
-                    });
-                }
-                info!("✅ Stored sections in database");
-            } else {
-                info!("⚠️  No sections to store (skipped due to backend issue)");
-            }
-
-            if let Err(e) = self.store_tasks_batch(&storage, &tasks).await {
-                error!("❌ Failed to store tasks: {e}");
-                return Ok(SyncStatus::Error {
-                    message: format!("Failed to store tasks: {e}"),
-                });
-            }
-            info!("✅ Stored tasks in database");
+            info!("✅ Refreshed local cache transactionally");
         }
 
         Ok(SyncStatus::Success)
