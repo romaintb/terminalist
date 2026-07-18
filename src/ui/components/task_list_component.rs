@@ -472,10 +472,15 @@ impl TaskListComponent {
         self.marked_task_ids.len()
     }
 
-    pub fn visible_task_count(&self) -> usize {
+    pub fn visible_incomplete_task_count(&self) -> usize {
         self.items
             .iter()
-            .filter(|item| matches!(item, TaskListItemType::Task(_)))
+            .filter(|item| {
+                matches!(
+                    item,
+                    TaskListItemType::Task(task) if !task.task.is_completed && !task.task.is_deleted
+                )
+            })
             .count()
     }
 

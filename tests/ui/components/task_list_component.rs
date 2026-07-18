@@ -101,7 +101,7 @@ fn today_shows_a_matching_subtask_when_its_parent_is_filtered_out() {
         SidebarSelection::Today,
     );
 
-    assert_eq!(component.visible_task_count(), 1);
+    assert_eq!(component.visible_incomplete_task_count(), 1);
     let visible_subtask = component.items.iter().find_map(|item| match item {
         TaskListItemType::Task(item) => Some(item),
         _ => None,
@@ -110,6 +110,18 @@ fn today_shows_a_matching_subtask_when_its_parent_is_filtered_out() {
         visible_subtask.and_then(|item| item.parent_context.as_deref()),
         Some("Parent task")
     );
+}
+
+#[test]
+fn visible_count_excludes_completed_and_deleted_tasks() {
+    let project = project();
+    let pending = task("pending", project.uuid, false);
+    let completed = task("completed", project.uuid, true);
+    let mut deleted = task("deleted", project.uuid, false);
+    deleted.is_deleted = true;
+    let component = component_with_tasks(vec![pending, completed, deleted], project);
+
+    assert_eq!(component.visible_incomplete_task_count(), 1);
 }
 
 #[test]

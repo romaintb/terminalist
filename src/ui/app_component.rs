@@ -247,7 +247,7 @@ impl AppComponent {
             self.state.projects.clone(),
             self.state.labels.clone(),
             self.state.navigation_counts.clone(),
-            self.task_list.visible_task_count(),
+            self.task_list.visible_incomplete_task_count(),
         );
 
         // Update dialog
