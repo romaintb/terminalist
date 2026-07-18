@@ -30,6 +30,7 @@ pub mod actions;
 pub mod component;
 pub mod context;
 pub mod event_handler;
+pub mod operations;
 pub mod task_manager;
 
 // Re-export core types for easier access from other modules
@@ -37,4 +38,5 @@ pub use actions::{Action, DialogType, SidebarSelection};
 pub use component::Component;
 pub use context::AppContext;
 pub use event_handler::{EventHandler, EventType};
+pub use operations::{LabelOperation, Operation, ProjectOperation, TaskOperation};
 pub use task_manager::{TaskId, TaskManager, TaskResult};

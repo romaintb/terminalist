@@ -11,7 +11,7 @@ pub struct NavigationCounts {
     pub labels: HashMap<Uuid, usize>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum TaskDueDate {
     None,
     Today,
@@ -39,10 +39,10 @@ pub enum Action {
     PreviousTask,
 
     // Task operations
-    CompleteTask(String),
+    CompleteTask(Uuid),
     ToggleTasks(Vec<(Uuid, bool)>),
-    DeleteTask(String),
-    CyclePriority(String),
+    DeleteTask(Uuid),
+    CyclePriority(Uuid),
     SetTaskDueToday(Uuid),
     SetTaskDueTomorrow(Uuid),
     SetTaskDueNextWeek(Uuid),
@@ -59,7 +59,7 @@ pub enum Action {
         task_uuid: Uuid,
         content: String,
     },
-    RestoreTask(String),
+    RestoreTask(Uuid),
 
     // Project operations
     CreateProject {

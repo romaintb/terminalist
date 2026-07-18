@@ -684,7 +684,7 @@ impl Component for TaskListComponent {
                 if let Some(task) = self.get_selected_task() {
                     // If task is already deleted, restore it; otherwise show delete confirmation
                     if task.is_deleted {
-                        Action::RestoreTask(task.uuid.to_string())
+                        Action::RestoreTask(task.uuid)
                     } else {
                         Action::ShowDialog(DialogType::DeleteConfirmation {
                             item_type: "task".to_string(),
@@ -697,7 +697,7 @@ impl Component for TaskListComponent {
             }
             KeyCode::Char('p') => {
                 if let Some(task) = self.get_selected_task() {
-                    Action::CyclePriority(task.uuid.to_string())
+                    Action::CyclePriority(task.uuid)
                 } else {
                     Action::None
                 }
