@@ -1191,7 +1191,7 @@ impl AppComponent {
         let shortcuts = [
             ("j/k", "navigate"),
             ("x", "select"),
-            ("u", "unschedule"),
+            ("Space", "complete"),
             ("a", "add"),
             ("t", "today"),
             ("/", "search"),
