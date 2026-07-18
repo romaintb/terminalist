@@ -45,8 +45,10 @@ currently highlighted task.
 
 - **`/`** Open search dialog
 - **Type** Search across all tasks by content
-- **`j/k`** or **`↑/↓`** Select a search result
-- **`t`** Set the selected result's due date to today
+- **`↓`** Move focus from the query to search results
+- **`j/k`** or **`↑/↓`** Navigate focused search results
+- **`t`** Set the focused result's due date to today
+- **`Enter`** No action
 - **`Esc`** Close search dialog
 - **`Backspace/Delete`** Edit search query
 - **`Left/Right`** Move cursor in search box
