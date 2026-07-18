@@ -90,7 +90,7 @@ pub struct CreateProjectArgs {
 pub struct CreateTaskArgs {
     pub content: String,
     pub description: Option<String>,
-    pub project_remote_id: String,
+    pub project_remote_id: Option<String>,
     pub section_remote_id: Option<String>,
     pub parent_remote_id: Option<String>,
     pub priority: Option<i32>,

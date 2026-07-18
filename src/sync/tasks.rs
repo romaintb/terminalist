@@ -146,7 +146,7 @@ impl SyncService {
         let task_args = crate::backend::CreateTaskArgs {
             content: content.to_string(),
             description: None,
-            project_remote_id: remote_project_id.unwrap_or_default(),
+            project_remote_id: remote_project_id,
             section_remote_id: None,
             parent_remote_id: None,
             priority: None,
@@ -449,7 +449,7 @@ impl SyncService {
             let task_args = crate::backend::CreateTaskArgs {
                 content: task.content.clone(),
                 description: task.description.clone().filter(|d| !d.is_empty()),
-                project_remote_id: remote_project_id,
+                project_remote_id: Some(remote_project_id),
                 section_remote_id: remote_section_id,
                 parent_remote_id: remote_parent_id,
                 priority: Some(task.priority),

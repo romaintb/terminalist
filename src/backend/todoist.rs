@@ -85,6 +85,26 @@ impl TodoistBackend {
             order_index: api_section.section_order,
         }
     }
+
+    fn task_create_args_to_todoist(args: CreateTaskArgs) -> crate::todoist::CreateTaskArgs {
+        crate::todoist::CreateTaskArgs {
+            content: args.content,
+            description: args.description,
+            project_id: args.project_remote_id,
+            section_id: args.section_remote_id,
+            parent_id: args.parent_remote_id,
+            priority: args.priority,
+            due_date: args.due_date,
+            due_datetime: args.due_datetime,
+            labels: Some(args.labels),
+            duration: args
+                .duration
+                .as_deref()
+                .and_then(|duration| duration.split_whitespace().next())
+                .and_then(|amount| amount.parse().ok()),
+            ..Default::default()
+        }
+    }
 }
 
 #[async_trait]
@@ -230,27 +250,7 @@ impl Backend for TodoistBackend {
     }
 
     async fn create_task(&self, args: CreateTaskArgs) -> Result<BackendTask, BackendError> {
-        let todoist_args = crate::todoist::CreateTaskArgs {
-            content: args.content,
-            description: args.description,
-            project_id: Some(args.project_remote_id),
-            section_id: args.section_remote_id,
-            parent_id: args.parent_remote_id,
-            priority: args.priority,
-            due_date: args.due_date,
-            due_datetime: args.due_datetime,
-            labels: Some(args.labels),
-            duration: args.duration.as_ref().and_then(|d| {
-                // CreateTaskArgs.duration is Option<i32> (just the amount)
-                let parts: Vec<&str> = d.split_whitespace().collect();
-                if !parts.is_empty() {
-                    parts[0].parse().ok()
-                } else {
-                    None
-                }
-            }),
-            ..Default::default()
-        };
+        let todoist_args = Self::task_create_args_to_todoist(args);
 
         let task = self
             .wrapper
@@ -368,5 +368,30 @@ impl Backend for TodoistBackend {
             .delete_label(remote_id)
             .await
             .map_err(|e| BackendError::Network(e.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn creating_an_inbox_task_omits_the_project_id() {
+        let args = CreateTaskArgs {
+            content: "Inbox task".to_string(),
+            description: None,
+            project_remote_id: None,
+            section_remote_id: None,
+            parent_remote_id: None,
+            priority: None,
+            due_date: None,
+            due_datetime: None,
+            duration: None,
+            labels: Vec::new(),
+        };
+
+        let todoist_args = TodoistBackend::task_create_args_to_todoist(args);
+
+        assert_eq!(todoist_args.project_id, None);
     }
 }
