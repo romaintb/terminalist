@@ -582,7 +582,14 @@ impl Component for SidebarComponent {
 
         let first = self.list_state.offset();
         for (row, item) in self.items.iter().skip(first).take(available_height).enumerate() {
-            let count_area = Rect::new(rect.x + 1, rect.y + 1 + row as u16, rect.width.saturating_sub(3), 1);
+            let count = self.item_count(item).to_string();
+            let count_width = count.chars().count() as u16;
+            let count_area = Rect::new(
+                rect.right().saturating_sub(count_width + 1),
+                rect.y + 1 + row as u16,
+                count_width,
+                1,
+            );
             let count_style = if item.get_selection().as_ref() == Some(&self.selection) {
                 Style::default()
                     .fg(Color::Yellow)
@@ -591,12 +598,7 @@ impl Component for SidebarComponent {
             } else {
                 Style::default().fg(Color::DarkGray)
             };
-            f.render_widget(
-                Paragraph::new(self.item_count(item).to_string())
-                    .alignment(ratatui::layout::Alignment::Right)
-                    .style(count_style),
-                count_area,
-            );
+            f.render_widget(Paragraph::new(count).style(count_style), count_area);
         }
 
         // Render scrollbar using helper
@@ -647,5 +649,19 @@ mod tests {
             .collect::<String>();
         assert!(row.contains('0'));
         assert!(!row.contains("14"));
+    }
+
+    #[test]
+    fn inactive_item_text_is_not_dimmed_by_the_count_overlay() {
+        let mut sidebar = SidebarComponent::new();
+        sidebar.update_data(Vec::new(), Vec::new(), NavigationCounts::default(), 0);
+        let backend = TestBackend::new(30, 10);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal.draw(|frame| sidebar.render(frame, frame.area())).unwrap();
+
+        let buffer = terminal.backend().buffer();
+        assert_eq!(buffer.cell((2, 2)).unwrap().fg, Color::White);
+        assert_eq!(buffer.cell((28, 2)).unwrap().fg, Color::DarkGray);
     }
 }
