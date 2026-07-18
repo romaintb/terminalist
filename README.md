@@ -70,9 +70,8 @@ We support Homebrew for installation! For other distributions (Debian/Ubuntu, Fe
 
 ### 1. Get your Todoist API Token
 
-1. Go to [Todoist Integrations Settings](https://todoist.com/prefs/integrations)
-2. Find the "API token" section
-3. Copy your API token
+1. Go to [Todoist Developer Settings](https://app.todoist.com/app/settings/integrations/developer)
+2. Copy your API token
 
 ### 2. Set Environment Variable
 
