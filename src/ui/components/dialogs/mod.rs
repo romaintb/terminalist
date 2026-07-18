@@ -1,4 +1,4 @@
-mod common;
+pub(crate) mod common;
 
 pub mod label_dialogs;
 pub mod project_dialogs;

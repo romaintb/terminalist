@@ -17,7 +17,9 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{layout::Rect, widgets::ScrollbarState, Frame};
 use uuid::Uuid;
 
-use crate::ui::components::dialogs::{label_dialogs, project_dialogs, scroll_behavior, system_dialogs, task_dialogs};
+use crate::ui::components::dialogs::{
+    common, label_dialogs, project_dialogs, scroll_behavior, system_dialogs, task_dialogs,
+};
 
 /// Modal dialog component that handles various user interactions.
 ///
@@ -58,6 +60,8 @@ pub struct DialogComponent {
     pub scrollbar_state: ScrollbarState,
     // Task search state
     pub search_results: Vec<task::Model>,
+    pub search_selected_index: usize,
+    pub search_results_focused: bool,
     pub sync_service: Option<SyncService>,
     pub display_config: DisplayConfig,
 }
@@ -86,6 +90,8 @@ impl DialogComponent {
             scroll_offset: 0,
             scrollbar_state: ScrollbarState::new(0),
             search_results: Vec::new(),
+            search_selected_index: 0,
+            search_results_focused: false,
             sync_service: None,
             display_config: DisplayConfig::default(),
         }
@@ -136,6 +142,10 @@ impl DialogComponent {
         // Only update if this is for the current query (avoid race conditions)
         if query == self.input_buffer {
             self.search_results = results;
+            self.search_selected_index = self.search_selected_index.min(self.search_results.len().saturating_sub(1));
+            if self.search_results.is_empty() {
+                self.search_results_focused = false;
+            }
         }
     }
 
@@ -418,7 +428,7 @@ impl DialogComponent {
         // Clear the area
         f.render_widget(Clear, popup_area);
 
-        // Split into input area and results area
+        // Split into input, results, and search-specific shortcut areas
         let content_area = popup_area.inner(Margin {
             horizontal: 1,
             vertical: 1,
@@ -427,6 +437,7 @@ impl DialogComponent {
         let layout = Layout::vertical([
             Constraint::Length(3), // Input area
             Constraint::Min(0),    // Results area
+            Constraint::Length(1), // Search shortcuts
         ])
         .split(content_area);
 
@@ -446,8 +457,10 @@ impl DialogComponent {
         );
         f.render_widget(input_paragraph, layout[0]);
 
-        // Set cursor position in input field
-        f.set_cursor_position((layout[0].x + 1 + self.cursor_position as u16, layout[0].y + 1));
+        // Show the terminal cursor only while the query field has focus.
+        if !self.search_results_focused {
+            f.set_cursor_position((layout[0].x + 1 + self.cursor_position as u16, layout[0].y + 1));
+        }
 
         // Render search results
         let results_text = if self.search_results.is_empty() {
@@ -463,7 +476,8 @@ impl DialogComponent {
         let results_list: Vec<ListItem> = self
             .search_results
             .iter()
-            .map(|task| {
+            .enumerate()
+            .map(|(index, task)| {
                 // TODO: Load task-label relationships from database
                 let task_labels = Vec::new();
 
@@ -478,7 +492,11 @@ impl DialogComponent {
                 );
 
                 // Use the same render method as main task list
-                TaskListItem::render(&task_item, false, &self.display_config)
+                TaskListItem::render(
+                    &task_item,
+                    self.search_results_focused && self.search_selected_index == index,
+                    &self.display_config,
+                )
             })
             .collect();
 
@@ -489,6 +507,25 @@ impl DialogComponent {
 
         let results_list_widget = List::new(results_list).block(results_block);
         f.render_widget(results_list_widget, layout[1]);
+
+        let instructions = if self.search_results_focused {
+            [
+                ("j/k or ↑/↓", Color::Cyan, " Navigate"),
+                common::shortcuts::SEPARATOR,
+                ("t", Color::Cyan, " Today"),
+                common::shortcuts::SEPARATOR,
+                ("Esc", Color::Red, " Close"),
+            ]
+        } else {
+            [
+                ("Type", Color::Cyan, " Search"),
+                common::shortcuts::SEPARATOR,
+                ("↓", Color::Cyan, " Results"),
+                common::shortcuts::SEPARATOR,
+                ("Esc", Color::Red, " Close"),
+            ]
+        };
+        f.render_widget(common::create_instructions_paragraph(&instructions), layout[2]);
     }
 
     fn render_logs_dialog(&mut self, f: &mut Frame, area: Rect) {
@@ -602,8 +639,48 @@ impl Component for DialogComponent {
             },
             Some(DialogType::TaskSearch) => match key.code {
                 KeyCode::Esc => Action::HideDialog,
-                KeyCode::Enter => Action::HideDialog,
-                KeyCode::Char(c) => {
+                KeyCode::Enter => Action::None,
+                KeyCode::Down => {
+                    if !self.search_results_focused {
+                        if !self.search_results.is_empty() {
+                            self.search_results_focused = true;
+                            self.search_selected_index =
+                                self.search_selected_index.min(self.search_results.len().saturating_sub(1));
+                        }
+                    } else if self.search_selected_index + 1 < self.search_results.len() {
+                        self.search_selected_index += 1;
+                    }
+                    Action::None
+                }
+                KeyCode::Up => {
+                    if self.search_results_focused {
+                        if self.search_selected_index == 0 {
+                            self.search_results_focused = false;
+                        } else {
+                            self.search_selected_index -= 1;
+                        }
+                    }
+                    Action::None
+                }
+                KeyCode::Char('j') if self.search_results_focused => {
+                    if self.search_selected_index + 1 < self.search_results.len() {
+                        self.search_selected_index += 1;
+                    }
+                    Action::None
+                }
+                KeyCode::Char('k') if self.search_results_focused => {
+                    if self.search_selected_index == 0 {
+                        self.search_results_focused = false;
+                    } else {
+                        self.search_selected_index -= 1;
+                    }
+                    Action::None
+                }
+                KeyCode::Char('t') if self.search_results_focused => self
+                    .search_results
+                    .get(self.search_selected_index)
+                    .map_or(Action::None, |task| Action::SetTaskDueToday(task.uuid)),
+                KeyCode::Char(c) if !self.search_results_focused => {
                     let byte_pos: usize = self
                         .input_buffer
                         .chars()
@@ -614,7 +691,7 @@ impl Component for DialogComponent {
                     self.cursor_position += 1;
                     self.trigger_search()
                 }
-                KeyCode::Backspace => {
+                KeyCode::Backspace if !self.search_results_focused => {
                     if self.cursor_position > 0 {
                         let byte_pos: usize = self
                             .input_buffer
@@ -634,7 +711,7 @@ impl Component for DialogComponent {
                     }
                     Action::None
                 }
-                KeyCode::Delete => {
+                KeyCode::Delete if !self.search_results_focused => {
                     let char_count = self.input_buffer.chars().count();
                     if self.cursor_position < char_count {
                         let byte_pos: usize = self
@@ -648,13 +725,13 @@ impl Component for DialogComponent {
                     }
                     Action::None
                 }
-                KeyCode::Left => {
+                KeyCode::Left if !self.search_results_focused => {
                     if self.cursor_position > 0 {
                         self.cursor_position -= 1;
                     }
                     Action::None
                 }
-                KeyCode::Right => {
+                KeyCode::Right if !self.search_results_focused => {
                     let char_count = self.input_buffer.chars().count();
                     if self.cursor_position < char_count {
                         self.cursor_position += 1;
@@ -835,6 +912,8 @@ impl Component for DialogComponent {
                         self.input_buffer.clear();
                         self.cursor_position = 0;
                         self.search_results.clear();
+                        self.search_selected_index = 0;
+                        self.search_results_focused = false;
                     }
                     _ => {
                         self.input_buffer.clear();
