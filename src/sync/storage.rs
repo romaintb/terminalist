@@ -39,11 +39,30 @@ impl SyncService {
         self.store_tasks_batch(&transaction, tasks)
             .await
             .context("Failed to store tasks")?;
+        self.remove_tasks_absent_from_snapshot(&transaction, tasks)
+            .await
+            .context("Failed to remove stale tasks")?;
 
         transaction
             .commit()
             .await
             .context("Failed to commit cache refresh transaction")?;
+        Ok(())
+    }
+
+    /// Remove cached tasks that are no longer present in the backend's active-task snapshot.
+    ///
+    /// Todoist omits completed and deleted tasks from `fetch_tasks`, so retaining records
+    /// absent from a successful snapshot leaves ghost tasks visible in the local views.
+    async fn remove_tasks_absent_from_snapshot<C>(&self, conn: &C, tasks: &[crate::backend::BackendTask]) -> Result<()>
+    where
+        C: ConnectionTrait,
+    {
+        let mut delete = task::Entity::delete_many().filter(task::Column::BackendUuid.eq(self.backend_uuid));
+        if !tasks.is_empty() {
+            delete = delete.filter(task::Column::RemoteId.is_not_in(tasks.iter().map(|task| task.remote_id.clone())));
+        }
+        delete.exec(conn).await?;
         Ok(())
     }
 
@@ -248,6 +267,7 @@ impl SyncService {
                 deadline: ActiveValue::Set(backend_task.deadline.clone()),
                 duration: ActiveValue::Set(backend_task.duration.clone()),
                 is_completed: ActiveValue::Set(backend_task.is_completed),
+                completed_at: ActiveValue::Set(backend_task.completed_at.clone()),
                 is_deleted: ActiveValue::Set(false),
             };
 
@@ -268,6 +288,7 @@ impl SyncService {
                         task::Column::Deadline,
                         task::Column::Duration,
                         task::Column::IsCompleted,
+                        task::Column::CompletedAt,
                         task::Column::IsDeleted,
                     ])
                     .to_owned(),
@@ -431,12 +452,33 @@ impl SyncService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::{BackendProject, BackendSection};
+    use crate::backend::{BackendProject, BackendSection, BackendTask};
     use crate::backend_registry::BackendRegistry;
     use crate::entities::backend;
     use sea_orm::{EntityTrait, Set};
     use std::sync::Arc;
     use tokio::sync::Mutex;
+
+    fn backend_task(remote_id: &str, project_remote_id: &str) -> BackendTask {
+        BackendTask {
+            remote_id: remote_id.to_string(),
+            content: remote_id.to_string(),
+            description: None,
+            project_remote_id: project_remote_id.to_string(),
+            section_remote_id: None,
+            parent_remote_id: None,
+            priority: 1,
+            order_index: 0,
+            due_date: None,
+            due_datetime: None,
+            is_recurring: false,
+            deadline: None,
+            duration: None,
+            is_completed: false,
+            completed_at: None,
+            labels: Vec::new(),
+        }
+    }
 
     #[tokio::test]
     async fn failed_snapshot_write_preserves_the_previous_cache() {
@@ -503,6 +545,180 @@ mod tests {
             let projects = ProjectRepository::get_all(&storage.conn).await.unwrap();
             assert_eq!(projects.len(), 1);
             assert_eq!(projects[0].remote_id, "cached-project");
+        }
+
+        storage.lock().await.conn.clone().close().await.unwrap();
+        std::fs::remove_file(db_path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn successful_snapshot_removes_tasks_missing_from_backend() {
+        let db_path = std::env::temp_dir().join(format!("terminalist-snapshot-{}.db", Uuid::new_v4()));
+        let storage = LocalStorage::new_at(db_path.clone()).await.unwrap();
+        let backend_uuid = Uuid::new_v4();
+
+        backend::Entity::insert(backend::ActiveModel {
+            uuid: Set(backend_uuid),
+            backend_type: Set("test".to_string()),
+            name: Set("Test".to_string()),
+            is_enabled: Set(true),
+            credentials: Set("{}".to_string()),
+            settings: Set("{}".to_string()),
+        })
+        .exec(&storage.conn)
+        .await
+        .unwrap();
+
+        let storage = Arc::new(Mutex::new(storage));
+        let service = SyncService::new_for_test(storage.clone(), backend_uuid);
+        let project = BackendProject {
+            remote_id: "inbox".to_string(),
+            name: "Inbox".to_string(),
+            is_favorite: false,
+            is_inbox: true,
+            order_index: 0,
+            parent_remote_id: None,
+        };
+        let retained = backend_task("retained", "inbox");
+        let removed = backend_task("removed", "inbox");
+
+        {
+            let storage = storage.lock().await;
+            service
+                .store_snapshot(
+                    &storage,
+                    std::slice::from_ref(&project),
+                    &[],
+                    &[],
+                    &[retained.clone(), removed],
+                )
+                .await
+                .unwrap();
+            service
+                .store_snapshot(&storage, &[project], &[], &[], &[retained])
+                .await
+                .unwrap();
+
+            let tasks = TaskRepository::get_all(&storage.conn).await.unwrap();
+            assert_eq!(tasks.len(), 1);
+            assert_eq!(tasks[0].remote_id, "retained");
+        }
+
+        storage.lock().await.conn.clone().close().await.unwrap();
+        std::fs::remove_file(db_path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn empty_successful_snapshot_removes_all_backend_tasks() {
+        let db_path = std::env::temp_dir().join(format!("terminalist-snapshot-{}.db", Uuid::new_v4()));
+        let storage = LocalStorage::new_at(db_path.clone()).await.unwrap();
+        let backend_uuid = Uuid::new_v4();
+
+        backend::Entity::insert(backend::ActiveModel {
+            uuid: Set(backend_uuid),
+            backend_type: Set("test".to_string()),
+            name: Set("Test".to_string()),
+            is_enabled: Set(true),
+            credentials: Set("{}".to_string()),
+            settings: Set("{}".to_string()),
+        })
+        .exec(&storage.conn)
+        .await
+        .unwrap();
+
+        let storage = Arc::new(Mutex::new(storage));
+        let service = SyncService::new_for_test(storage.clone(), backend_uuid);
+        let project = BackendProject {
+            remote_id: "inbox".to_string(),
+            name: "Inbox".to_string(),
+            is_favorite: false,
+            is_inbox: true,
+            order_index: 0,
+            parent_remote_id: None,
+        };
+
+        {
+            let storage = storage.lock().await;
+            service
+                .store_snapshot(
+                    &storage,
+                    std::slice::from_ref(&project),
+                    &[],
+                    &[],
+                    &[backend_task("old", "inbox")],
+                )
+                .await
+                .unwrap();
+            service.store_snapshot(&storage, &[project], &[], &[], &[]).await.unwrap();
+
+            assert!(TaskRepository::get_all(&storage.conn).await.unwrap().is_empty());
+        }
+
+        storage.lock().await.conn.clone().close().await.unwrap();
+        std::fs::remove_file(db_path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn remotely_completed_task_is_cached_and_selected_only_for_its_completion_day() {
+        let db_path = std::env::temp_dir().join(format!("terminalist-snapshot-{}.db", Uuid::new_v4()));
+        let storage = LocalStorage::new_at(db_path.clone()).await.unwrap();
+        let backend_uuid = Uuid::new_v4();
+
+        backend::Entity::insert(backend::ActiveModel {
+            uuid: Set(backend_uuid),
+            backend_type: Set("test".to_string()),
+            name: Set("Test".to_string()),
+            is_enabled: Set(true),
+            credentials: Set("{}".to_string()),
+            settings: Set("{}".to_string()),
+        })
+        .exec(&storage.conn)
+        .await
+        .unwrap();
+
+        let storage = Arc::new(Mutex::new(storage));
+        let service = SyncService::new_for_test(storage.clone(), backend_uuid);
+        let project = BackendProject {
+            remote_id: "inbox".to_string(),
+            name: "Inbox".to_string(),
+            is_favorite: false,
+            is_inbox: true,
+            order_index: 0,
+            parent_remote_id: None,
+        };
+        let mut completed = backend_task("completed", "inbox");
+        completed.is_completed = true;
+        completed.completed_at = Some("2026-07-18T14:30:00Z".to_string());
+        completed.due_date = Some("2026-07-18".to_string());
+
+        {
+            let storage = storage.lock().await;
+            service
+                .store_snapshot(&storage, &[project], &[], &[], &[completed])
+                .await
+                .unwrap();
+
+            let completion_day = TaskRepository::get_for_today(
+                &storage.conn,
+                "2026-07-18",
+                "2026-07-18T04:00:00Z",
+                "2026-07-19T04:00:00Z",
+            )
+            .await
+            .unwrap();
+            assert_eq!(completion_day.len(), 1);
+            assert!(completion_day[0].is_completed);
+            assert_eq!(completion_day[0].completed_at.as_deref(), Some("2026-07-18T14:30:00Z"));
+
+            let next_day = TaskRepository::get_for_today(
+                &storage.conn,
+                "2026-07-19",
+                "2026-07-19T04:00:00Z",
+                "2026-07-20T04:00:00Z",
+            )
+            .await
+            .unwrap();
+            assert!(next_day.is_empty());
         }
 
         storage.lock().await.conn.clone().close().await.unwrap();

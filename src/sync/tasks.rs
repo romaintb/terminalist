@@ -75,7 +75,8 @@ impl SyncService {
     pub async fn get_tasks_for_today(&self) -> Result<Vec<task::Model>> {
         let storage = self.storage.lock().await;
         let today = datetime::format_today();
-        TaskRepository::get_for_today(&storage.conn, &today).await
+        let (completed_since, completed_until) = datetime::today_completion_range();
+        TaskRepository::get_for_today(&storage.conn, &today, &completed_since, &completed_until).await
     }
 
     /// Retrieves tasks scheduled for tomorrow.
@@ -205,6 +206,7 @@ impl SyncService {
             deadline: ActiveValue::Set(backend_task.deadline),
             duration: ActiveValue::Set(backend_task.duration),
             is_completed: ActiveValue::Set(backend_task.is_completed),
+            completed_at: ActiveValue::Set(backend_task.completed_at),
             is_deleted: ActiveValue::Set(false),
         };
 
@@ -352,11 +354,10 @@ impl SyncService {
         Ok(())
     }
 
-    /// Marks a task as completed via the remote backend and removes it from local storage.
+    /// Marks a task as completed remotely and caches Todoist's completion timestamp.
     ///
-    /// This method completes the task remotely (which automatically handles subtasks)
-    /// and removes it from local storage since completed tasks are not displayed in the UI.
-    /// Subtasks are automatically deleted via database CASCADE constraints.
+    /// This method completes the task remotely (which automatically handles subtasks),
+    /// then reads the completed-task feed so the crossed-out task remains visible today.
     ///
     /// # Arguments
     /// * `task_uuid` - The local UUID of the task to complete
@@ -367,19 +368,31 @@ impl SyncService {
         // Look up the task's remote_id for backend call
         let remote_id = self.get_task_remote_id(task_uuid).await?;
 
-        // Complete the task via backend using remote_id (this handles subtasks automatically)
-        self.get_backend()
-            .await?
+        // Complete the task remotely, then read Todoist's authoritative completion timestamp.
+        let backend = self.get_backend().await?;
+        backend
             .complete_task(&remote_id)
             .await
             .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+        let (completed_since, completed_until) = datetime::today_completion_range();
+        let completed_at = backend
+            .fetch_completed_tasks(&completed_since, &completed_until)
+            .await
+            .map_err(|e| anyhow::anyhow!("Task completed remotely, but completion refresh failed: {}", e))?
+            .into_iter()
+            .find(|task| task.remote_id == remote_id)
+            .and_then(|task| task.completed_at)
+            .ok_or_else(|| {
+                anyhow::anyhow!("Task completed remotely, but Todoist did not return its completion timestamp")
+            })?;
 
-        // Then mark as completed in local storage (soft completion)
+        // Cache the remote completion state for immediate crossed-out rendering.
         let storage = self.storage.lock().await;
 
         if let Some(task) = TaskRepository::get_by_id(&storage.conn, task_uuid).await? {
             let mut active_model: task::ActiveModel = task.into_active_model();
             active_model.is_completed = ActiveValue::Set(true);
+            active_model.completed_at = ActiveValue::Set(Some(completed_at));
             TaskRepository::update(&storage.conn, active_model).await?;
         }
 
@@ -509,6 +522,7 @@ impl SyncService {
                 deadline: ActiveValue::Set(new_task.deadline),
                 duration: ActiveValue::Set(new_task.duration),
                 is_completed: ActiveValue::Set(new_task.is_completed),
+                completed_at: ActiveValue::Set(new_task.completed_at),
                 is_deleted: ActiveValue::Set(false),
             };
 
@@ -553,6 +567,7 @@ impl SyncService {
             if let Some(task) = TaskRepository::get_by_id(&storage.conn, task_id).await? {
                 let mut active_model: task::ActiveModel = task.into_active_model();
                 active_model.is_completed = ActiveValue::Set(false);
+                active_model.completed_at = ActiveValue::Set(None);
                 TaskRepository::update(&storage.conn, active_model).await?;
             }
         }

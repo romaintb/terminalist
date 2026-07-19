@@ -6,6 +6,14 @@ use super::{
 };
 use crate::todoist::TodoistWrapper;
 use async_trait::async_trait;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+struct CompletedTasksPage {
+    #[serde(alias = "results")]
+    items: Vec<crate::todoist::Task>,
+    next_cursor: Option<String>,
+}
 
 /// Todoist backend implementation.
 pub struct TodoistBackend {
@@ -61,7 +69,8 @@ impl TodoistBackend {
             is_recurring: api_task.due.as_ref().map(|d| d.is_recurring).unwrap_or(false),
             deadline: None, // Todoist doesn't have deadline
             duration: api_task.duration.as_ref().map(|d| format!("{} {}", d.amount, d.unit)),
-            is_completed: false, // Fetch operations don't include completed tasks
+            is_completed: api_task.checked || api_task.completed_at.is_some(),
+            completed_at: api_task.completed_at.clone(),
             labels: api_task.labels.clone(),
         }
     }
@@ -152,6 +161,40 @@ impl Backend for TodoistBackend {
             all_tasks.extend(response.results.iter().map(Self::task_to_backend));
 
             // Check if there are more pages
+            if response.next_cursor.is_none() {
+                break;
+            }
+            cursor = response.next_cursor;
+        }
+
+        Ok(all_tasks)
+    }
+
+    async fn fetch_completed_tasks(&self, since: &str, until: &str) -> Result<Vec<BackendTask>, BackendError> {
+        let mut all_tasks = Vec::new();
+        let mut cursor = None;
+
+        loop {
+            let mut request = self
+                .client
+                .get("https://api.todoist.com/api/v1/tasks/completed/by_completion_date")
+                .bearer_auth(&self.api_token)
+                .query(&[("since", since), ("until", until), ("limit", "200")]);
+            if let Some(cursor) = &cursor {
+                request = request.query(&[("cursor", cursor)]);
+            }
+            let response = request.send().await.map_err(|e| BackendError::Network(e.to_string()))?;
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                return Err(BackendError::Other(format!("Todoist returned {status}: {body}")));
+            }
+            let response = response
+                .json::<CompletedTasksPage>()
+                .await
+                .map_err(|e| BackendError::InvalidData(e.to_string()))?;
+
+            all_tasks.extend(response.items.iter().map(Self::task_to_backend));
             if response.next_cursor.is_none() {
                 break;
             }
@@ -393,5 +436,58 @@ mod tests {
         let todoist_args = TodoistBackend::task_create_args_to_todoist(args);
 
         assert_eq!(todoist_args.project_id, None);
+    }
+
+    #[test]
+    fn completed_task_uses_todoists_completion_timestamp() {
+        let api_task: crate::todoist::Task = serde_json::from_value(serde_json::json!({
+            "id": "completed-task",
+            "user_id": "user",
+            "content": "Exercise",
+            "description": "",
+            "project_id": "inbox",
+            "section_id": null,
+            "parent_id": null,
+            "added_by_uid": "user",
+            "assigned_by_uid": null,
+            "responsible_uid": null,
+            "labels": [],
+            "deadline": null,
+            "duration": null,
+            "checked": true,
+            "is_deleted": false,
+            "added_at": "2026-07-18T10:00:00Z",
+            "completed_at": "2026-07-18T14:30:00Z",
+            "completed_by_uid": "user",
+            "updated_at": "2026-07-18T14:30:00Z",
+            "due": {
+                "date": "2026-07-18",
+                "string": "today",
+                "lang": "en",
+                "is_recurring": false
+            },
+            "priority": 1,
+            "child_order": 0,
+            "note_count": 0,
+            "day_order": 0,
+            "is_collapsed": false
+        }))
+        .unwrap();
+
+        let task = TodoistBackend::task_to_backend(&api_task);
+        assert!(task.is_completed);
+        assert_eq!(task.completed_at.as_deref(), Some("2026-07-18T14:30:00Z"));
+    }
+
+    #[test]
+    fn completed_endpoint_uses_items_response_shape() {
+        let response: CompletedTasksPage = serde_json::from_value(serde_json::json!({
+            "items": [],
+            "next_cursor": null
+        }))
+        .unwrap();
+
+        assert!(response.items.is_empty());
+        assert!(response.next_cursor.is_none());
     }
 }

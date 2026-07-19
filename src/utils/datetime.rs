@@ -30,6 +30,24 @@ pub fn format_today() -> String {
     format_ymd(Local::now().date_naive())
 }
 
+/// Return the UTC RFC3339 bounds for the current local calendar day.
+pub fn today_completion_range() -> (String, String) {
+    completion_range_for_local_date(Local::now().date_naive())
+}
+
+fn completion_range_for_local_date(date: NaiveDate) -> (String, String) {
+    let start = Local
+        .from_local_datetime(&date.and_hms_opt(0, 0, 0).expect("midnight is valid"))
+        .earliest()
+        .expect("local date has a midnight");
+    let end_date = date + Duration::days(1);
+    let end = Local
+        .from_local_datetime(&end_date.and_hms_opt(0, 0, 0).expect("midnight is valid"))
+        .earliest()
+        .expect("local date has a midnight");
+    (start.to_utc().to_rfc3339(), end.to_utc().to_rfc3339())
+}
+
 /// Format date with offset from today to YYYY-MM-DD string
 ///
 /// # Arguments

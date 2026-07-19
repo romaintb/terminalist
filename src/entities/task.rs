@@ -23,6 +23,7 @@ pub struct Model {
     pub deadline: Option<String>,
     pub duration: Option<String>,
     pub is_completed: bool,
+    pub completed_at: Option<String>,
     pub is_deleted: bool,
 }
 
@@ -107,6 +108,15 @@ impl Entity {
             .order_by_asc(Column::IsDeleted)
             .order_by_asc(Column::IsCompleted)
             .order_by_asc(Column::OrderIndex)
+    }
+
+    /// Completed tasks whose authoritative Todoist completion timestamp falls today locally.
+    pub fn completed_on(completed_since: &str, completed_until: &str) -> Select<Entity> {
+        Self::find()
+            .filter(Column::IsCompleted.eq(true))
+            .filter(Column::CompletedAt.gte(completed_since))
+            .filter(Column::CompletedAt.lt(completed_until))
+            .order_by_asc(Column::CompletedAt)
     }
 
     /// Scope for tasks due in a date range

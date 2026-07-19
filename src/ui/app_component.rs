@@ -1377,16 +1377,20 @@ mod tests {
         let mut app = AppComponent::new(sync_service, Config::default());
         app.trigger_initial_sync();
 
-        for _ in 0..100 {
-            tokio::task::yield_now().await;
-            let actions = app.process_background_actions();
-            for action in actions {
-                app.handle_app_action(action).await;
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            loop {
+                let actions = app.process_background_actions();
+                for action in actions {
+                    app.handle_app_action(action).await;
+                }
+                if app.total_projects() == 1 && app.state.error_message.is_some() {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
             }
-            if app.total_projects() == 1 && app.state.error_message.is_some() {
-                break;
-            }
-        }
+        })
+        .await
+        .expect("cached data and the backend error should both load");
 
         assert_eq!(app.total_projects(), 1);
         assert_eq!(app.state.projects[0].name, "Cached project");

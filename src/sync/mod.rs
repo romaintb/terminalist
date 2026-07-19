@@ -234,6 +234,29 @@ impl SyncService {
             }
         };
 
+        let (completed_since, completed_until) = crate::utils::datetime::today_completion_range();
+        let completed_tasks = match self
+            .get_backend()
+            .await?
+            .fetch_completed_tasks(&completed_since, &completed_until)
+            .await
+        {
+            Ok(tasks) => {
+                info!("✅ Fetched {} tasks completed today from backend", tasks.len());
+                tasks
+            }
+            Err(e) => {
+                error!("❌ Failed to fetch completed tasks: {e}");
+                return Ok(SyncStatus::Error {
+                    message: format!("Failed to fetch completed tasks: {e}"),
+                });
+            }
+        };
+
+        // Completed entries are stored first so an active occurrence wins if Todoist
+        // returns the same task ID for a recurring task's next occurrence.
+        let tasks = completed_tasks.into_iter().chain(tasks).collect::<Vec<_>>();
+
         // Fetch all labels from backend
         let labels = match self.get_backend().await?.fetch_labels().await {
             Ok(labels) => {

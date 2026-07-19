@@ -43,6 +43,7 @@ fn task(content: &str, project_uuid: Uuid, is_completed: bool) -> task::Model {
         deadline: None,
         duration: None,
         is_completed,
+        completed_at: None,
         is_deleted: false,
     }
 }

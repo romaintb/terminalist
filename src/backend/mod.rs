@@ -56,6 +56,7 @@ pub struct BackendTask {
     pub deadline: Option<String>,
     pub duration: Option<String>,
     pub is_completed: bool,
+    pub completed_at: Option<String>,
     pub labels: Vec<String>,
 }
 
@@ -150,6 +151,7 @@ pub trait Backend: Send + Sync {
     // Sync operations - fetch all data
     async fn fetch_projects(&self) -> Result<Vec<BackendProject>, BackendError>;
     async fn fetch_tasks(&self) -> Result<Vec<BackendTask>, BackendError>;
+    async fn fetch_completed_tasks(&self, since: &str, until: &str) -> Result<Vec<BackendTask>, BackendError>;
     async fn fetch_labels(&self) -> Result<Vec<BackendLabel>, BackendError>;
     async fn fetch_sections(&self) -> Result<Vec<BackendSection>, BackendError>;
 

@@ -85,6 +85,29 @@ impl LocalStorage {
             self.conn.execute(backend.build(&statement)).await?;
         }
 
+        // Lightweight migration for databases created before completion timestamps
+        // were cached. SQLite does not support `ADD COLUMN IF NOT EXISTS`.
+        let task_columns = self
+            .conn
+            .query_all(Statement::from_string(
+                DbBackend::Sqlite,
+                "PRAGMA table_info(tasks)".to_owned(),
+            ))
+            .await?;
+        let has_completed_at = task_columns.iter().any(|row| {
+            row.try_get::<String>("", "name")
+                .map(|name| name == "completed_at")
+                .unwrap_or(false)
+        });
+        if !has_completed_at {
+            self.conn
+                .execute(Statement::from_string(
+                    DbBackend::Sqlite,
+                    "ALTER TABLE tasks ADD COLUMN completed_at TEXT".to_owned(),
+                ))
+                .await?;
+        }
+
         // Create composite unique indexes for (backend_uuid, remote_id)
         let indexes = vec![
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_backend_remote ON projects(backend_uuid, remote_id)",

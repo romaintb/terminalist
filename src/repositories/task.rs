@@ -111,15 +111,32 @@ impl TaskRepository {
     }
 
     /// Get tasks for the "Today" view (overdue + today).
-    pub async fn get_for_today<C>(conn: &C, today: &str) -> Result<Vec<task::Model>>
+    pub async fn get_for_today<C>(
+        conn: &C,
+        today: &str,
+        completed_since: &str,
+        completed_until: &str,
+    ) -> Result<Vec<task::Model>>
     where
         C: ConnectionTrait,
     {
-        let overdue_tasks = task::Entity::overdue(today).all(conn).await?;
-        let today_tasks = task::Entity::due_today(today).all(conn).await?;
+        let overdue_tasks = task::Entity::overdue(today)
+            .filter(task::Column::IsCompleted.eq(false))
+            .all(conn)
+            .await?;
+        let today_tasks = task::Entity::due_today(today)
+            .filter(task::Column::IsCompleted.eq(false))
+            .all(conn)
+            .await?;
+        let completed_tasks = task::Entity::completed_on(completed_since, completed_until).all(conn).await?;
 
         let mut result = overdue_tasks;
         result.extend(today_tasks);
+        for completed_task in completed_tasks {
+            if !result.iter().any(|task| task.uuid == completed_task.uuid) {
+                result.push(completed_task);
+            }
+        }
         Ok(result)
     }
 
