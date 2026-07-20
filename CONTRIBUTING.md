@@ -34,6 +34,41 @@ Thanks for taking the time to contribute!
 - Show version: `cargo run -- --version`
 - Debug DB mode: `cargo run -- --debug`
 
+### Install the development version locally
+
+To test the current checkout as the globally available `terminalist` command:
+
+```sh
+cargo install --path . --locked --force
+terminalist --version
+```
+
+The version output includes the Git commit and indicates whether the build
+contained uncommitted changes:
+
+```text
+terminalist 0.6.1-dev (74f4f78, dirty)
+```
+
+Run `command -v terminalist` if the command does not appear to use the expected
+installation.
+
+To remove the locally installed binary:
+
+```sh
+cargo uninstall terminalist
+```
+
+## Versioning
+
+Do not bump the package version for ordinary feature or bug-fix PRs.
+Development builds identify their exact source revision through
+`terminalist --version`.
+
+Release-preparation changes should update the semantic version in `Cargo.toml`
+and run `cargo check` to update `Cargo.lock`. Commit both files together.
+Development versions use the `-dev` suffix, such as `0.6.1-dev`.
+
 ## Reporting issues
 
 Please include:
@@ -45,4 +80,3 @@ Please include:
 ---
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
-
