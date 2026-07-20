@@ -154,7 +154,7 @@ fn selected_completed_task_content_contrasts_with_highlight() {
 
     for x in title_start..title_start + "completed task".len() as u16 {
         let cell = &buffer[(x, row)];
-        assert_eq!(cell.fg, ratatui::style::Color::White);
+        assert_eq!(cell.fg, ratatui::style::Color::Yellow);
         assert_eq!(cell.bg, ratatui::style::Color::DarkGray);
         assert!(cell.modifier.contains(ratatui::style::Modifier::CROSSED_OUT));
     }

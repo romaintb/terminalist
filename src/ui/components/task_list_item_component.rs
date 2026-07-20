@@ -166,7 +166,7 @@ impl ListItem for TaskItem {
             Style::default().fg(Color::Red).add_modifier(Modifier::CROSSED_OUT)
         } else if self.task.is_completed {
             // Keep selected completed tasks legible against the dark-gray highlight.
-            let color = if selected { Color::White } else { Color::DarkGray };
+            let color = if selected { Color::Yellow } else { Color::DarkGray };
             Style::default().fg(color).add_modifier(Modifier::CROSSED_OUT)
         } else if self.marked || selected {
             // Selected active tasks: yellow and bold
