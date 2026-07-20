@@ -5,6 +5,7 @@ use crate::sync::{SyncService, SyncStatus};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
+use uuid::Uuid;
 
 pub type TaskId = u64;
 
@@ -13,6 +14,8 @@ pub struct BackgroundTask {
     pub id: TaskId,
     pub handle: JoinHandle<anyhow::Result<TaskResult>>,
     pub description: String,
+    pub blocks_input: bool,
+    pub task_uuid: Option<Uuid>,
     pub started_at: std::time::Instant,
 }
 
@@ -80,6 +83,8 @@ impl TaskManager {
             id: task_id,
             handle,
             description,
+            blocks_input: false,
+            task_uuid: None,
             started_at: std::time::Instant::now(),
         };
 
@@ -89,6 +94,34 @@ impl TaskManager {
 
     /// Spawn a background task operation (create, update, delete)
     pub fn spawn_task_operation<F, Fut>(&mut self, operation: F, description: String) -> TaskId
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = anyhow::Result<String>> + Send + 'static,
+    {
+        self.spawn_task_operation_with_input_policy(operation, description, true, None)
+    }
+
+    /// Spawn a background task operation while keeping keyboard input responsive.
+    pub fn spawn_non_blocking_task_operation<F, Fut>(
+        &mut self,
+        task_uuid: Uuid,
+        operation: F,
+        description: String,
+    ) -> TaskId
+    where
+        F: FnOnce() -> Fut + Send + 'static,
+        Fut: std::future::Future<Output = anyhow::Result<String>> + Send + 'static,
+    {
+        self.spawn_task_operation_with_input_policy(operation, description, false, Some(task_uuid))
+    }
+
+    fn spawn_task_operation_with_input_policy<F, Fut>(
+        &mut self,
+        operation: F,
+        description: String,
+        blocks_input: bool,
+        task_uuid: Option<Uuid>,
+    ) -> TaskId
     where
         F: FnOnce() -> Fut + Send + 'static,
         Fut: std::future::Future<Output = anyhow::Result<String>> + Send + 'static,
@@ -129,6 +162,8 @@ impl TaskManager {
             id: task_id,
             handle,
             description: desc_for_task,
+            blocks_input,
+            task_uuid,
             started_at: std::time::Instant::now(),
         };
 
@@ -165,7 +200,11 @@ impl TaskManager {
     }
 
     pub fn has_blocking_work(&self) -> bool {
-        self.tasks.values().any(|task| !task.description.starts_with("Searching tasks"))
+        self.tasks.values().any(|task| task.blocks_input)
+    }
+
+    pub fn has_pending_operation_for_task(&self, task_uuid: &Uuid) -> bool {
+        self.tasks.values().any(|task| task.task_uuid.as_ref() == Some(task_uuid))
     }
 
     pub fn processing_description(&self) -> Option<String> {
@@ -287,6 +326,8 @@ impl TaskManager {
             id: task_id,
             handle,
             description,
+            blocks_input: true,
+            task_uuid: None,
             started_at: std::time::Instant::now(),
         };
 
@@ -326,6 +367,8 @@ impl TaskManager {
             id: task_id,
             handle,
             description,
+            blocks_input: false,
+            task_uuid: None,
             started_at: std::time::Instant::now(),
         };
 

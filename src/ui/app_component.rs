@@ -563,6 +563,10 @@ impl AppComponent {
                 Action::None
             }
             Action::CompleteTask(task_id) => {
+                if self.task_manager.has_pending_operation_for_task(&task_id) {
+                    info!("Task: Completion already pending for task {}", task_id);
+                    return Action::None;
+                }
                 // Find the task being completed
                 let sync_service = self.sync_service.clone();
                 if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
@@ -863,6 +867,11 @@ impl AppComponent {
                 info!("Data: Refreshing UI data after task operation");
                 // Schedule a data fetch to reload current view with updated data
                 self.schedule_data_fetch();
+                if matches!(self.dialog.dialog_type, Some(DialogType::TaskSearch)) {
+                    let query = self.dialog.input_buffer.clone();
+                    info!("Search: Refreshing active query '{}' after task operation", query);
+                    self.task_manager.spawn_task_search(self.sync_service.clone(), query);
+                }
                 Action::None
             }
             // Help panel scrolling actions
@@ -911,13 +920,25 @@ impl AppComponent {
 
     fn spawn_operation(&mut self, operation: Operation) {
         let description = operation.description();
+        let completed_task_uuid = match &operation {
+            Operation::Task(TaskOperation::Complete(task_uuid)) => Some(*task_uuid),
+            _ => None,
+        };
         let sync_service = self.sync_service.clone();
         info!("Background: Spawning typed operation '{}'", description);
 
-        self.task_manager.spawn_task_operation(
-            move || async move { operation.execute(&sync_service).await },
-            description,
-        );
+        if let Some(task_uuid) = completed_task_uuid {
+            self.task_manager.spawn_non_blocking_task_operation(
+                task_uuid,
+                move || async move { operation.execute(&sync_service).await },
+                description,
+            );
+        } else {
+            self.task_manager.spawn_task_operation(
+                move || async move { operation.execute(&sync_service).await },
+                description,
+            );
+        }
     }
 
     fn update_data_from_sync(&mut self, status: SyncStatus) {
@@ -1396,6 +1417,20 @@ mod tests {
         assert_eq!(app.state.projects[0].name, "Cached project");
         assert!(app.state.error_message.is_some());
 
+        app.task_manager.cancel_all_tasks();
+        storage.lock().await.conn.clone().close().await.unwrap();
+        std::fs::remove_file(db_path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn task_operation_refreshes_an_open_search_query() {
+        let (mut app, storage, db_path) = test_app().await;
+        app.dialog.dialog_type = Some(DialogType::TaskSearch);
+        app.dialog.input_buffer = "needle".to_string();
+
+        app.handle_app_action(Action::RefreshData).await;
+
+        assert_eq!(app.task_manager.task_count(), 2);
         app.task_manager.cancel_all_tasks();
         storage.lock().await.conn.clone().close().await.unwrap();
         std::fs::remove_file(db_path).unwrap();

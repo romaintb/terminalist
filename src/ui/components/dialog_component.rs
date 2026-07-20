@@ -509,15 +509,17 @@ impl DialogComponent {
         f.render_widget(results_list_widget, layout[1]);
 
         let instructions = if self.search_results_focused {
-            [
+            vec![
                 ("j/k or ↑/↓", Color::Cyan, " Navigate"),
+                common::shortcuts::SEPARATOR,
+                ("Space", Color::Cyan, " Complete"),
                 common::shortcuts::SEPARATOR,
                 ("t", Color::Cyan, " Today"),
                 common::shortcuts::SEPARATOR,
                 ("Esc", Color::Red, " Close"),
             ]
         } else {
-            [
+            vec![
                 ("Type", Color::Cyan, " Search"),
                 common::shortcuts::SEPARATOR,
                 ("↓", Color::Cyan, " Results"),
@@ -680,6 +682,10 @@ impl Component for DialogComponent {
                     .search_results
                     .get(self.search_selected_index)
                     .map_or(Action::None, |task| Action::SetTaskDueToday(task.uuid)),
+                KeyCode::Char(' ') if self.search_results_focused => self
+                    .search_results
+                    .get(self.search_selected_index)
+                    .map_or(Action::None, |task| Action::CompleteTask(task.uuid)),
                 KeyCode::Char(c) if !self.search_results_focused => {
                     let byte_pos: usize = self
                         .input_buffer

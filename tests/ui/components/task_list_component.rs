@@ -114,6 +114,27 @@ fn today_shows_a_matching_subtask_when_its_parent_is_filtered_out() {
 }
 
 #[test]
+fn today_shows_an_unscheduled_task_completed_today() {
+    let project = project();
+    let mut completed = task("Completed from search", project.uuid, true);
+    completed.completed_at = Some(chrono::Utc::now().to_rfc3339());
+
+    let mut component = TaskListComponent::new();
+    component.update_data(
+        vec![completed],
+        Vec::new(),
+        vec![project],
+        Vec::new(),
+        SidebarSelection::Today,
+    );
+
+    assert!(component
+        .items
+        .iter()
+        .any(|item| { matches!(item, TaskListItemType::Task(item) if item.task.content == "Completed from search") }));
+}
+
+#[test]
 fn visible_count_excludes_completed_and_deleted_tasks() {
     let project = project();
     let pending = task("pending", project.uuid, false);

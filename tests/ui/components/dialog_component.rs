@@ -87,6 +87,31 @@ fn test_t_sets_selected_search_result_due_today() {
 }
 
 #[test]
+fn test_space_completes_selected_search_result() {
+    let mut dialog = DialogComponent::new();
+    dialog.dialog_type = Some(DialogType::TaskSearch);
+    dialog.search_results = vec![search_task("first"), search_task("second")];
+    dialog.search_selected_index = 1;
+    dialog.search_results_focused = true;
+    let selected_uuid = dialog.search_results[1].uuid;
+
+    let action = dialog.handle_key_events(key(KeyCode::Char(' ')));
+
+    assert!(matches!(action, Action::CompleteTask(uuid) if uuid == selected_uuid));
+}
+
+#[test]
+fn test_space_is_search_text_while_query_is_focused() {
+    let mut dialog = DialogComponent::new();
+    dialog.dialog_type = Some(DialogType::TaskSearch);
+
+    let action = dialog.handle_key_events(key(KeyCode::Char(' ')));
+
+    assert!(matches!(action, Action::SearchTasks(query) if query == " "));
+    assert_eq!(dialog.input_buffer, " ");
+}
+
+#[test]
 fn test_enter_has_no_search_action() {
     let mut dialog = DialogComponent::new();
     dialog.dialog_type = Some(DialogType::TaskSearch);

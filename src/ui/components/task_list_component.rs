@@ -165,6 +165,12 @@ impl TaskListComponent {
 
         // Separate visible hierarchy roots by date; orphaned subtasks remain visible.
         for task in self.visible_roots() {
+            // The Today query also returns tasks completed during the current local day,
+            // including tasks that were unscheduled or due on another date.
+            if task.is_completed {
+                today_tasks.push(task);
+                continue;
+            }
             if let Some(due_date_str) = &task.due_date {
                 if let Ok(due_date) = datetime::parse_date(due_date_str) {
                     if due_date < now {
