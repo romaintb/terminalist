@@ -574,11 +574,11 @@ impl TaskListComponent {
 
     /// Create the list items for rendering
     fn create_list_items(&self, _rect: Rect) -> Vec<RatatuiListItem<'static>> {
+        let selected_index = self.list_state.selected();
         self.items
             .iter()
-            .map(|item| {
-                item.render(false, &self.display_config) // Selection styling handled by List widget
-            })
+            .enumerate()
+            .map(|(index, item)| item.render(selected_index == Some(index), &self.display_config))
             .collect()
     }
 

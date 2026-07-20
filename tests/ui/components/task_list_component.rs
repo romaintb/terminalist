@@ -126,6 +126,41 @@ fn visible_count_excludes_completed_and_deleted_tasks() {
 }
 
 #[test]
+fn selected_completed_task_content_contrasts_with_highlight() {
+    let project = project();
+    let mut component = component_with_tasks(vec![task("completed task", project.uuid, true)], project);
+    let backend = TestBackend::new(50, 5);
+    let mut terminal = Terminal::new(backend).unwrap();
+
+    terminal.draw(|frame| component.render(frame, frame.area())).unwrap();
+
+    let buffer = terminal.backend().buffer();
+    let row = (0..buffer.area.height)
+        .find(|&y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                .contains("completed task")
+        })
+        .expect("completed task should be rendered");
+    let title_start = (0..buffer.area.width - "completed task".len() as u16)
+        .find(|&x| {
+            (x..x + "completed task".len() as u16)
+                .map(|cell_x| buffer[(cell_x, row)].symbol())
+                .collect::<String>()
+                == "completed task"
+        })
+        .expect("completed task cells should be rendered");
+
+    for x in title_start..title_start + "completed task".len() as u16 {
+        let cell = &buffer[(x, row)];
+        assert_eq!(cell.fg, ratatui::style::Color::White);
+        assert_eq!(cell.bg, ratatui::style::Color::DarkGray);
+        assert!(cell.modifier.contains(ratatui::style::Modifier::CROSSED_OUT));
+    }
+}
+
+#[test]
 fn marks_tasks_and_unschedules_all_marked_tasks() {
     let project = project();
     let first = task("first", project.uuid, false);
