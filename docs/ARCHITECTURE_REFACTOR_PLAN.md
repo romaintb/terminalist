@@ -1,5 +1,10 @@
 # Architecture Refactor Plan
 
+> **Status note (July 21, 2026):** This plan predates the consolidated PR and the subsequent
+> completion-history, responsive-operation, context-aware creation, and local Trash work. Its
+> branch strategy and implementation-status sections are no longer authoritative. It is retained
+> as historical design context and should be re-baselined after the consolidated work lands.
+
 Status: In progress
 Scope: UI operations, background loading, local storage, navigation counts, and Todoist transport
 
