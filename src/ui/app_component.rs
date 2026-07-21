@@ -329,6 +329,9 @@ impl AppComponent {
                         info!("Global key: 'D' - cannot delete Upcoming view");
                         Action::ShowDialog(DialogType::Info("Cannot delete the Upcoming view".to_string()))
                     }
+                    SidebarSelection::Trash => Action::ShowDialog(DialogType::EmptyTrashConfirmation {
+                        count: self.state.all_tasks.iter().filter(|task| task.is_deleted).count(),
+                    }),
                     SidebarSelection::Label(uuid) => {
                         if let Some(label) = self.state.labels.iter().find(|label| label.uuid == *uuid) {
                             info!("Global key: 'D' - deleting label '{}' (ID: {})", label.name, label.uuid);
@@ -372,6 +375,9 @@ impl AppComponent {
                     SidebarSelection::Upcoming => {
                         info!("Global key: 'E' - cannot edit Upcoming view");
                         Action::ShowDialog(DialogType::Info("Cannot edit the Upcoming view".to_string()))
+                    }
+                    SidebarSelection::Trash => {
+                        Action::ShowDialog(DialogType::Info("Cannot edit the Trash view".to_string()))
                     }
                     SidebarSelection::Label(uuid) => {
                         if let Some(label) = self.state.labels.iter().find(|label| label.uuid == *uuid) {
@@ -528,6 +534,7 @@ impl AppComponent {
                     SidebarSelection::Today => "Today".to_string(),
                     SidebarSelection::Tomorrow => "Tomorrow".to_string(),
                     SidebarSelection::Upcoming => "Upcoming".to_string(),
+                    SidebarSelection::Trash => "Trash".to_string(),
                     SidebarSelection::Project(uuid) => {
                         if let Some(project) = self.state.projects.iter().find(|project| project.uuid == *uuid) {
                             format!("Project({}) '{}'", uuid, project.name)
@@ -552,14 +559,24 @@ impl AppComponent {
                 Action::None
             }
             // Task operations with background execution
-            Action::CreateTask { content, project_uuid } => {
+            Action::CreateTask {
+                content,
+                project_uuid,
+                due_date,
+                label_uuid,
+            } => {
                 let project_desc = match &project_uuid {
                     Some(uuid) => format!(" in project {}", uuid),
                     None => " in inbox".to_string(),
                 };
                 info!("Task: Creating task with content '{}'{}", content, project_desc);
 
-                self.spawn_operation(Operation::Task(TaskOperation::Create { content, project_uuid }));
+                self.spawn_operation(Operation::Task(TaskOperation::Create {
+                    content,
+                    project_uuid,
+                    due_date,
+                    label_uuid,
+                }));
                 Action::None
             }
             Action::CompleteTask(task_id) => {
@@ -584,19 +601,34 @@ impl AppComponent {
             Action::ToggleTasks(tasks) => {
                 let count = tasks.len();
                 let sync_service = self.sync_service.clone();
-                self.task_manager.spawn_task_operation(
-                    move || async move {
-                        for (task_uuid, should_restore) in tasks {
-                            if should_restore {
-                                sync_service.restore_task(&task_uuid).await?;
-                            } else {
-                                sync_service.complete_task(&task_uuid).await?;
+                if let Some(task_uuid) = Self::single_task_completion(&tasks) {
+                    if self.task_manager.has_pending_operation_for_task(&task_uuid) {
+                        info!("Task: Completion already pending for task {}", task_uuid);
+                        return Action::None;
+                    }
+                    self.task_manager.spawn_non_blocking_task_operation(
+                        task_uuid,
+                        move || async move {
+                            sync_service.complete_task(&task_uuid).await?;
+                            Ok("Completed task".to_string())
+                        },
+                        "Complete task".to_string(),
+                    );
+                } else {
+                    self.task_manager.spawn_task_operation(
+                        move || async move {
+                            for (task_uuid, should_restore) in tasks {
+                                if should_restore {
+                                    sync_service.restore_task(&task_uuid).await?;
+                                } else {
+                                    sync_service.complete_task(&task_uuid).await?;
+                                }
                             }
-                        }
-                        Ok(format!("Updated {} task(s)", count))
-                    },
-                    format!("Toggle {} selected task(s)", count),
-                );
+                            Ok(format!("Updated {} task(s)", count))
+                        },
+                        format!("Toggle {} selected task(s)", count),
+                    );
+                }
                 Action::None
             }
             Action::CyclePriority(task_id) => {
@@ -741,6 +773,17 @@ impl AppComponent {
                 self.spawn_operation(Operation::Task(TaskOperation::Restore(task_id)));
                 Action::None
             }
+            Action::EmptyTrash => {
+                let sync_service = self.sync_service.clone();
+                self.task_manager.spawn_task_operation(
+                    move || async move {
+                        let count = sync_service.empty_trash().await?;
+                        Ok(format!("Permanently deleted {} task(s)", count))
+                    },
+                    "Empty trash".to_string(),
+                );
+                Action::None
+            }
             Action::CreateProject { name, parent_uuid } => {
                 let parent_desc = match &parent_uuid {
                     Some(uuid) => format!(" with parent {}", uuid),
@@ -822,10 +865,17 @@ impl AppComponent {
                     snapshot.tasks.len()
                 );
                 let was_initial = snapshot.is_initial;
+                let trash_became_empty =
+                    snapshot.selection == SidebarSelection::Trash && snapshot.navigation_counts.trash == 0;
                 self.apply_snapshot(*snapshot);
+                if trash_became_empty {
+                    self.state.sidebar_selection = SidebarSelection::Today;
+                }
                 self.sync_component_data();
                 if was_initial {
                     self.set_initial_sidebar_selection();
+                    self.schedule_data_fetch();
+                } else if trash_became_empty {
                     self.schedule_data_fetch();
                 }
                 Action::None
@@ -916,6 +966,13 @@ impl AppComponent {
         let sync_service = self.sync_service.clone();
         let task_id = self.task_manager.spawn_sync(sync_service);
         self.active_sync_task = Some(task_id);
+    }
+
+    fn single_task_completion(tasks: &[(Uuid, bool)]) -> Option<Uuid> {
+        match tasks {
+            [(task_uuid, false)] => Some(*task_uuid),
+            _ => None,
+        }
     }
 
     fn spawn_operation(&mut self, operation: Operation) {
@@ -1313,6 +1370,22 @@ mod tests {
             order_index: 0,
             parent_uuid: None,
         }
+    }
+
+    #[test]
+    fn only_single_task_completion_uses_the_non_blocking_path() {
+        let pending_task = Uuid::new_v4();
+        let other_task = Uuid::new_v4();
+
+        assert_eq!(
+            AppComponent::single_task_completion(&[(pending_task, false)]),
+            Some(pending_task)
+        );
+        assert_eq!(AppComponent::single_task_completion(&[(pending_task, true)]), None);
+        assert_eq!(
+            AppComponent::single_task_completion(&[(pending_task, false), (other_task, false)]),
+            None
+        );
     }
 
     #[tokio::test]

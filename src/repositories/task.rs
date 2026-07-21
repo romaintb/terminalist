@@ -35,6 +35,30 @@ impl TaskRepository {
             .await?)
     }
 
+    /// Get locally retained deleted tasks, newest deletion first.
+    pub async fn get_deleted<C>(conn: &C) -> Result<Vec<task::Model>>
+    where
+        C: ConnectionTrait,
+    {
+        Ok(task::Entity::find()
+            .filter(task::Column::IsDeleted.eq(true))
+            .order_by_desc(task::Column::DeletedAt)
+            .all(conn)
+            .await?)
+    }
+
+    /// Permanently remove all locally retained deleted tasks.
+    pub async fn empty_trash<C>(conn: &C) -> Result<u64>
+    where
+        C: ConnectionTrait,
+    {
+        Ok(task::Entity::delete_many()
+            .filter(task::Column::IsDeleted.eq(true))
+            .exec(conn)
+            .await?
+            .rows_affected)
+    }
+
     /// Get a single task by UUID.
     pub async fn get_by_id<C>(conn: &C, uuid: &Uuid) -> Result<Option<task::Model>>
     where
@@ -62,6 +86,7 @@ impl TaskRepository {
     {
         Ok(task::Entity::find()
             .filter(task::Column::ProjectUuid.eq(*project_uuid))
+            .filter(task::Column::IsDeleted.eq(false))
             .order_by_asc(task::Column::IsDeleted)
             .order_by_asc(task::Column::IsCompleted)
             .order_by_asc(task::Column::OrderIndex)
@@ -76,6 +101,7 @@ impl TaskRepository {
     {
         use sea_orm::sea_query::Expr;
         Ok(task::Entity::find()
+            .filter(task::Column::IsDeleted.eq(false))
             .filter(
                 Expr::col(task::Column::Content)
                     .like(format!("%{}%", query))
@@ -94,6 +120,7 @@ impl TaskRepository {
         C: ConnectionTrait,
     {
         Ok(task::Entity::find()
+            .filter(task::Column::IsDeleted.eq(false))
             .filter(
                 task::Column::Uuid.in_subquery(
                     task_label::Entity::find()
@@ -121,14 +148,19 @@ impl TaskRepository {
         C: ConnectionTrait,
     {
         let overdue_tasks = task::Entity::overdue(today)
+            .filter(task::Column::IsDeleted.eq(false))
             .filter(task::Column::IsCompleted.eq(false))
             .all(conn)
             .await?;
         let today_tasks = task::Entity::due_today(today)
+            .filter(task::Column::IsDeleted.eq(false))
             .filter(task::Column::IsCompleted.eq(false))
             .all(conn)
             .await?;
-        let completed_tasks = task::Entity::completed_on(completed_since, completed_until).all(conn).await?;
+        let completed_tasks = task::Entity::completed_on(completed_since, completed_until)
+            .filter(task::Column::IsDeleted.eq(false))
+            .all(conn)
+            .await?;
 
         let mut result = overdue_tasks;
         result.extend(today_tasks);
@@ -147,6 +179,7 @@ impl TaskRepository {
     {
         Ok(task::Entity::find()
             .filter(task::Column::DueDate.eq(tomorrow))
+            .filter(task::Column::IsDeleted.eq(false))
             .order_by_asc(task::Column::IsDeleted)
             .order_by_asc(task::Column::IsCompleted)
             .order_by_asc(task::Column::OrderIndex)
@@ -159,9 +192,18 @@ impl TaskRepository {
     where
         C: ConnectionTrait,
     {
-        let overdue_tasks = task::Entity::overdue(today).all(conn).await?;
-        let today_tasks = task::Entity::due_today(today).all(conn).await?;
-        let future_tasks = task::Entity::due_between(today, three_months_later).all(conn).await?;
+        let overdue_tasks = task::Entity::overdue(today)
+            .filter(task::Column::IsDeleted.eq(false))
+            .all(conn)
+            .await?;
+        let today_tasks = task::Entity::due_today(today)
+            .filter(task::Column::IsDeleted.eq(false))
+            .all(conn)
+            .await?;
+        let future_tasks = task::Entity::due_between(today, three_months_later)
+            .filter(task::Column::IsDeleted.eq(false))
+            .all(conn)
+            .await?;
 
         let mut result = overdue_tasks;
         result.extend(today_tasks);

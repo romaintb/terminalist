@@ -31,7 +31,7 @@ async fn test_local_storage_creation() {
 }
 
 #[tokio::test]
-async fn existing_database_gains_completed_at_cache_column() {
+async fn existing_database_gains_task_cache_columns() {
     let db_path = std::env::temp_dir().join(format!("terminalist-migration-{}.db", uuid::Uuid::new_v4()));
     let database_url = format!("sqlite:{}?mode=rwc", db_path.display());
     let old_database = Database::connect(database_url).await.expect("old database should open");
@@ -63,6 +63,11 @@ async fn existing_database_gains_completed_at_cache_column() {
     assert!(columns.iter().any(|row| {
         String::try_get(row, "", "name")
             .map(|name| name == "completed_at")
+            .unwrap_or(false)
+    }));
+    assert!(columns.iter().any(|row| {
+        String::try_get(row, "", "name")
+            .map(|name| name == "deleted_at")
             .unwrap_or(false)
     }));
 

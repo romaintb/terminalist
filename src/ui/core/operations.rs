@@ -20,6 +20,8 @@ pub enum TaskOperation {
     Create {
         content: String,
         project_uuid: Option<Uuid>,
+        due_date: Option<String>,
+        label_uuid: Option<Uuid>,
     },
     Edit {
         task_uuid: Uuid,
@@ -115,8 +117,13 @@ impl Operation {
                     .await
                     .context(description.clone())?
             }
-            Self::Task(TaskOperation::Create { content, project_uuid }) => sync_service
-                .create_task(&content, project_uuid)
+            Self::Task(TaskOperation::Create {
+                content,
+                project_uuid,
+                due_date,
+                label_uuid,
+            }) => sync_service
+                .create_task(&content, project_uuid, due_date.as_deref(), label_uuid)
                 .await
                 .context(description.clone())?,
             Self::Task(TaskOperation::Edit { task_uuid, content }) => sync_service
@@ -158,6 +165,8 @@ mod tests {
         let operation = Operation::Task(TaskOperation::Create {
             content: "Review A|B: preserve this exactly".to_string(),
             project_uuid: Some(Uuid::new_v4()),
+            due_date: None,
+            label_uuid: None,
         });
 
         match operation {

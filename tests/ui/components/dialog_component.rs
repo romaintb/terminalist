@@ -24,6 +24,7 @@ fn search_task(content: &str) -> task::Model {
         is_completed: false,
         completed_at: None,
         is_deleted: false,
+        deleted_at: None,
     }
 }
 

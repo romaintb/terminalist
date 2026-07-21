@@ -137,6 +137,7 @@ impl TaskListComponent {
             SidebarSelection::Today => self.build_today_items(),
             SidebarSelection::Tomorrow => self.build_tomorrow_items(),
             SidebarSelection::Upcoming => self.build_upcoming_items(),
+            SidebarSelection::Trash => self.build_trash_items(),
             SidebarSelection::Project(project_id) => self.build_project_items(&project_id),
             SidebarSelection::Label(label_id) => self.build_label_items(&label_id),
         }
@@ -360,6 +361,12 @@ impl TaskListComponent {
         }
     }
 
+    fn build_trash_items(&mut self) {
+        for task in self.visible_roots() {
+            self.add_task_and_children_to_items(task, 0);
+        }
+    }
+
     /// Recursively add a task and its children to the items list
     fn add_task_and_children_to_items(&mut self, task: task::Model, depth: usize) {
         // Calculate child count
@@ -479,6 +486,13 @@ impl TaskListComponent {
     }
 
     pub fn visible_incomplete_task_count(&self) -> usize {
+        if self.sidebar_selection == SidebarSelection::Trash {
+            return self
+                .items
+                .iter()
+                .filter(|item| matches!(item, TaskListItemType::Task(_)))
+                .count();
+        }
         self.items
             .iter()
             .filter(|item| {
@@ -653,7 +667,23 @@ impl Component for TaskListComponent {
                     SidebarSelection::Project(project_id) => Some(*project_id),
                     _ => None,
                 };
-                Action::ShowDialog(DialogType::TaskCreation { default_project_uuid })
+                let default_due_date = match self.sidebar_selection {
+                    SidebarSelection::Today => Some(datetime::format_today()),
+                    SidebarSelection::Tomorrow => Some(datetime::format_date_with_offset(1)),
+                    _ => None,
+                };
+                let default_label_uuid = match self.sidebar_selection {
+                    SidebarSelection::Label(label_id) => Some(label_id),
+                    _ => None,
+                };
+                if self.sidebar_selection == SidebarSelection::Trash {
+                    return Action::None;
+                }
+                Action::ShowDialog(DialogType::TaskCreation {
+                    default_project_uuid,
+                    default_due_date,
+                    default_label_uuid,
+                })
             }
             KeyCode::Char('e') => {
                 if let Some(task) = self.get_selected_task() {
@@ -719,6 +749,7 @@ impl Component for TaskListComponent {
             Some(match &self.sidebar_selection {
                 SidebarSelection::Today => "No tasks due today. Press 'a' to create a task or 'r' to sync.",
                 SidebarSelection::Tomorrow => "No tasks due tomorrow. Press 'a' to create a task or 'r' to sync.",
+                SidebarSelection::Trash => "Trash is empty.",
                 _ if self.projects.is_empty() => "No projects available. Press 'r' to sync or 'A' to create a project.",
                 _ => "No tasks in this view. Press 'a' to create a task.",
             })

@@ -7,6 +7,7 @@ pub struct NavigationCounts {
     pub today: usize,
     pub tomorrow: usize,
     pub upcoming: usize,
+    pub trash: usize,
     pub projects: HashMap<Uuid, usize>,
     pub labels: HashMap<Uuid, usize>,
 }
@@ -27,6 +28,7 @@ pub enum SidebarSelection {
     Today, // Today view (special view)
     Tomorrow, // Tomorrow view (special view)
     Upcoming, // Upcoming view (tasks with future due dates)
+    Trash,
     Label(Uuid),
     Project(Uuid),
 }
@@ -54,12 +56,15 @@ pub enum Action {
     CreateTask {
         content: String,
         project_uuid: Option<Uuid>,
+        due_date: Option<String>,
+        label_uuid: Option<Uuid>,
     },
     EditTask {
         task_uuid: Uuid,
         content: String,
     },
     RestoreTask(Uuid),
+    EmptyTrash,
 
     // Project operations
     CreateProject {
@@ -123,6 +128,8 @@ pub enum Action {
 pub enum DialogType {
     TaskCreation {
         default_project_uuid: Option<Uuid>,
+        default_due_date: Option<String>,
+        default_label_uuid: Option<Uuid>,
     },
     TaskEdit {
         task_uuid: Uuid,
@@ -142,6 +149,9 @@ pub enum DialogType {
     DeleteConfirmation {
         item_type: String,
         item_uuid: Uuid,
+    },
+    EmptyTrashConfirmation {
+        count: usize,
     },
     Error(String),
     Info(String),

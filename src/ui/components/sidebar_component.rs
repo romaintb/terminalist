@@ -102,7 +102,11 @@ impl SidebarComponent {
             .iter()
             .map(|project| project.name.chars().count() + 4)
             .chain(self.labels.iter().map(|label| label.name.chars().count() + 2))
-            .chain(["Today", "Tomorrow", "Upcoming"].into_iter().map(|name| name.len() + 1))
+            .chain(
+                ["Today", "Tomorrow", "Upcoming", "Trash"]
+                    .into_iter()
+                    .map(|name| name.len() + 1),
+            )
             .max()
             .unwrap_or(10);
         let count_width = self
@@ -114,6 +118,7 @@ impl SidebarComponent {
                 &self.navigation_counts.today,
                 &self.navigation_counts.tomorrow,
                 &self.navigation_counts.upcoming,
+                &self.navigation_counts.trash,
             ])
             .map(|count| count.to_string().len())
             .max()
@@ -134,6 +139,7 @@ impl SidebarComponent {
                 SidebarSelection::Today => self.navigation_counts.today,
                 SidebarSelection::Tomorrow => self.navigation_counts.tomorrow,
                 SidebarSelection::Upcoming => self.navigation_counts.upcoming,
+                SidebarSelection::Trash => self.navigation_counts.trash,
                 _ => 0,
             },
             SidebarItemType::Project { project, .. } => {
@@ -163,6 +169,12 @@ impl SidebarComponent {
             name: "Upcoming".to_string(),
             selection: SidebarSelection::Upcoming,
         });
+        if self.navigation_counts.trash > 0 {
+            self.items.push(SidebarItemType::SpecialView {
+                name: "Trash".to_string(),
+                selection: SidebarSelection::Trash,
+            });
+        }
 
         // Use placeholder account ID for now
         let account_id = "main".to_string();
@@ -661,5 +673,29 @@ mod tests {
         let buffer = terminal.backend().buffer();
         assert_eq!(buffer.cell((2, 2)).unwrap().fg, Color::White);
         assert_eq!(buffer.cell((28, 2)).unwrap().fg, Color::DarkGray);
+    }
+
+    #[test]
+    fn trash_only_appears_when_it_has_items() {
+        let mut sidebar = SidebarComponent::new();
+        sidebar.update_data(Vec::new(), Vec::new(), NavigationCounts::default(), 0);
+        assert!(!sidebar
+            .items
+            .iter()
+            .any(|item| item.get_selection() == Some(SidebarSelection::Trash)));
+
+        sidebar.update_data(
+            Vec::new(),
+            Vec::new(),
+            NavigationCounts {
+                trash: 2,
+                ..NavigationCounts::default()
+            },
+            0,
+        );
+        assert!(sidebar
+            .items
+            .iter()
+            .any(|item| item.get_selection() == Some(SidebarSelection::Trash)));
     }
 }

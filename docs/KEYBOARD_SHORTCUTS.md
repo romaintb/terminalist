@@ -35,6 +35,7 @@ currently highlighted task.
 - **`b`** Toggle sidebar visibility
 - **`/`** Open task search dialog (search across all tasks)
 - **`r`** Force sync with Todoist
+- **`D`** Empty Trash while the Trash view is selected (with confirmation)
 - **`i`** Cycle through icon themes
 - **`?`** Toggle help panel
 - **`q`** Quit the application
@@ -76,6 +77,8 @@ currently highlighted task.
 
 ### Task Display Features
 Tasks are displayed with:
+- **Trash**: Appears only while locally restorable deleted tasks exist; deleted tasks expire after 30 days
+- **Restore**: Press `d` on a task in Trash to recreate it in Todoist
 - **Status Icons**: ☐ (pending), ☒ (completed), ✗ (deleted)
 - **Priority Badges**: [P0] (urgent), [P1] (high), [P2] (medium), [P3] (low), no badge (normal)
 - **Label Badges**: Colored badges showing task labels

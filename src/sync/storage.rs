@@ -58,11 +58,21 @@ impl SyncService {
     where
         C: ConnectionTrait,
     {
-        let mut delete = task::Entity::delete_many().filter(task::Column::BackendUuid.eq(self.backend_uuid));
+        let mut delete = task::Entity::delete_many()
+            .filter(task::Column::BackendUuid.eq(self.backend_uuid))
+            .filter(task::Column::IsDeleted.eq(false));
         if !tasks.is_empty() {
             delete = delete.filter(task::Column::RemoteId.is_not_in(tasks.iter().map(|task| task.remote_id.clone())));
         }
         delete.exec(conn).await?;
+
+        let trash_cutoff = (chrono::Utc::now() - chrono::Duration::days(30)).to_rfc3339();
+        task::Entity::delete_many()
+            .filter(task::Column::BackendUuid.eq(self.backend_uuid))
+            .filter(task::Column::IsDeleted.eq(true))
+            .filter(task::Column::DeletedAt.lt(trash_cutoff))
+            .exec(conn)
+            .await?;
         Ok(())
     }
 
@@ -269,6 +279,7 @@ impl SyncService {
                 is_completed: ActiveValue::Set(backend_task.is_completed),
                 completed_at: ActiveValue::Set(backend_task.completed_at.clone()),
                 is_deleted: ActiveValue::Set(false),
+                deleted_at: ActiveValue::Set(None),
             };
 
             let mut insert = task::Entity::insert(local_task);
@@ -455,7 +466,7 @@ mod tests {
     use crate::backend::{BackendProject, BackendSection, BackendTask};
     use crate::backend_registry::BackendRegistry;
     use crate::entities::backend;
-    use sea_orm::{EntityTrait, Set};
+    use sea_orm::{DbBackend, EntityTrait, Set, Statement};
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
@@ -652,6 +663,72 @@ mod tests {
             service.store_snapshot(&storage, &[project], &[], &[], &[]).await.unwrap();
 
             assert!(TaskRepository::get_all(&storage.conn).await.unwrap().is_empty());
+        }
+
+        storage.lock().await.conn.clone().close().await.unwrap();
+        std::fs::remove_file(db_path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn snapshot_preserves_recent_trash_and_purges_expired_trash() {
+        let db_path = std::env::temp_dir().join(format!("terminalist-snapshot-{}.db", Uuid::new_v4()));
+        let storage = LocalStorage::new_at(db_path.clone()).await.unwrap();
+        let backend_uuid = Uuid::new_v4();
+
+        backend::Entity::insert(backend::ActiveModel {
+            uuid: Set(backend_uuid),
+            backend_type: Set("test".to_string()),
+            name: Set("Test".to_string()),
+            is_enabled: Set(true),
+            credentials: Set("{}".to_string()),
+            settings: Set("{}".to_string()),
+        })
+        .exec(&storage.conn)
+        .await
+        .unwrap();
+
+        let storage = Arc::new(Mutex::new(storage));
+        let service = SyncService::new_for_test(storage.clone(), backend_uuid);
+        let project = BackendProject {
+            remote_id: "inbox".to_string(),
+            name: "Inbox".to_string(),
+            is_favorite: false,
+            is_inbox: true,
+            order_index: 0,
+            parent_remote_id: None,
+        };
+
+        {
+            let storage = storage.lock().await;
+            service
+                .store_snapshot(
+                    &storage,
+                    std::slice::from_ref(&project),
+                    &[],
+                    &[],
+                    &[backend_task("recent", "inbox"), backend_task("expired", "inbox")],
+                )
+                .await
+                .unwrap();
+            storage
+                .conn
+                .execute(Statement::from_string(
+                    DbBackend::Sqlite,
+                    format!(
+                        "UPDATE tasks SET is_deleted = 1, deleted_at = CASE remote_id \
+                         WHEN 'recent' THEN '{}' ELSE '{}' END",
+                        chrono::Utc::now().to_rfc3339(),
+                        (chrono::Utc::now() - chrono::Duration::days(31)).to_rfc3339()
+                    ),
+                ))
+                .await
+                .unwrap();
+
+            service.store_snapshot(&storage, &[project], &[], &[], &[]).await.unwrap();
+
+            let deleted = TaskRepository::get_deleted(&storage.conn).await.unwrap();
+            assert_eq!(deleted.len(), 1);
+            assert_eq!(deleted[0].remote_id, "recent");
         }
 
         storage.lock().await.conn.clone().close().await.unwrap();

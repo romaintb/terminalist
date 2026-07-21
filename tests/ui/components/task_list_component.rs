@@ -1,6 +1,6 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{backend::TestBackend, Terminal};
-use terminalist::entities::{project, task};
+use terminalist::entities::{label, project, task};
 use terminalist::ui::components::task_list_item_component::TaskListItemType;
 use terminalist::ui::components::TaskListComponent;
 use terminalist::ui::core::actions::{Action, SidebarSelection, TaskDueDate};
@@ -45,6 +45,7 @@ fn task(content: &str, project_uuid: Uuid, is_completed: bool) -> task::Model {
         is_completed,
         completed_at: None,
         is_deleted: false,
+        deleted_at: None,
     }
 }
 
@@ -65,6 +66,56 @@ fn component_with_tasks(tasks: Vec<task::Model>, project: project::Model) -> Tas
 fn test_task_list_component_creation() {
     // Test that TaskListComponent can be created without panicking
     let _task_list = TaskListComponent::new();
+}
+
+#[test]
+fn task_creation_inherits_the_current_list_context() {
+    let project = project();
+    let label = label::Model {
+        uuid: Uuid::new_v4(),
+        backend_uuid: Uuid::new_v4(),
+        remote_id: "label".to_string(),
+        name: "Test label".to_string(),
+        order_index: 0,
+        is_favorite: false,
+    };
+
+    let cases = [
+        (SidebarSelection::Today, None, Some(datetime::format_today()), None),
+        (
+            SidebarSelection::Tomorrow,
+            None,
+            Some(datetime::format_date_with_offset(1)),
+            None,
+        ),
+        (SidebarSelection::Upcoming, None, None, None),
+        (SidebarSelection::Project(project.uuid), Some(project.uuid), None, None),
+        (SidebarSelection::Label(label.uuid), None, None, Some(label.uuid)),
+    ];
+
+    for (selection, expected_project, expected_due_date, expected_label) in cases {
+        let mut component = TaskListComponent::new();
+        component.update_data(
+            Vec::new(),
+            Vec::new(),
+            vec![project.clone()],
+            vec![label.clone()],
+            selection,
+        );
+
+        match component.handle_key_events(key(KeyCode::Char('a'))) {
+            Action::ShowDialog(terminalist::ui::core::actions::DialogType::TaskCreation {
+                default_project_uuid,
+                default_due_date,
+                default_label_uuid,
+            }) => {
+                assert_eq!(default_project_uuid, expected_project);
+                assert_eq!(default_due_date, expected_due_date);
+                assert_eq!(default_label_uuid, expected_label);
+            }
+            other => panic!("unexpected action: {other:?}"),
+        }
+    }
 }
 
 #[test]
@@ -144,6 +195,37 @@ fn visible_count_excludes_completed_and_deleted_tasks() {
     let component = component_with_tasks(vec![pending, completed, deleted], project);
 
     assert_eq!(component.visible_incomplete_task_count(), 1);
+}
+
+#[test]
+fn trash_lists_deleted_tasks_and_d_restores_the_selected_task() {
+    let project = project();
+    let mut deleted = task("deleted", project.uuid, false);
+    deleted.is_deleted = true;
+    deleted.deleted_at = Some(chrono::Utc::now().to_rfc3339());
+    let deleted_uuid = deleted.uuid;
+    let mut component = TaskListComponent::new();
+    component.update_data(
+        vec![deleted],
+        Vec::new(),
+        vec![project],
+        Vec::new(),
+        SidebarSelection::Trash,
+    );
+
+    assert!(component
+        .items
+        .iter()
+        .any(|item| matches!(item, TaskListItemType::Task(item) if item.task.uuid == deleted_uuid)));
+    assert_eq!(component.visible_incomplete_task_count(), 1);
+    assert!(matches!(
+        component.handle_key_events(key(KeyCode::Char('d'))),
+        Action::RestoreTask(uuid) if uuid == deleted_uuid
+    ));
+    assert!(matches!(
+        component.handle_key_events(key(KeyCode::Char('a'))),
+        Action::None
+    ));
 }
 
 #[test]

@@ -155,7 +155,11 @@ impl DialogComponent {
 
     fn handle_submit(&mut self) -> Action {
         match &self.dialog_type {
-            Some(DialogType::TaskCreation { default_project_uuid }) => {
+            Some(DialogType::TaskCreation {
+                default_project_uuid,
+                default_due_date,
+                default_label_uuid,
+            }) => {
                 if !self.input_buffer.is_empty() {
                     // Determine the project UUID based on whether user explicitly selected via Tab
                     let project_uuid = if self.task_project_explicitly_selected {
@@ -182,6 +186,8 @@ impl DialogComponent {
                     let action = Action::CreateTask {
                         content: self.input_buffer.clone(),
                         project_uuid,
+                        due_date: default_due_date.clone(),
+                        label_uuid: *default_label_uuid,
                     };
                     self.clear_dialog();
                     action
@@ -277,6 +283,10 @@ impl DialogComponent {
                 }
                 _ => Action::None,
             },
+            Some(DialogType::EmptyTrashConfirmation { .. }) => {
+                self.clear_dialog();
+                Action::EmptyTrash
+            }
             _ => Action::None,
         }
     }
@@ -634,7 +644,7 @@ impl Component for DialogComponent {
                     _ => Action::None,
                 }
             }
-            Some(DialogType::DeleteConfirmation { .. }) => match key.code {
+            Some(DialogType::DeleteConfirmation { .. } | DialogType::EmptyTrashConfirmation { .. }) => match key.code {
                 KeyCode::Esc => Action::HideDialog,
                 KeyCode::Enter => self.handle_submit(),
                 _ => Action::None,
@@ -893,7 +903,9 @@ impl Component for DialogComponent {
                         self.input_buffer = name.clone();
                         self.cursor_position = name.chars().count();
                     }
-                    DialogType::TaskCreation { default_project_uuid } => {
+                    DialogType::TaskCreation {
+                        default_project_uuid, ..
+                    } => {
                         self.input_buffer.clear();
                         self.cursor_position = 0;
                         // Set the selected task project index and UUID if a default project is provided
@@ -966,6 +978,9 @@ impl Component for DialogComponent {
                 }
                 DialogType::DeleteConfirmation { item_type, .. } => {
                     self.render_delete_confirmation_dialog(f, rect, &item_type);
+                }
+                DialogType::EmptyTrashConfirmation { count } => {
+                    self.render_delete_confirmation_dialog(f, rect, &format!("{} tasks from Trash", count));
                 }
                 DialogType::Info(message) => {
                     self.render_info_dialog(f, rect, &message);

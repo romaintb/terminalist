@@ -1,5 +1,5 @@
-use crate::entities::task;
-use crate::repositories::{ProjectRepository, SectionRepository, TaskRepository};
+use crate::entities::{task, task_label};
+use crate::repositories::{LabelRepository, ProjectRepository, SectionRepository, TaskRepository};
 use crate::sync::SyncService;
 use crate::utils::datetime;
 use anyhow::Result;
@@ -35,6 +35,16 @@ impl SyncService {
     pub async fn get_all_tasks(&self) -> Result<Vec<task::Model>> {
         let storage = self.storage.lock().await;
         TaskRepository::get_all(&storage.conn).await
+    }
+
+    pub async fn get_deleted_tasks(&self) -> Result<Vec<task::Model>> {
+        let storage = self.storage.lock().await;
+        TaskRepository::get_deleted(&storage.conn).await
+    }
+
+    pub async fn empty_trash(&self) -> Result<usize> {
+        let storage = self.storage.lock().await;
+        Ok(TaskRepository::empty_trash(&storage.conn).await? as usize)
     }
 
     /// Searches for tasks by content using database-level filtering.
@@ -128,19 +138,37 @@ impl SyncService {
     /// # Arguments
     /// * `content` - The content/description of the new task
     /// * `project_uuid` - Optional local project UUID to assign the task to a specific project
+    /// * `due_date` - Optional due date in YYYY-MM-DD format
+    /// * `label_uuid` - Optional local label UUID to assign to the task
     ///
     /// # Errors
     /// Returns an error if the backend call fails or local storage update fails
-    pub async fn create_task(&self, content: &str, project_uuid: Option<Uuid>) -> Result<()> {
-        // Look up remote_id for project if provided
-        let remote_project_id = {
+    pub async fn create_task(
+        &self,
+        content: &str,
+        project_uuid: Option<Uuid>,
+        due_date: Option<&str>,
+        label_uuid: Option<Uuid>,
+    ) -> Result<()> {
+        // Resolve local project and label identifiers before releasing the storage lock.
+        let (remote_project_id, label_name) = {
             let storage = self.storage.lock().await;
-            if let Some(uuid) = project_uuid {
+            let remote_project_id = if let Some(uuid) = project_uuid {
                 Some(ProjectRepository::get_remote_id(&storage.conn, &uuid).await?)
             } else {
                 None
-            }
-            // Lock is automatically dropped here when storage goes out of scope
+            };
+            let label_name = if let Some(uuid) = label_uuid {
+                Some(
+                    LabelRepository::get_by_id(&storage.conn, &uuid)
+                        .await?
+                        .ok_or_else(|| anyhow::anyhow!("Label not found: {}", uuid))?
+                        .name,
+                )
+            } else {
+                None
+            };
+            (remote_project_id, label_name)
         };
 
         // Create task via backend using backend CreateTaskArgs (lock is not held)
@@ -151,10 +179,10 @@ impl SyncService {
             section_remote_id: None,
             parent_remote_id: None,
             priority: None,
-            due_date: None,
+            due_date: due_date.map(str::to_owned),
             due_datetime: None,
             duration: None,
-            labels: Vec::new(),
+            labels: label_name.into_iter().collect(),
         };
         let backend_task = self
             .get_backend()
@@ -189,8 +217,9 @@ impl SyncService {
             None
         };
 
+        let task_uuid = Uuid::new_v4();
         let local_task = task::ActiveModel {
-            uuid: ActiveValue::Set(Uuid::new_v4()),
+            uuid: ActiveValue::Set(task_uuid),
             backend_uuid: ActiveValue::Set(self.backend_uuid),
             remote_id: ActiveValue::Set(backend_task.remote_id),
             content: ActiveValue::Set(backend_task.content),
@@ -208,6 +237,7 @@ impl SyncService {
             is_completed: ActiveValue::Set(backend_task.is_completed),
             completed_at: ActiveValue::Set(backend_task.completed_at),
             is_deleted: ActiveValue::Set(false),
+            deleted_at: ActiveValue::Set(None),
         };
 
         use sea_orm::sea_query::OnConflict;
@@ -233,6 +263,15 @@ impl SyncService {
                 .to_owned(),
         );
         insert.exec(&txn).await?;
+
+        if let Some(label_uuid) = label_uuid {
+            task_label::Entity::insert(task_label::ActiveModel {
+                task_uuid: ActiveValue::Set(task_uuid),
+                label_uuid: ActiveValue::Set(label_uuid),
+            })
+            .exec(&txn)
+            .await?;
+        }
 
         txn.commit().await?;
 
@@ -426,6 +465,7 @@ impl SyncService {
         if let Some(task) = TaskRepository::get_by_id(&storage.conn, task_uuid).await? {
             let mut active_model: task::ActiveModel = task.into_active_model();
             active_model.is_deleted = ActiveValue::Set(true);
+            active_model.deleted_at = ActiveValue::Set(Some(chrono::Utc::now().to_rfc3339()));
             TaskRepository::update(&storage.conn, active_model).await?;
         }
 
@@ -524,6 +564,7 @@ impl SyncService {
                 is_completed: ActiveValue::Set(new_task.is_completed),
                 completed_at: ActiveValue::Set(new_task.completed_at),
                 is_deleted: ActiveValue::Set(false),
+                deleted_at: ActiveValue::Set(None),
             };
 
             use sea_orm::sea_query::OnConflict;

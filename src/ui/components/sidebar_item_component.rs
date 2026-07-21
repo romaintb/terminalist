@@ -81,6 +81,7 @@ impl SidebarItem for SidebarItemType {
                     SidebarSelection::Today => icons.today(),
                     SidebarSelection::Tomorrow => icons.tomorrow(),
                     SidebarSelection::Upcoming => icons.upcoming(),
+                    SidebarSelection::Trash => "🗑 ",
                     _ => "",
                 };
 

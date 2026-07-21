@@ -120,7 +120,11 @@ pub fn render_delete_confirmation_dialog(f: &mut Frame, area: Rect, icons: &Icon
         .split(inner_area);
 
     // Confirmation message
-    let message = format!("Are you sure you want to delete this {}?", item_type);
+    let message = if item_type.ends_with("from Trash") {
+        format!("Permanently delete {}? This cannot be undone.", item_type)
+    } else {
+        format!("Are you sure you want to delete this {}?", item_type)
+    };
     let message_paragraph = Paragraph::new(message)
         .style(Style::default().fg(Color::White))
         .alignment(Alignment::Center);

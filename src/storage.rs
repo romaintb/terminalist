@@ -108,6 +108,34 @@ impl LocalStorage {
                 .await?;
         }
 
+        let has_deleted_at = task_columns.iter().any(|row| {
+            row.try_get::<String>("", "name")
+                .map(|name| name == "deleted_at")
+                .unwrap_or(false)
+        });
+        if !has_deleted_at {
+            self.conn
+                .execute(Statement::from_string(
+                    DbBackend::Sqlite,
+                    "ALTER TABLE tasks ADD COLUMN deleted_at TEXT".to_owned(),
+                ))
+                .await?;
+        }
+        let has_is_deleted = task_columns.iter().any(|row| {
+            row.try_get::<String>("", "name")
+                .map(|name| name == "is_deleted")
+                .unwrap_or(false)
+        });
+        if has_is_deleted {
+            self.conn
+                .execute(Statement::from_string(
+                    DbBackend::Sqlite,
+                    "UPDATE tasks SET deleted_at = CURRENT_TIMESTAMP WHERE is_deleted = 1 AND deleted_at IS NULL"
+                        .to_owned(),
+                ))
+                .await?;
+        }
+
         // Create composite unique indexes for (backend_uuid, remote_id)
         let indexes = vec![
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_projects_backend_remote ON projects(backend_uuid, remote_id)",

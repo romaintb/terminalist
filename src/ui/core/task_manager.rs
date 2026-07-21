@@ -144,6 +144,9 @@ impl TaskManager {
                     if desc_clone.starts_with("Delete project") {
                         let _ = action_sender.send(Action::NavigateToSidebar(SidebarSelection::Today));
                     }
+                    if desc_clone == "Empty trash" {
+                        let _ = action_sender.send(Action::NavigateToSidebar(SidebarSelection::Today));
+                    }
 
                     Ok(result)
                 }
@@ -262,6 +265,7 @@ impl TaskManager {
                         SidebarSelection::Today => sync_service.get_tasks_for_today().await.unwrap_or_default(),
                         SidebarSelection::Tomorrow => sync_service.get_tasks_for_tomorrow().await.unwrap_or_default(),
                         SidebarSelection::Upcoming => sync_service.get_tasks_for_upcoming().await.unwrap_or_default(),
+                        SidebarSelection::Trash => sync_service.get_deleted_tasks().await.unwrap_or_default(),
                         SidebarSelection::Project(project_uuid) => {
                             sync_service.get_tasks_for_project(project_uuid).await.unwrap_or_default()
                         }
@@ -273,7 +277,10 @@ impl TaskManager {
                     let today = chrono::Local::now().date_naive();
                     let tomorrow = today + chrono::Duration::days(1);
                     let upcoming_end = today + chrono::Duration::days(90);
-                    let mut navigation_counts = NavigationCounts::default();
+                    let mut navigation_counts = NavigationCounts {
+                        trash: all_tasks.iter().filter(|task| task.is_deleted).count(),
+                        ..NavigationCounts::default()
+                    };
                     for task in all_tasks.iter().filter(|task| !task.is_completed && !task.is_deleted) {
                         if let Some(due) = &task.due_date {
                             if let Ok(due) = crate::utils::datetime::parse_date(due) {

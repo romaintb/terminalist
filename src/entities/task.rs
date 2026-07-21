@@ -25,6 +25,7 @@ pub struct Model {
     pub is_completed: bool,
     pub completed_at: Option<String>,
     pub is_deleted: bool,
+    pub deleted_at: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
