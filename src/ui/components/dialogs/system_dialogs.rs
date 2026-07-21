@@ -205,7 +205,7 @@ PROJECT & LABEL MANAGEMENT
 --------------------------
 A           Create new project
 E           Edit selected item (project or label)
-D           Delete selected item (project or label)
+D           Delete selected project/label; empty Trash when viewing Trash
 
 TASK MANAGEMENT
 --------------
@@ -214,7 +214,7 @@ x           Mark/unmark task for bulk actions
 Esc         Clear marked tasks
 a           Create new task
 e           Edit selected task
-d           Delete task (with confirmation)
+d           Delete task; restore selected task when viewing Trash
 p           Cycle task priority
 t           Set task due date to today
 T           Set task due date to tomorrow

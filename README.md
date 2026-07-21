@@ -20,6 +20,7 @@ A terminal application for interacting with Todoist, built in Rust with a modern
 - **Smart Sync** - Automatic sync on startup and manual refresh with 'r'
 - **Project Management** - Browse projects with hierarchical display
 - **Task Management** - View, navigate, complete, and create tasks
+- **Recoverable Deletion** - Restore recently deleted tasks from a 30-day local Trash
 - **Task Search** - Fast database-powered search across all tasks with '/' shortcut
 - **Keyboard & Mouse Navigation** - Efficient keyboard operation with mouse support
 - **Real-time Updates** - Create, complete, and delete tasks/projects
