@@ -1243,7 +1243,7 @@ impl Component for AppComponent {
         self.task_list.render(f, main_chunks[1]);
 
         if self.config.ui.shortcut_bar_visible {
-            Self::render_shortcut_bar(f, page_chunks[1]);
+            Self::render_shortcut_bar(f, page_chunks[1], &self.state.sidebar_selection);
         }
 
         // Render sync status if syncing or loading
@@ -1259,24 +1259,41 @@ impl Component for AppComponent {
 }
 
 impl AppComponent {
-    fn render_shortcut_bar(f: &mut Frame, rect: Rect) {
+    fn shortcut_bar_items(selection: &SidebarSelection) -> &'static [(&'static str, &'static str)] {
+        if selection == &SidebarSelection::Trash {
+            &[
+                ("j/k", "navigate"),
+                ("x", "select"),
+                ("d", "restore"),
+                ("D", "empty trash"),
+                ("/", "search"),
+                ("r", "sync"),
+                ("?", "help"),
+                ("q", "quit"),
+            ]
+        } else {
+            &[
+                ("j/k", "navigate"),
+                ("x", "select"),
+                ("Space", "complete"),
+                ("a", "add"),
+                ("t", "today"),
+                ("/", "search"),
+                ("r", "sync"),
+                ("?", "help"),
+                ("q", "quit"),
+            ]
+        }
+    }
+
+    fn render_shortcut_bar(f: &mut Frame, rect: Rect, selection: &SidebarSelection) {
         use ratatui::{
             style::{Color, Style},
             text::{Line, Span},
             widgets::Paragraph,
         };
 
-        let shortcuts = [
-            ("j/k", "navigate"),
-            ("x", "select"),
-            ("Space", "complete"),
-            ("a", "add"),
-            ("t", "today"),
-            ("/", "search"),
-            ("r", "sync"),
-            ("?", "help"),
-            ("q", "quit"),
-        ];
+        let shortcuts = Self::shortcut_bar_items(selection);
         let mut spans = Vec::new();
         for (index, (key, label)) in shortcuts.iter().enumerate() {
             if index > 0 {
@@ -1386,6 +1403,15 @@ mod tests {
             AppComponent::single_task_completion(&[(pending_task, false), (other_task, false)]),
             None
         );
+    }
+
+    #[test]
+    fn trash_shortcut_bar_replaces_task_actions_with_restore_actions() {
+        let shortcuts = AppComponent::shortcut_bar_items(&SidebarSelection::Trash);
+
+        assert!(shortcuts.contains(&("d", "restore")));
+        assert!(shortcuts.contains(&("D", "empty trash")));
+        assert!(!shortcuts.iter().any(|(_, label)| ["complete", "add", "today"].contains(label)));
     }
 
     #[tokio::test]
