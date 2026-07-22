@@ -120,11 +120,12 @@ impl ListItem for TaskItem {
 
         if let Some((time, suggested)) = &self.agenda_time {
             let style = if *suggested {
-                Style::default().fg(Color::DarkGray)
+                let color = if selected { Color::Yellow } else { Color::DarkGray };
+                Style::default().fg(color)
             } else {
                 Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
             };
-            line_spans.push(Span::styled(format!("{time:<8}"), style));
+            line_spans.push(Span::styled(time.clone(), style));
         }
 
         if self.marked {

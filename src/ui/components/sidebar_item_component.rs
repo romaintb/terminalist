@@ -79,7 +79,7 @@ impl SidebarItem for SidebarItemType {
 
                 let icon = match selection {
                     SidebarSelection::Today => icons.today(),
-                    SidebarSelection::Agenda => "◷ ",
+                    SidebarSelection::Agenda => "◷",
                     SidebarSelection::Tomorrow => icons.tomorrow(),
                     SidebarSelection::Upcoming => icons.upcoming(),
                     SidebarSelection::Trash => "🗑 ",

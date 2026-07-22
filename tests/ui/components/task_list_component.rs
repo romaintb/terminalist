@@ -325,6 +325,62 @@ fn selected_completed_task_content_contrasts_with_highlight() {
 }
 
 #[test]
+fn selected_agenda_time_stays_visible_without_excess_padding() {
+    let project = project();
+    let mut agenda_task = task("agenda task", project.uuid, false);
+    agenda_task.due_date = Some(datetime::format_today());
+    let mut component = TaskListComponent::new();
+    component.update_data(
+        vec![agenda_task],
+        Vec::new(),
+        vec![project],
+        Vec::new(),
+        SidebarSelection::Agenda,
+    );
+    let TaskListItemType::Task(item) = &mut component.items[0] else {
+        panic!("agenda task should be rendered as a task item");
+    };
+    item.agenda_time = Some(("6pm".to_string(), true));
+
+    let backend = TestBackend::new(50, 5);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|frame| component.render(frame, frame.area())).unwrap();
+    let buffer = terminal.backend().buffer();
+    let row = (0..buffer.area.height)
+        .find(|&y| {
+            (0..buffer.area.width)
+                .map(|x| buffer[(x, y)].symbol())
+                .collect::<String>()
+                .contains("agenda task")
+        })
+        .expect("agenda task should be rendered");
+    let rendered = (0..buffer.area.width).map(|x| buffer[(x, row)].symbol()).collect::<String>();
+    let time_start = (0..buffer.area.width - 2)
+        .find(|&x| (x..x + 3).map(|cell_x| buffer[(cell_x, row)].symbol()).collect::<String>() == "6pm")
+        .expect("agenda time should occupy terminal cells");
+    let time_column = rendered.chars().position(|ch| ch == '6').unwrap();
+    let task_column = rendered
+        .chars()
+        .collect::<Vec<_>>()
+        .windows("agenda task".chars().count())
+        .position(|window| window.iter().collect::<String>() == "agenda task")
+        .expect("task content should have a terminal column");
+
+    let after_time = rendered.chars().skip(time_column + 3).take(3).collect::<Vec<_>>();
+    assert_eq!(after_time[0..2], [' ', ' '], "unexpected Agenda spacing: {rendered:?}");
+    assert_ne!(after_time[2], ' ', "unexpected Agenda padding: {rendered:?}");
+    assert!(
+        task_column - (time_column + 3) <= 8,
+        "unexpected Agenda spacing: {rendered:?}"
+    );
+    for x in time_start..time_start + 3 {
+        let cell = &buffer[(x, row)];
+        assert_eq!(cell.fg, ratatui::style::Color::Yellow);
+        assert_eq!(cell.bg, ratatui::style::Color::DarkGray);
+    }
+}
+
+#[test]
 fn marks_tasks_and_unschedules_all_marked_tasks() {
     let project = project();
     let first = task("first", project.uuid, false);

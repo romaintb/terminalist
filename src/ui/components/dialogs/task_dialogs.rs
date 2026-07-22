@@ -128,11 +128,13 @@ pub fn render_task_edit_dialog(
 }
 
 pub fn render_task_time_dialog(f: &mut Frame, area: Rect, input: &str, cursor_position: usize) {
-    let dialog_area = LayoutManager::centered_rect_lines(45, 8, area);
+    // Nine rows guarantee one content row inside the bordered input after the
+    // dialog's borders and margins are applied.
+    let dialog_area = LayoutManager::centered_rect_lines(45, 9, area);
     f.render_widget(Clear, dialog_area);
     let block = common::create_dialog_block("Set Due Time", Color::Cyan);
     let inner = block.inner(dialog_area);
-    let chunks = Layout::vertical([Constraint::Length(4), Constraint::Length(1), Constraint::Length(1)])
+    let chunks = Layout::vertical([Constraint::Length(3), Constraint::Length(1), Constraint::Length(1)])
         .margin(1)
         .split(inner);
     let input_width = chunks[0].width.saturating_sub(2);
