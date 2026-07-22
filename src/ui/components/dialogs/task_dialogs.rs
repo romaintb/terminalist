@@ -39,7 +39,8 @@ pub fn render_task_dialog(
         ])
         .split(inner_area);
 
-    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Task Content");
+    let input_width = chunks[0].width.saturating_sub(2);
+    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, input_width, "Task Content");
 
     // Project selection field
     let project_name = match selected_project_index {
@@ -78,8 +79,9 @@ pub fn render_task_dialog(
     f.render_widget(project_paragraph, chunks[1]);
     f.render_widget(instructions_paragraph, chunks[3]);
 
-    // Set terminal cursor position
-    f.set_cursor_position((chunks[0].x + 1 + cursor_position as u16, chunks[0].y + 1));
+    // Set the cursor inside the horizontally scrolled input viewport.
+    let (_, visible_cursor_column) = common::input_viewport(input_buffer, cursor_position, input_width);
+    f.set_cursor_position((chunks[0].x + 1 + visible_cursor_column, chunks[0].y + 1));
 }
 
 // Legacy wrapper functions for backward compatibility

@@ -35,7 +35,8 @@ pub fn render_project_creation_dialog(
         ])
         .split(inner_area);
 
-    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Project Name");
+    let input_width = chunks[0].width.saturating_sub(2);
+    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, input_width, "Project Name");
 
     // Parent project selection field
     let parent_project_name = match selected_parent_index {
@@ -67,10 +68,9 @@ pub fn render_project_creation_dialog(
     f.render_widget(parent_paragraph, chunks[1]);
     f.render_widget(instructions_paragraph, chunks[3]);
 
-    // Set terminal cursor position with safe u16 conversion and overflow protection
-    let base_x = chunks[0].x.saturating_add(1);
-    let cursor_u16 = u16::try_from(cursor_position).unwrap_or(u16::MAX.saturating_sub(base_x));
-    let final_x = base_x.saturating_add(cursor_u16);
+    // Set the cursor inside the horizontally scrolled input viewport.
+    let (_, visible_cursor_column) = common::input_viewport(input_buffer, cursor_position, input_width);
+    let final_x = chunks[0].x.saturating_add(1).saturating_add(visible_cursor_column);
     let final_y = chunks[0].y.saturating_add(1);
     f.set_cursor_position((final_x, final_y));
 }
@@ -99,7 +99,8 @@ pub fn render_project_edit_dialog(
         ])
         .split(inner_area);
 
-    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, "Project Name");
+    let input_width = chunks[0].width.saturating_sub(2);
+    let input_paragraph = common::create_input_paragraph(input_buffer, cursor_position, input_width, "Project Name");
 
     let instructions = [
         ("Enter", Color::Green, " Save Changes"),
@@ -113,10 +114,9 @@ pub fn render_project_edit_dialog(
     f.render_widget(input_paragraph, chunks[0]);
     f.render_widget(instructions_paragraph, chunks[2]);
 
-    // Set terminal cursor position with safe u16 conversion and overflow protection
-    let base_x = chunks[0].x.saturating_add(1);
-    let cursor_u16 = u16::try_from(cursor_position).unwrap_or(u16::MAX.saturating_sub(base_x));
-    let final_x = base_x.saturating_add(cursor_u16);
+    // Set the cursor inside the horizontally scrolled input viewport.
+    let (_, visible_cursor_column) = common::input_viewport(input_buffer, cursor_position, input_width);
+    let final_x = chunks[0].x.saturating_add(1).saturating_add(visible_cursor_column);
     let final_y = chunks[0].y.saturating_add(1);
     f.set_cursor_position((final_x, final_y));
 }
