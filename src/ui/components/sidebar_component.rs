@@ -103,7 +103,7 @@ impl SidebarComponent {
             .map(|project| project.name.chars().count() + 4)
             .chain(self.labels.iter().map(|label| label.name.chars().count() + 2))
             .chain(
-                ["Today", "Tomorrow", "Upcoming", "Trash"]
+                ["Today", "Agenda", "Tomorrow", "Upcoming", "Trash"]
                     .into_iter()
                     .map(|name| name.len() + 1),
             )
@@ -137,6 +137,7 @@ impl SidebarComponent {
         match item {
             SidebarItemType::SpecialView { selection, .. } => match selection {
                 SidebarSelection::Today => self.navigation_counts.today,
+                SidebarSelection::Agenda => self.navigation_counts.today,
                 SidebarSelection::Tomorrow => self.navigation_counts.tomorrow,
                 SidebarSelection::Upcoming => self.navigation_counts.upcoming,
                 SidebarSelection::Trash => self.navigation_counts.trash,
@@ -160,6 +161,10 @@ impl SidebarComponent {
         self.items.push(SidebarItemType::SpecialView {
             name: "Today".to_string(),
             selection: SidebarSelection::Today,
+        });
+        self.items.push(SidebarItemType::SpecialView {
+            name: "Agenda".to_string(),
+            selection: SidebarSelection::Agenda,
         });
         self.items.push(SidebarItemType::SpecialView {
             name: "Tomorrow".to_string(),

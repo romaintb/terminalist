@@ -126,3 +126,25 @@ pub fn render_task_edit_dialog(
         true, // is_editing = true for editing
     );
 }
+
+pub fn render_task_time_dialog(f: &mut Frame, area: Rect, input: &str, cursor_position: usize) {
+    let dialog_area = LayoutManager::centered_rect_lines(45, 8, area);
+    f.render_widget(Clear, dialog_area);
+    let block = common::create_dialog_block("Set Due Time", Color::Cyan);
+    let inner = block.inner(dialog_area);
+    let chunks = Layout::vertical([Constraint::Length(4), Constraint::Length(1), Constraint::Length(1)])
+        .margin(1)
+        .split(inner);
+    let input_width = chunks[0].width.saturating_sub(2);
+    let field = common::create_input_paragraph(input, cursor_position, input_width, "Time (e.g. 2pm)");
+    let instructions = common::create_instructions_paragraph(&[
+        ("Enter", Color::Green, " Save"),
+        shortcuts::SEPARATOR,
+        shortcuts::ESC_CANCEL,
+    ]);
+    f.render_widget(block, dialog_area);
+    f.render_widget(field, chunks[0]);
+    f.render_widget(instructions, chunks[2]);
+    let (_, cursor) = common::input_viewport(input, cursor_position, input_width);
+    f.set_cursor_position((chunks[0].x + 1 + cursor, chunks[0].y + 1));
+}

@@ -16,7 +16,7 @@ use crate::ui::core::{
     Component,
 };
 use crate::utils::datetime;
-use chrono::{Duration, Local};
+use chrono::{DateTime, Duration, Local, NaiveDateTime, TimeZone, Timelike};
 use crossterm::event::{KeyCode, KeyEvent, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::{
     layout::Rect,
@@ -135,11 +135,82 @@ impl TaskListComponent {
         // Handle different sidebar selections with appropriate sectioning
         match self.sidebar_selection.clone() {
             SidebarSelection::Today => self.build_today_items(),
+            SidebarSelection::Agenda => self.build_agenda_items(),
             SidebarSelection::Tomorrow => self.build_tomorrow_items(),
             SidebarSelection::Upcoming => self.build_upcoming_items(),
             SidebarSelection::Trash => self.build_trash_items(),
             SidebarSelection::Project(project_id) => self.build_project_items(&project_id),
             SidebarSelection::Label(label_id) => self.build_label_items(&label_id),
+        }
+    }
+
+    fn parse_task_datetime(value: &str) -> Option<DateTime<Local>> {
+        DateTime::parse_from_rfc3339(value)
+            .ok()
+            .map(|datetime| datetime.with_timezone(&Local))
+            .or_else(|| {
+                NaiveDateTime::parse_from_str(value, "%Y-%m-%dT%H:%M:%S")
+                    .ok()
+                    .and_then(|datetime| Local.from_local_datetime(&datetime).single())
+            })
+    }
+
+    fn agenda_time_label(datetime: DateTime<Local>) -> String {
+        if datetime.minute() == 0 {
+            datetime.format("%-I%P").to_string()
+        } else {
+            datetime.format("%-I:%M%P").to_string()
+        }
+    }
+
+    /// Build a flat, chronological local schedule from incomplete Today tasks.
+    fn build_agenda_items(&mut self) {
+        let now = Local::now();
+        let mut occupied_hours = HashSet::new();
+        let mut scheduled = Vec::new();
+        let tasks: Vec<_> = self
+            .tasks
+            .iter()
+            .filter(|task| !task.is_completed && !task.is_deleted)
+            .cloned()
+            .collect();
+
+        for task in &tasks {
+            if let Some(datetime) = task.due_datetime.as_deref().and_then(Self::parse_task_datetime) {
+                occupied_hours.insert((datetime.date_naive(), datetime.hour()));
+                scheduled.push((datetime, false, task.clone()));
+            }
+        }
+
+        let next_hour = now
+            .with_minute(0)
+            .and_then(|value| value.with_second(0))
+            .and_then(|value| value.with_nanosecond(0))
+            .unwrap_or(now)
+            + Duration::hours(1);
+        let mut candidate = next_hour;
+        for task in tasks.into_iter().filter(|task| task.due_datetime.is_none()) {
+            while occupied_hours.contains(&(candidate.date_naive(), candidate.hour())) {
+                candidate += Duration::hours(1);
+            }
+            occupied_hours.insert((candidate.date_naive(), candidate.hour()));
+            scheduled.push((candidate, true, task));
+            candidate += Duration::hours(1);
+        }
+
+        scheduled.sort_by_key(|(datetime, suggested, _)| (*datetime, *suggested));
+        for (datetime, suggested, task) in scheduled {
+            let mut item = TaskItem::new(
+                task.clone(),
+                0,
+                self.get_child_task_count(&task.uuid),
+                self.icons.clone(),
+                self.projects.clone(),
+                Vec::new(),
+            );
+            item.marked = self.marked_task_ids.contains(&task.uuid);
+            item.agenda_time = Some((Self::agenda_time_label(datetime), suggested));
+            self.items.push(TaskListItemType::Task(Box::new(item)));
         }
     }
 
@@ -645,22 +716,29 @@ impl Component for TaskListComponent {
                 Action::None
             }
             KeyCode::Enter | KeyCode::Char(' ') => {
-                let tasks = self
-                    .target_tasks()
-                    .into_iter()
-                    .map(|task| (task.uuid, task.is_deleted || task.is_completed))
-                    .collect::<Vec<_>>();
-                if tasks.is_empty() {
-                    return Action::None;
-                }
+                let action = Action::toggle_tasks(self.target_tasks());
                 self.clear_marked_tasks();
-                Action::ToggleTasks(tasks)
+                action
             }
             KeyCode::Char('u') => self.due_date_action(TaskDueDate::None),
             KeyCode::Char('t') => self.due_date_action(TaskDueDate::Today),
             KeyCode::Char('T') => self.due_date_action(TaskDueDate::Tomorrow),
             KeyCode::Char('w') => self.due_date_action(TaskDueDate::NextWeek),
             KeyCode::Char('W') => self.due_date_action(TaskDueDate::Weekend),
+            KeyCode::Char('s') if self.sidebar_selection == SidebarSelection::Agenda => {
+                if let Some(task) = self.get_selected_task() {
+                    Action::ShowDialog(DialogType::TaskTime {
+                        task_uuid: task.uuid,
+                        current_time: task
+                            .due_datetime
+                            .as_deref()
+                            .and_then(Self::parse_task_datetime)
+                            .map(|datetime| datetime.format("%-I:%M%P").to_string()),
+                    })
+                } else {
+                    Action::None
+                }
+            }
             KeyCode::Char('a') => {
                 // When viewing a specific project, preselect it as the default project
                 let default_project_uuid = match &self.sidebar_selection {
@@ -669,6 +747,7 @@ impl Component for TaskListComponent {
                 };
                 let default_due_date = match self.sidebar_selection {
                     SidebarSelection::Today => Some(datetime::format_today()),
+                    SidebarSelection::Agenda => Some(datetime::format_today()),
                     SidebarSelection::Tomorrow => Some(datetime::format_date_with_offset(1)),
                     _ => None,
                 };
@@ -748,6 +827,7 @@ impl Component for TaskListComponent {
             // Show contextual empty state message
             Some(match &self.sidebar_selection {
                 SidebarSelection::Today => "No tasks due today. Press 'a' to create a task or 'r' to sync.",
+                SidebarSelection::Agenda => "No incomplete tasks in Today.",
                 SidebarSelection::Tomorrow => "No tasks due tomorrow. Press 'a' to create a task or 'r' to sync.",
                 SidebarSelection::Trash => "Trash is empty.",
                 _ if self.projects.is_empty() => "No projects available. Press 'r' to sync or 'A' to create a project.",

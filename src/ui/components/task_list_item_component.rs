@@ -69,6 +69,8 @@ pub struct TaskItem {
     pub labels: Vec<crate::entities::label::Model>,
     pub marked: bool,
     pub parent_context: Option<String>,
+    /// Agenda-only time label and whether it is a local suggestion.
+    pub agenda_time: Option<(String, bool)>,
 }
 
 impl TaskItem {
@@ -89,6 +91,7 @@ impl TaskItem {
             labels,
             marked: false,
             parent_context: None,
+            agenda_time: None,
         }
     }
 
@@ -114,6 +117,15 @@ impl ListItem for TaskItem {
             self.icons.task_pending()
         };
         let mut line_spans = Vec::new();
+
+        if let Some((time, suggested)) = &self.agenda_time {
+            let style = if *suggested {
+                Style::default().fg(Color::DarkGray)
+            } else {
+                Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)
+            };
+            line_spans.push(Span::styled(format!("{time:<8}"), style));
+        }
 
         if self.marked {
             line_spans.push(Span::styled(
@@ -203,20 +215,22 @@ impl ListItem for TaskItem {
         }
 
         // Due date/datetime display
-        if let Some(due_date) = &self.task.due_date {
-            line_spans.push(Span::raw(" "));
+        if self.agenda_time.is_none() {
+            if let Some(due_date) = &self.task.due_date {
+                line_spans.push(Span::raw(" "));
 
-            // Use datetime formatting if available, otherwise use date formatting
-            let formatted_date = if let Some(due_datetime) = &self.task.due_datetime {
-                self.format_due_datetime(due_datetime)
-            } else {
-                self.format_due_date(due_date)
-            };
+                // Use datetime formatting if available, otherwise use date formatting
+                let formatted_date = if let Some(due_datetime) = &self.task.due_datetime {
+                    self.format_due_datetime(due_datetime)
+                } else {
+                    self.format_due_date(due_date)
+                };
 
-            line_spans.push(Span::styled(
-                formatted_date,
-                Style::default().fg(Color::Rgb(255, 165, 0)), // Orange color
-            ));
+                line_spans.push(Span::styled(
+                    formatted_date,
+                    Style::default().fg(Color::Rgb(255, 165, 0)), // Orange color
+                ));
+            }
         }
 
         // Metadata badges (only if configured to show)

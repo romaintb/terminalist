@@ -201,6 +201,7 @@ impl AppComponent {
                 }
             }
             "today" => SidebarSelection::Today,
+            "agenda" => SidebarSelection::Agenda,
             "tomorrow" => SidebarSelection::Tomorrow,
             "upcoming" => SidebarSelection::Upcoming,
             project_id_or_name => {
@@ -321,6 +322,9 @@ impl AppComponent {
                         info!("Global key: 'D' - cannot delete Today view");
                         Action::ShowDialog(DialogType::Info(UI_CANNOT_DELETE_TODAY_VIEW.to_string()))
                     }
+                    SidebarSelection::Agenda => {
+                        Action::ShowDialog(DialogType::Info("Cannot delete the Agenda view".to_string()))
+                    }
                     SidebarSelection::Tomorrow => {
                         info!("Global key: 'D' - cannot delete Tomorrow view");
                         Action::ShowDialog(DialogType::Info("Cannot delete the Tomorrow view".to_string()))
@@ -367,6 +371,9 @@ impl AppComponent {
                     SidebarSelection::Today => {
                         info!("Global key: 'E' - cannot edit Today view");
                         Action::ShowDialog(DialogType::Info("Cannot edit the Today view".to_string()))
+                    }
+                    SidebarSelection::Agenda => {
+                        Action::ShowDialog(DialogType::Info("Cannot edit the Agenda view".to_string()))
                     }
                     SidebarSelection::Tomorrow => {
                         info!("Global key: 'E' - cannot edit Tomorrow view");
@@ -532,6 +539,7 @@ impl AppComponent {
                 // Create a more detailed log message with names
                 let selection_desc = match &selection {
                     SidebarSelection::Today => "Today".to_string(),
+                    SidebarSelection::Agenda => "Agenda".to_string(),
                     SidebarSelection::Tomorrow => "Tomorrow".to_string(),
                     SidebarSelection::Upcoming => "Upcoming".to_string(),
                     SidebarSelection::Trash => "Trash".to_string(),
@@ -577,25 +585,6 @@ impl AppComponent {
                     due_date,
                     label_uuid,
                 }));
-                Action::None
-            }
-            Action::CompleteTask(task_id) => {
-                if self.task_manager.has_pending_operation_for_task(&task_id) {
-                    info!("Task: Completion already pending for task {}", task_id);
-                    return Action::None;
-                }
-                // Find the task being completed
-                let sync_service = self.sync_service.clone();
-                if let Ok(Some(task)) = sync_service.get_task_by_id(&task_id).await {
-                    let task_desc = format!("ID {} '{}'", task_id, task.content);
-
-                    info!("Task: Completing task {}", task_desc);
-
-                    // Todoist API automatically handles subtasks when parent is completed
-                    self.spawn_operation(Operation::Task(TaskOperation::Complete(task_id)));
-                } else {
-                    info!("Task: Cannot complete - task {} not found", task_id);
-                }
                 Action::None
             }
             Action::ToggleTasks(tasks) => {
@@ -760,6 +749,20 @@ impl AppComponent {
                         Ok(format!("Updated due date for {} task(s)", count))
                     },
                     format!("{operation} {count} task(s)"),
+                );
+                Action::None
+            }
+            Action::SetTaskDueTime {
+                task_uuid,
+                due_datetime,
+            } => {
+                let sync_service = self.sync_service.clone();
+                self.task_manager.spawn_task_operation(
+                    move || async move {
+                        sync_service.update_task_due_datetime(&task_uuid, &due_datetime).await?;
+                        Ok("Set task time".to_string())
+                    },
+                    "Set task time".to_string(),
                 );
                 Action::None
             }
@@ -1271,11 +1274,21 @@ impl AppComponent {
                 ("?", "help"),
                 ("q", "quit"),
             ]
+        } else if selection == &SidebarSelection::Agenda {
+            &[
+                ("j/k", "navigate"),
+                ("Space", "toggle complete"),
+                ("s", "set time"),
+                ("/", "search"),
+                ("r", "sync"),
+                ("?", "help"),
+                ("q", "quit"),
+            ]
         } else {
             &[
                 ("j/k", "navigate"),
                 ("x", "select"),
-                ("Space", "complete"),
+                ("Space", "toggle complete"),
                 ("a", "add"),
                 ("t", "today"),
                 ("/", "search"),
@@ -1411,7 +1424,9 @@ mod tests {
 
         assert!(shortcuts.contains(&("d", "restore")));
         assert!(shortcuts.contains(&("D", "empty trash")));
-        assert!(!shortcuts.iter().any(|(_, label)| ["complete", "add", "today"].contains(label)));
+        assert!(!shortcuts
+            .iter()
+            .any(|(_, label)| ["toggle complete", "add", "today"].contains(label)));
     }
 
     #[tokio::test]

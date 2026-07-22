@@ -355,6 +355,39 @@ impl SyncService {
         Ok(())
     }
 
+    /// Set an exact Todoist due time and mirror the returned value locally.
+    pub async fn update_task_due_datetime(&self, task_uuid: &Uuid, due_datetime: &str) -> Result<()> {
+        let remote_id = self.get_task_remote_id(task_uuid).await?;
+        let task_args = crate::backend::UpdateTaskArgs {
+            content: None,
+            description: None,
+            project_remote_id: None,
+            section_remote_id: None,
+            parent_remote_id: None,
+            priority: None,
+            due_date: None,
+            due_datetime: Some(due_datetime.to_string()),
+            clear_due_date: false,
+            duration: None,
+            labels: None,
+        };
+        let updated_task = self
+            .get_backend()
+            .await?
+            .update_task(&remote_id, task_args)
+            .await
+            .map_err(|error| anyhow::anyhow!("Backend error: {}", error))?;
+
+        let storage = self.storage.lock().await;
+        if let Some(task) = TaskRepository::get_by_id(&storage.conn, task_uuid).await? {
+            let mut active_model: task::ActiveModel = task.into_active_model();
+            active_model.due_date = ActiveValue::Set(updated_task.due_date);
+            active_model.due_datetime = ActiveValue::Set(updated_task.due_datetime);
+            TaskRepository::update(&storage.conn, active_model).await?;
+        }
+        Ok(())
+    }
+
     /// Update task priority
     pub async fn update_task_priority(&self, task_uuid: &Uuid, priority: i32) -> Result<()> {
         // Look up the task's remote_id for backend call

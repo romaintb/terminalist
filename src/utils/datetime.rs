@@ -3,7 +3,7 @@
 //! This module provides functions for date manipulation and human-readable formatting,
 //! similar to how Todoist displays dates (e.g., "yesterday", "today", "tomorrow").
 
-use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, TimeZone, Weekday};
+use chrono::{DateTime, Datelike, Duration, Local, NaiveDate, NaiveTime, TimeZone, Weekday};
 
 /// Standard date format used throughout the application for Todoist API compatibility
 pub const TODOIST_DATE_FORMAT: &str = "%Y-%m-%d";
@@ -28,6 +28,26 @@ pub fn format_ymd(d: NaiveDate) -> String {
 /// Format current local date to YYYY-MM-DD string
 pub fn format_today() -> String {
     format_ymd(Local::now().date_naive())
+}
+
+/// Parse a user-entered clock time and return today's instant as UTC RFC3339.
+pub fn today_at_time(input: &str) -> Result<String, String> {
+    let mut trimmed = input.trim().to_ascii_uppercase().replace(' ', "");
+    if (trimmed.ends_with("AM") || trimmed.ends_with("PM")) && !trimmed.contains(':') {
+        let suffix = trimmed.split_off(trimmed.len() - 2);
+        trimmed.push_str(":00");
+        trimmed.push_str(&suffix);
+    }
+    let formats = ["%I:%M%p", "%H:%M", "%H%M"];
+    let time = formats
+        .iter()
+        .find_map(|format| NaiveTime::parse_from_str(&trimmed, format).ok())
+        .ok_or_else(|| "Enter a time like 2pm or 14:30".to_string())?;
+    let local = Local
+        .from_local_datetime(&Local::now().date_naive().and_time(time))
+        .earliest()
+        .ok_or_else(|| "That local time does not exist today".to_string())?;
+    Ok(local.to_utc().to_rfc3339())
 }
 
 /// Return the UTC RFC3339 bounds for the current local calendar day.

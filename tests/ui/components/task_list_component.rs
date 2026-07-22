@@ -69,6 +69,67 @@ fn test_task_list_component_creation() {
 }
 
 #[test]
+fn agenda_assigns_local_suggestions_and_preserves_real_times() {
+    let project = project();
+    let mut timed = task("timed", project.uuid, false);
+    timed.due_date = Some(datetime::format_today());
+    timed.due_datetime = Some(datetime::today_at_time("11:30pm").unwrap());
+    let mut first = task("first", project.uuid, false);
+    first.due_date = Some(datetime::format_today());
+    let mut second = task("second", project.uuid, false);
+    second.due_date = Some(datetime::format_today());
+
+    let mut component = TaskListComponent::new();
+    component.update_data(
+        vec![timed, first, second],
+        Vec::new(),
+        vec![project],
+        Vec::new(),
+        SidebarSelection::Agenda,
+    );
+
+    let agenda = component
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            TaskListItemType::Task(item) => Some((item.task.content.as_str(), item.agenda_time.clone().unwrap())),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(agenda.len(), 3);
+    assert_eq!(
+        agenda.iter().find(|(name, _)| *name == "timed").unwrap().1,
+        ("11:30pm".to_string(), false)
+    );
+    assert!(agenda.iter().find(|(name, _)| *name == "first").unwrap().1 .1);
+    assert!(agenda.iter().find(|(name, _)| *name == "second").unwrap().1 .1);
+}
+
+#[test]
+fn agenda_set_time_key_opens_the_time_dialog() {
+    let project = project();
+    let mut selected = task("selected", project.uuid, false);
+    selected.due_date = Some(datetime::format_today());
+    let selected_uuid = selected.uuid;
+    let mut component = TaskListComponent::new();
+    component.update_data(
+        vec![selected],
+        Vec::new(),
+        vec![project],
+        Vec::new(),
+        SidebarSelection::Agenda,
+    );
+
+    assert!(matches!(
+        component.handle_key_events(key(KeyCode::Char('s'))),
+        Action::ShowDialog(terminalist::ui::core::actions::DialogType::TaskTime {
+            task_uuid,
+            current_time: None,
+        }) if task_uuid == selected_uuid
+    ));
+}
+
+#[test]
 fn task_creation_inherits_the_current_list_context() {
     let project = project();
     let label = label::Model {

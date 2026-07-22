@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, Weekday};
+use chrono::{DateTime, Local, NaiveDate, Timelike, Weekday};
 use terminalist::utils::datetime::*;
 
 #[test]
@@ -65,4 +65,22 @@ fn test_format_human_datetime_iso_format() {
     // Should contain time information and be human-readable
     assert!(formatted.contains("at"));
     assert!(formatted.contains("09:00"));
+}
+
+#[test]
+fn today_at_time_accepts_friendly_and_twenty_four_hour_times() {
+    for input in ["2pm", "2:30 PM", "14:30"] {
+        let parsed =
+            DateTime::parse_from_rfc3339(&today_at_time(input).unwrap_or_else(|error| panic!("{input}: {error}")))
+                .unwrap()
+                .with_timezone(&Local);
+        assert_eq!(parsed.date_naive(), Local::now().date_naive());
+        assert_eq!(parsed.hour(), 14);
+        assert_eq!(parsed.minute(), if input == "2pm" { 0 } else { 30 });
+    }
+}
+
+#[test]
+fn today_at_time_rejects_invalid_input() {
+    assert!(today_at_time("later").is_err());
 }

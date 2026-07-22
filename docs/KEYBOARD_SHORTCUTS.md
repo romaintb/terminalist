@@ -48,6 +48,7 @@ currently highlighted task.
 - **Type** Search across all tasks by content
 - **`↓`** Move focus from the query to search results
 - **`j/k`** or **`↑/↓`** Navigate focused search results
+- **`Space`** Complete or reopen the focused result
 - **`t`** Set the focused result's due date to today
 - **`Enter`** No action
 - **`Esc`** Close search dialog
@@ -74,6 +75,11 @@ currently highlighted task.
   - Displays task content, priority, labels, and status
 - **Help Panel**: Modal overlay accessible with `?` key
 - **Shortcut Bar**: Common controls shown along the bottom (configurable with `shortcut_bar_visible`)
+
+## Agenda
+
+- **`s`** Set the selected task's Todoist due time (for example, `2pm` or `14:30`)
+- Timed tasks use their saved Todoist time. Untimed Today tasks receive dimmed, local-only one-hour suggestions beginning at the next whole hour.
 
 ### Task Display Features
 Tasks are displayed with:

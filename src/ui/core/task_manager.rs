@@ -262,7 +262,9 @@ impl TaskManager {
                 (Ok(projects), Ok(labels), Ok(sections)) => {
                     // Get tasks based on sidebar selection
                     let tasks = match &sidebar_selection {
-                        SidebarSelection::Today => sync_service.get_tasks_for_today().await.unwrap_or_default(),
+                        SidebarSelection::Today | SidebarSelection::Agenda => {
+                            sync_service.get_tasks_for_today().await.unwrap_or_default()
+                        }
                         SidebarSelection::Tomorrow => sync_service.get_tasks_for_tomorrow().await.unwrap_or_default(),
                         SidebarSelection::Upcoming => sync_service.get_tasks_for_upcoming().await.unwrap_or_default(),
                         SidebarSelection::Trash => sync_service.get_deleted_tasks().await.unwrap_or_default(),

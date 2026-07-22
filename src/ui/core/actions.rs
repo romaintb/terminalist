@@ -1,4 +1,4 @@
-use crate::sync::SyncStatus;
+use crate::{entities::task, sync::SyncStatus};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -26,6 +26,7 @@ pub enum TaskDueDate {
 pub enum SidebarSelection {
     #[default]
     Today, // Today view (special view)
+    Agenda,   // Local smart view derived from Today
     Tomorrow, // Tomorrow view (special view)
     Upcoming, // Upcoming view (tasks with future due dates)
     Trash,
@@ -41,7 +42,6 @@ pub enum Action {
     PreviousTask,
 
     // Task operations
-    CompleteTask(Uuid),
     ToggleTasks(Vec<(Uuid, bool)>),
     DeleteTask(Uuid),
     CyclePriority(Uuid),
@@ -49,6 +49,10 @@ pub enum Action {
     SetTaskDueTomorrow(Uuid),
     SetTaskDueNextWeek(Uuid),
     SetTaskDueWeekEnd(Uuid),
+    SetTaskDueTime {
+        task_uuid: Uuid,
+        due_datetime: String,
+    },
     SetTasksDueDate {
         task_ids: Vec<Uuid>,
         due_date: TaskDueDate,
@@ -124,6 +128,29 @@ pub enum Action {
     None,
 }
 
+impl Action {
+    /// Build the shared completion-toggle action used by every task view.
+    ///
+    /// The boolean records whether the task should be restored rather than
+    /// completed. Deleted tasks use the same restore path as completed tasks.
+    pub fn toggle_tasks<'a>(tasks: impl IntoIterator<Item = &'a task::Model>) -> Self {
+        let tasks = tasks
+            .into_iter()
+            .map(|task| (task.uuid, task.is_deleted || task.is_completed))
+            .collect::<Vec<_>>();
+
+        if tasks.is_empty() {
+            Self::None
+        } else {
+            Self::ToggleTasks(tasks)
+        }
+    }
+
+    pub fn toggle_task(task: &task::Model) -> Self {
+        Self::toggle_tasks([task])
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum DialogType {
     TaskCreation {
@@ -135,6 +162,10 @@ pub enum DialogType {
         task_uuid: Uuid,
         content: String,
         project_uuid: Uuid,
+    },
+    TaskTime {
+        task_uuid: Uuid,
+        current_time: Option<String>,
     },
     ProjectCreation,
     ProjectEdit {

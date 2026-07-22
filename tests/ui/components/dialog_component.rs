@@ -88,7 +88,7 @@ fn test_t_sets_selected_search_result_due_today() {
 }
 
 #[test]
-fn test_space_completes_selected_search_result() {
+fn test_space_toggles_selected_incomplete_search_result() {
     let mut dialog = DialogComponent::new();
     dialog.dialog_type = Some(DialogType::TaskSearch);
     dialog.search_results = vec![search_task("first"), search_task("second")];
@@ -98,7 +98,22 @@ fn test_space_completes_selected_search_result() {
 
     let action = dialog.handle_key_events(key(KeyCode::Char(' ')));
 
-    assert!(matches!(action, Action::CompleteTask(uuid) if uuid == selected_uuid));
+    assert!(matches!(action, Action::ToggleTasks(tasks) if tasks == vec![(selected_uuid, false)]));
+}
+
+#[test]
+fn test_space_toggles_selected_completed_search_result() {
+    let mut dialog = DialogComponent::new();
+    dialog.dialog_type = Some(DialogType::TaskSearch);
+    let mut completed = search_task("completed");
+    completed.is_completed = true;
+    let selected_uuid = completed.uuid;
+    dialog.search_results = vec![completed];
+    dialog.search_results_focused = true;
+
+    let action = dialog.handle_key_events(key(KeyCode::Char(' ')));
+
+    assert!(matches!(action, Action::ToggleTasks(tasks) if tasks == vec![(selected_uuid, true)]));
 }
 
 #[test]

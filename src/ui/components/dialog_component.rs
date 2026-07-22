@@ -207,6 +207,19 @@ impl DialogComponent {
                     Action::None
                 }
             }
+            Some(DialogType::TaskTime { task_uuid, .. }) => {
+                match crate::utils::datetime::today_at_time(&self.input_buffer) {
+                    Ok(due_datetime) => {
+                        let action = Action::SetTaskDueTime {
+                            task_uuid: *task_uuid,
+                            due_datetime,
+                        };
+                        self.clear_dialog();
+                        action
+                    }
+                    Err(message) => Action::ShowDialog(DialogType::Error(message)),
+                }
+            }
             Some(DialogType::ProjectCreation) => {
                 if !self.input_buffer.is_empty() {
                     let parent_uuid = if let Some(parent_index) = self.selected_parent_project_index {
@@ -522,7 +535,7 @@ impl DialogComponent {
             vec![
                 ("j/k or ↑/↓", Color::Cyan, " Navigate"),
                 common::shortcuts::SEPARATOR,
-                ("Space", Color::Cyan, " Complete"),
+                ("Space", Color::Cyan, " Toggle complete"),
                 common::shortcuts::SEPARATOR,
                 ("t", Color::Cyan, " Today"),
                 common::shortcuts::SEPARATOR,
@@ -695,7 +708,7 @@ impl Component for DialogComponent {
                 KeyCode::Char(' ') if self.search_results_focused => self
                     .search_results
                     .get(self.search_selected_index)
-                    .map_or(Action::None, |task| Action::CompleteTask(task.uuid)),
+                    .map_or(Action::None, Action::toggle_task),
                 KeyCode::Char(c) if !self.search_results_focused => {
                     let byte_pos: usize = self
                         .input_buffer
@@ -895,6 +908,10 @@ impl Component for DialogComponent {
                         self.input_buffer = content.clone();
                         self.cursor_position = content.chars().count();
                     }
+                    DialogType::TaskTime { current_time, .. } => {
+                        self.input_buffer = current_time.clone().unwrap_or_default();
+                        self.cursor_position = self.input_buffer.chars().count();
+                    }
                     DialogType::ProjectEdit { name, .. } => {
                         self.input_buffer = name.clone();
                         self.cursor_position = name.chars().count();
@@ -964,6 +981,9 @@ impl Component for DialogComponent {
             match dialog_type {
                 DialogType::TaskCreation { .. } => self.render_task_creation_dialog(f, rect),
                 DialogType::TaskEdit { .. } => self.render_task_edit_dialog(f, rect),
+                DialogType::TaskTime { .. } => {
+                    task_dialogs::render_task_time_dialog(f, rect, &self.input_buffer, self.cursor_position)
+                }
                 DialogType::ProjectCreation => {
                     self.render_project_creation_dialog(f, rect);
                 }
