@@ -27,9 +27,11 @@ impl LocalStorage {
     pub async fn new(debug_mode: bool) -> Result<Self> {
         let db_path = Self::get_db_path()?;
 
-        // In normal mode, always delete the database file to start fresh
-        // In debug mode, keep the database file if it exists (for debugging without re-syncing)
-        if !debug_mode && db_path.exists() {
+        // Normal mode: the DB is a throwaway cache, wiped and rebuilt by initial sync each boot.
+        // Debug mode: keep an existing file so manually-loaded data (e.g. demo_data.sql) survives
+        // and is shown without syncing.
+        let existing = db_path.exists();
+        if !debug_mode && existing {
             std::fs::remove_file(&db_path)?;
         }
 
@@ -52,7 +54,10 @@ impl LocalStorage {
         .await?;
 
         let storage = LocalStorage { conn };
-        storage.init_schema().await?;
+        // A kept debug file already has its schema; only build it for a fresh file.
+        if !(debug_mode && existing) {
+            storage.init_schema().await?;
+        }
 
         Ok(storage)
     }
@@ -62,7 +67,7 @@ impl LocalStorage {
         let backend = self.conn.get_database_backend();
         let schema = Schema::new(backend);
 
-        // Create tables in the correct order (parent tables first)
+        // Create tables in the correct order (parent tables first).
         let table_statements = vec![
             schema.create_table_from_entity(backend::Entity),
             schema.create_table_from_entity(project::Entity),
