@@ -62,6 +62,10 @@ pub struct Theme {
     /// Background color of the currently-highlighted row in the task list.
     #[serde(with = "color_serde")]
     pub selection_bg: Color,
+    /// Background color painted behind the whole UI. Defaults to `Color::Reset`, which
+    /// keeps the terminal's own background; set it to override the terminal theme entirely.
+    #[serde(with = "color_serde")]
+    pub background: Color,
 }
 
 impl Default for Theme {
@@ -82,6 +86,7 @@ impl Default for Theme {
             border: Color::DarkGray,
             border_dim: Color::Gray,
             selection_bg: Color::DarkGray,
+            background: Color::Reset,
         }
     }
 }
@@ -152,6 +157,7 @@ pub(crate) struct RawTheme {
     border: Option<toml::Spanned<toml::Value>>,
     border_dim: Option<toml::Spanned<toml::Value>>,
     selection_bg: Option<toml::Spanned<toml::Value>>,
+    background: Option<toml::Spanned<toml::Value>>,
 }
 
 /// 1-based line number containing the given byte offset into `source`.
@@ -215,6 +221,7 @@ impl Theme {
             border: resolve!(border),
             border_dim: resolve!(border_dim),
             selection_bg: resolve!(selection_bg),
+            background: resolve!(background),
         };
 
         (theme, warnings)
