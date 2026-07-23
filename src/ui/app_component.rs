@@ -1244,6 +1244,12 @@ impl Component for AppComponent {
     }
 
     fn render(&mut self, f: &mut Frame, rect: Rect) {
+        // Paint the themed background behind everything (Color::Reset = keep terminal bg).
+        f.render_widget(
+            ratatui::widgets::Block::default().style(ratatui::style::Style::default().bg(self.config.theme.background)),
+            rect,
+        );
+
         // Create layout: sidebar (configurable width) | task list (remainder)
         let sidebar_width = if self.sidebar_visible {
             self.calculate_sidebar_width(rect.width)
