@@ -4,8 +4,25 @@ use super::{
     Backend, BackendError, BackendLabel, BackendProject, BackendSection, BackendTask, CreateLabelArgs,
     CreateProjectArgs, CreateTaskArgs, UpdateLabelArgs, UpdateProjectArgs, UpdateTaskArgs,
 };
-use crate::todoist::TodoistWrapper;
+use crate::todoist::{TodoistError, TodoistWrapper};
 use async_trait::async_trait;
+
+fn map_err(e: TodoistError) -> BackendError {
+    match e {
+        TodoistError::AuthenticationError { .. } | TodoistError::AuthorizationError { .. } => {
+            BackendError::Auth(e.to_string())
+        }
+        TodoistError::NotFound { .. } => BackendError::NotFound(e.to_string()),
+        TodoistError::NetworkError { .. }
+        | TodoistError::RateLimited { .. }
+        | TodoistError::ServerError { .. }
+        | TodoistError::EmptyResponse { .. } => BackendError::Network(e.to_string()),
+        TodoistError::ParseError { .. } | TodoistError::ValidationError { .. } => {
+            BackendError::InvalidData(e.to_string())
+        }
+        TodoistError::Generic { .. } => BackendError::Other(e.to_string()),
+    }
+}
 
 /// Todoist backend implementation.
 pub struct TodoistBackend {
@@ -86,11 +103,7 @@ impl Backend for TodoistBackend {
 
         // Fetch all pages with limit=200
         loop {
-            let response = self
-                .wrapper
-                .get_projects(Some(200), cursor.clone())
-                .await
-                .map_err(|e| BackendError::Network(e.to_string()))?;
+            let response = self.wrapper.get_projects(Some(200), cursor.clone()).await.map_err(map_err)?;
 
             all_projects.extend(response.results.iter().map(Self::project_to_backend));
 
@@ -110,11 +123,7 @@ impl Backend for TodoistBackend {
 
         // Fetch all pages with limit=200
         loop {
-            let response = self
-                .wrapper
-                .get_tasks(Some(200), cursor.clone())
-                .await
-                .map_err(|e| BackendError::Network(e.to_string()))?;
+            let response = self.wrapper.get_tasks(Some(200), cursor.clone()).await.map_err(map_err)?;
 
             all_tasks.extend(response.results.iter().map(Self::task_to_backend));
 
@@ -134,11 +143,7 @@ impl Backend for TodoistBackend {
 
         // Fetch all pages with limit=200
         loop {
-            let response = self
-                .wrapper
-                .get_labels(Some(200), cursor.clone())
-                .await
-                .map_err(|e| BackendError::Network(e.to_string()))?;
+            let response = self.wrapper.get_labels(Some(200), cursor.clone()).await.map_err(map_err)?;
 
             all_labels.extend(response.results.iter().map(Self::label_to_backend));
 
@@ -158,11 +163,7 @@ impl Backend for TodoistBackend {
 
         // Fetch all pages with limit=200
         loop {
-            let response = self
-                .wrapper
-                .get_sections(Some(200), cursor.clone())
-                .await
-                .map_err(|e| BackendError::Network(e.to_string()))?;
+            let response = self.wrapper.get_sections(Some(200), cursor.clone()).await.map_err(map_err)?;
 
             all_sections.extend(response.results.iter().map(Self::section_to_backend));
 
@@ -185,11 +186,7 @@ impl Backend for TodoistBackend {
             view_style: None,
         };
 
-        let project = self
-            .wrapper
-            .create_project(&todoist_args)
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))?;
+        let project = self.wrapper.create_project(&todoist_args).await.map_err(map_err)?;
         Ok(Self::project_to_backend(&project))
     }
 
@@ -201,19 +198,12 @@ impl Backend for TodoistBackend {
             view_style: None,
         };
 
-        let project = self
-            .wrapper
-            .update_project(remote_id, &todoist_args)
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))?;
+        let project = self.wrapper.update_project(remote_id, &todoist_args).await.map_err(map_err)?;
         Ok(Self::project_to_backend(&project))
     }
 
     async fn delete_project(&self, remote_id: &str) -> Result<(), BackendError> {
-        self.wrapper
-            .delete_project(remote_id)
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))
+        self.wrapper.delete_project(remote_id).await.map_err(map_err)
     }
 
     async fn create_task(&self, args: CreateTaskArgs) -> Result<BackendTask, BackendError> {
@@ -239,11 +229,7 @@ impl Backend for TodoistBackend {
             ..Default::default()
         };
 
-        let task = self
-            .wrapper
-            .create_task(&todoist_args)
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))?;
+        let task = self.wrapper.create_task(&todoist_args).await.map_err(map_err)?;
         Ok(Self::task_to_backend(&task))
     }
 
@@ -267,33 +253,20 @@ impl Backend for TodoistBackend {
             ..Default::default()
         };
 
-        let task = self
-            .wrapper
-            .update_task(remote_id, &todoist_args)
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))?;
+        let task = self.wrapper.update_task(remote_id, &todoist_args).await.map_err(map_err)?;
         Ok(Self::task_to_backend(&task))
     }
 
     async fn delete_task(&self, remote_id: &str) -> Result<(), BackendError> {
-        self.wrapper
-            .delete_task(remote_id)
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))
+        self.wrapper.delete_task(remote_id).await.map_err(map_err)
     }
 
     async fn complete_task(&self, remote_id: &str) -> Result<(), BackendError> {
-        self.wrapper
-            .complete_task(remote_id)
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))
+        self.wrapper.complete_task(remote_id).await.map_err(map_err)
     }
 
     async fn reopen_task(&self, remote_id: &str) -> Result<(), BackendError> {
-        self.wrapper
-            .reopen_task(remote_id)
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))
+        self.wrapper.reopen_task(remote_id).await.map_err(map_err)
     }
 
     async fn create_label(&self, args: CreateLabelArgs) -> Result<BackendLabel, BackendError> {
@@ -304,11 +277,7 @@ impl Backend for TodoistBackend {
             ..Default::default()
         };
 
-        let label = self
-            .wrapper
-            .create_label(&todoist_args)
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))?;
+        let label = self.wrapper.create_label(&todoist_args).await.map_err(map_err)?;
         Ok(Self::label_to_backend(&label))
     }
 
@@ -320,18 +289,11 @@ impl Backend for TodoistBackend {
             ..Default::default()
         };
 
-        let label = self
-            .wrapper
-            .update_label(remote_id, &todoist_args)
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))?;
+        let label = self.wrapper.update_label(remote_id, &todoist_args).await.map_err(map_err)?;
         Ok(Self::label_to_backend(&label))
     }
 
     async fn delete_label(&self, remote_id: &str) -> Result<(), BackendError> {
-        self.wrapper
-            .delete_label(remote_id)
-            .await
-            .map_err(|e| BackendError::Network(e.to_string()))
+        self.wrapper.delete_label(remote_id).await.map_err(map_err)
     }
 }
