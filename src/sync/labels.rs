@@ -32,12 +32,7 @@ impl SyncService {
             name: name.to_string(),
             is_favorite: None,
         };
-        let api_label = self
-            .get_backend()
-            .await?
-            .create_label(label_args)
-            .await
-            .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+        let api_label = self.get_backend().await?.create_label(label_args).await?;
 
         // Store the created label in local database immediately for UI refresh
         info!("Storage: Storing new label locally with ID {}", api_label.remote_id);
@@ -76,12 +71,7 @@ impl SyncService {
             name: Some(name.to_string()),
             is_favorite: None,
         };
-        let _label = self
-            .get_backend()
-            .await?
-            .update_label(&remote_id, label_args)
-            .await
-            .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+        let _label = self.get_backend().await?.update_label(&remote_id, label_args).await?;
 
         // Update local storage immediately after successful backend call
         info!(
@@ -105,11 +95,7 @@ impl SyncService {
         let remote_id = self.get_label_remote_id(label_uuid).await?;
 
         // Delete label via backend
-        self.get_backend()
-            .await?
-            .delete_label(&remote_id)
-            .await
-            .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+        self.get_backend().await?.delete_label(&remote_id).await?;
 
         // Note: Local storage deletion will be handled by the next sync
         Ok(())

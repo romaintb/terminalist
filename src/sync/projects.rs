@@ -56,12 +56,7 @@ impl SyncService {
             parent_remote_id: remote_parent_id,
             is_favorite: None,
         };
-        let backend_project = self
-            .get_backend()
-            .await?
-            .create_project(project_args)
-            .await
-            .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+        let backend_project = self.get_backend().await?.create_project(project_args).await?;
 
         // Store the created project in local database immediately for UI refresh
         let storage = self.storage.lock().await;
@@ -105,12 +100,7 @@ impl SyncService {
             name: Some(name.to_string()),
             is_favorite: None,
         };
-        let _project = self
-            .get_backend()
-            .await?
-            .update_project(&remote_id, project_args)
-            .await
-            .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+        let _project = self.get_backend().await?.update_project(&remote_id, project_args).await?;
 
         // Update local storage immediately after successful backend call
         let storage = self.storage.lock().await;
@@ -135,11 +125,7 @@ impl SyncService {
         let remote_id = self.get_project_remote_id(project_uuid).await?;
 
         // Delete project via backend
-        self.get_backend()
-            .await?
-            .delete_project(&remote_id)
-            .await
-            .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+        self.get_backend().await?.delete_project(&remote_id).await?;
 
         // Remove from local storage
         let storage = self.storage.lock().await;

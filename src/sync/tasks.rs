@@ -155,12 +155,7 @@ impl SyncService {
             duration: None,
             labels: Vec::new(),
         };
-        let backend_task = self
-            .get_backend()
-            .await?
-            .create_task(task_args)
-            .await
-            .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+        let backend_task = self.get_backend().await?.create_task(task_args).await?;
 
         // Store the created task in local database immediately for UI refresh
         let storage = self.storage.lock().await;
@@ -255,12 +250,7 @@ impl SyncService {
             duration: None,
             labels: None,
         };
-        let _task = self
-            .get_backend()
-            .await?
-            .update_task(&remote_id, task_args)
-            .await
-            .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+        let _task = self.get_backend().await?.update_task(&remote_id, task_args).await?;
 
         // Update local storage immediately after successful backend call
         let storage = self.storage.lock().await;
@@ -292,12 +282,7 @@ impl SyncService {
             duration: None,
             labels: None,
         };
-        let _task = self
-            .get_backend()
-            .await?
-            .update_task(&remote_id, task_args)
-            .await
-            .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+        let _task = self.get_backend().await?.update_task(&remote_id, task_args).await?;
 
         // Then update local storage
         let storage = self.storage.lock().await;
@@ -329,12 +314,7 @@ impl SyncService {
             duration: None,
             labels: None,
         };
-        let _task = self
-            .get_backend()
-            .await?
-            .update_task(&remote_id, task_args)
-            .await
-            .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+        let _task = self.get_backend().await?.update_task(&remote_id, task_args).await?;
 
         // Then update local storage
         let storage = self.storage.lock().await;
@@ -364,11 +344,7 @@ impl SyncService {
         let remote_id = self.get_task_remote_id(task_uuid).await?;
 
         // Complete the task via backend using remote_id (this handles subtasks automatically)
-        self.get_backend()
-            .await?
-            .complete_task(&remote_id)
-            .await
-            .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+        self.get_backend().await?.complete_task(&remote_id).await?;
 
         // Then mark as completed in local storage (soft completion)
         let storage = self.storage.lock().await;
@@ -397,11 +373,7 @@ impl SyncService {
         let remote_id = self.get_task_remote_id(task_uuid).await?;
 
         // Delete the task via backend using remote_id
-        self.get_backend()
-            .await?
-            .delete_task(&remote_id)
-            .await
-            .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+        self.get_backend().await?.delete_task(&remote_id).await?;
 
         // Then mark as deleted in local storage (soft deletion)
         let storage = self.storage.lock().await;
@@ -455,12 +427,7 @@ impl SyncService {
                 labels: Vec::new(), // Labels will be synced separately
             };
 
-            let new_task = self
-                .get_backend()
-                .await?
-                .create_task(task_args)
-                .await
-                .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+            let new_task = self.get_backend().await?.create_task(task_args).await?;
 
             // Update local storage: remove the old soft-deleted task and add the new one
             let storage = self.storage.lock().await;
@@ -537,11 +504,7 @@ impl SyncService {
             // For completed tasks, just reopen them
             let remote_id = task.remote_id.clone();
             drop(storage); // Release the lock before API call
-            self.get_backend()
-                .await?
-                .reopen_task(&remote_id)
-                .await
-                .map_err(|e| anyhow::anyhow!("Backend error: {}", e))?;
+            self.get_backend().await?.reopen_task(&remote_id).await?;
 
             // Clear local completion flag
             let storage = self.storage.lock().await;
