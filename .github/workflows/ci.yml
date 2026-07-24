@@ -89,6 +89,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
-    - uses: rustsec/audit-check@v2
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
+    - uses: dtolnay/rust-toolchain@stable
+    # --locked pins cargo-audit's own lockfile: unlocked installs pull deps
+    # that may require a newer rustc than the toolchain
+    - run: cargo install cargo-audit --locked
+    - run: cargo audit

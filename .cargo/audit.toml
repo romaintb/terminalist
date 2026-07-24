@@ -1,0 +1,4 @@
+[advisories]
+# rsa comes from sqlx's optional mysql backend, which we never enable
+# (sqlx-sqlite only). No fix exists upstream; not compiled into our binary.
+ignore = ["RUSTSEC-2023-0071"]
