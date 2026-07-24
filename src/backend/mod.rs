@@ -12,19 +12,22 @@ pub mod todoist;
 /// Common error types for backend operations.
 #[derive(Debug, thiserror::Error)]
 pub enum BackendError {
-    #[error("Authentication failed: {0}")]
+    // Messages from backends are already self-describing (e.g. todoist prefixes
+    // "Authentication error: ..."), so Display passes them through without
+    // re-labeling. The variant carries the category for programmatic handling.
+    #[error("{0}")]
     Auth(String),
 
-    #[error("Resource not found: {0}")]
+    #[error("{0}")]
     NotFound(String),
 
-    #[error("Network error: {0}")]
+    #[error("{0}")]
     Network(String),
 
-    #[error("Invalid data: {0}")]
+    #[error("{0}")]
     InvalidData(String),
 
-    #[error("Backend error: {0}")]
+    #[error("{0}")]
     Other(String),
 }
 
