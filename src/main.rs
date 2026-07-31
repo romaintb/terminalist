@@ -21,6 +21,14 @@ use std::sync::Arc;
 use terminalist::{backend_registry, config, logger, storage, sync, ui};
 use tokio::sync::Mutex;
 
+fn version_string(package_name: &str, package_version: &str, revision: Option<&str>, dirty: bool) -> String {
+    match revision {
+        Some(revision) if dirty => format!("{package_name} {package_version} ({revision}, dirty)"),
+        Some(revision) => format!("{package_name} {package_version} ({revision})"),
+        None => format!("{package_name} {package_version}"),
+    }
+}
+
 /// Main entry point for the Terminalist application.
 ///
 /// This function:
@@ -47,7 +55,15 @@ async fn main() -> Result<()> {
     let generate_config = args.iter().any(|arg| arg == "--generate-config");
 
     if show_version {
-        println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+        println!(
+            "{}",
+            version_string(
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION"),
+                option_env!("TERMINALIST_GIT_REVISION"),
+                option_env!("TERMINALIST_GIT_DIRTY").is_some(),
+            )
+        );
         return Ok(());
     }
 
@@ -144,4 +160,30 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::version_string;
+
+    #[test]
+    fn version_without_git_metadata_uses_package_version() {
+        assert_eq!(version_string("terminalist", "0.5.0", None, false), "terminalist 0.5.0");
+    }
+
+    #[test]
+    fn version_with_clean_revision_includes_commit() {
+        assert_eq!(
+            version_string("terminalist", "0.5.0", Some("74f4f78"), false),
+            "terminalist 0.5.0 (74f4f78)"
+        );
+    }
+
+    #[test]
+    fn version_with_dirty_revision_marks_the_build() {
+        assert_eq!(
+            version_string("terminalist", "0.5.0", Some("74f4f78"), true),
+            "terminalist 0.5.0 (74f4f78, dirty)"
+        );
+    }
 }

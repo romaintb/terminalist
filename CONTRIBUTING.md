@@ -34,6 +34,30 @@ Thanks for taking the time to contribute!
 - Show version: `cargo run -- --version`
 - Debug DB mode: `cargo run -- --debug`
 
+### Install the development version locally
+
+To test the current checkout as the globally available `terminalist` command:
+
+```sh
+cargo install --path . --locked --force
+terminalist --version
+```
+
+The version output includes the Git commit and indicates whether the build contained
+uncommitted changes:
+
+```text
+terminalist 0.5.0 (74f4f78, dirty)
+```
+
+Run `command -v terminalist` if the command does not appear to use the expected installation.
+
+To remove the locally installed binary:
+
+```sh
+cargo uninstall terminalist
+```
+
 ## Reporting issues
 
 Please include:
@@ -45,4 +69,3 @@ Please include:
 ---
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
-
