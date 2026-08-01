@@ -1380,17 +1380,24 @@ mod tests {
         let mut app = AppComponent::new(sync_service, Config::default(), Vec::new());
         app.trigger_initial_sync();
 
-        for _ in 0..100 {
-            tokio::task::yield_now().await;
-            let actions = app.process_background_actions();
-            for action in actions {
-                app.handle_app_action(action).await;
+        let startup_result = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                let actions = app.process_background_actions();
+                for action in actions {
+                    app.handle_app_action(action).await;
+                }
+                if app.total_projects() == 1 && app.state.error_message.is_some() {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
             }
-            if app.total_projects() == 1 && app.state.error_message.is_some() {
-                break;
-            }
-        }
+        })
+        .await;
 
+        assert!(
+            startup_result.is_ok(),
+            "cached startup did not finish within five seconds"
+        );
         assert_eq!(app.total_projects(), 1);
         assert_eq!(app.state.projects[0].name, "Cached project");
         assert!(app.state.error_message.is_some());
