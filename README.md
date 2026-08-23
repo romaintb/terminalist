@@ -16,7 +16,8 @@ A terminal application for interacting with Todoist, built in Rust with a modern
 ## Features
 
 - **Interactive TUI Interface** - Beautiful terminal user interface with ratatui
-- **Local Data Caching** - Fast, responsive UI with in-memory SQLite storage
+- **Local Data Caching** - Fast, responsive UI backed by a persistent SQLite
+  cache that survives restarts
 - **Smart Sync** - Automatic sync on startup and manual refresh with 'r'
 - **Project Management** - Browse projects with hierarchical display
 - **Task Management** - View, navigate, complete, and create tasks
@@ -128,8 +129,10 @@ Essential keyboard shortcuts to get started:
 ## How It Works
 
 Terminalist uses a smart sync mechanism:
-- **Fast Startup**: In-memory SQLite database for instant loading
-- **Auto Sync**: Syncs with Todoist on startup and every 5 minutes
+- **Fast Startup**: A file-backed SQLite cache persists across launches, so
+  the UI paints cached data immediately while a sync runs in the background
+- **Auto Sync**: Syncs with Todoist on startup and every
+  `auto_sync_interval_minutes` (5 minutes by default; set to `0` to disable)
 - **Manual Sync**: Press `r` to force refresh from Todoist
 - **Real-time Updates**: Create, modify, and delete tasks/projects immediately
 

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Configurable cache location** - New `[storage] data_dir` key sets the directory holding the local SQLite cache (`terminalist.db`). Omit it for the platform default; a leading `~` is expanded. See `docs/CONFIGURATION.md` — note that the database holds your API token in plaintext, so it should not live in a shared or cloud-synced directory
+- **Working automatic sync** - `[sync] auto_sync_interval_minutes` now actually schedules background syncs. It was previously accepted, documented, and ignored: nothing ever read it, so the app only synced at startup or when you pressed `r`
+
+### Changed
+- **Persistent local cache** - The database is now kept across launches instead of being deleted and rebuilt at every startup, and each sync reconciles it against Todoist (insert/update/delete) rather than rewriting it. Startup no longer waits on a full re-download, and an existing cache from an older version is adopted in place rather than duplicated
+- **Non-blocking startup and sync** - The app paints your cached tasks immediately and syncs in the background, so navigation works while a sync runs. The blocking centered "Loading data" overlay is replaced by a small status toast in the corner of the task list: it shows progress, auto-hides a few seconds after a successful sync, and stays up after a failure until you press a key
+- **Faster sync** - Projects, tasks, labels, and sections are fetched concurrently rather than one after another
+- **Completed and deleted tasks leave the cache sooner** - A task you complete or delete is now removed from the local cache at the next sync, rather than lingering until the next launch. The window in which such a task is still visible locally is now at most one auto-sync interval
+
 ## [0.5.0] - 2026-03-25
 
 ### Added

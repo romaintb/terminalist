@@ -98,6 +98,12 @@ where
                 needs_render = true;
             }
             EventType::Tick => {
+                // Sampled *before* the tick is processed: `process_background_actions` advances
+                // the toast's own timer, so a success toast that expires on this tick would
+                // already report "nothing left to change" by the time we asked afterwards, and
+                // the frame that erases it would never be drawn.
+                let toast_may_change = app.sync_toast_expires_on_tick();
+
                 // Process background actions on tick (less frequent)
                 let background_actions = app.process_background_actions();
 
@@ -115,7 +121,13 @@ where
                         }
                     }
                 }
-                // Don't render on every tick - only when there are actual background actions
+                // Don't render on every tick unconditionally - only when there were actual
+                // background actions, or a success toast is counting down and needs the frames
+                // to expire on screen. A "Syncing" toast is static and a "Failed" toast never
+                // expires on its own, so neither is allowed to pin the loop at tick rate.
+                if toast_may_change {
+                    needs_render = true;
+                }
             }
             EventType::Render => {
                 needs_render = true;

@@ -36,7 +36,7 @@
 //!
 //! # async fn example() -> anyhow::Result<()> {
 //! let (config, theme_warnings) = Config::load()?;
-//! let storage = Arc::new(Mutex::new(LocalStorage::new(false).await?));
+//! let storage = Arc::new(Mutex::new(LocalStorage::new_at("/tmp/terminalist-example").await?));
 //! let backend_registry = Arc::new(BackendRegistry::new(storage));
 //! // ... initialize and load backends ...
 //! # let backend_uuid = uuid::Uuid::new_v4();

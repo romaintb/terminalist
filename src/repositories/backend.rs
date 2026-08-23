@@ -29,6 +29,23 @@ impl BackendRepository {
             .await?)
     }
 
+    /// Get a backend by its `(backend_type, name)` pair.
+    ///
+    /// `idx_backends_type_name` makes the pair unique, so at most one row can match. This is
+    /// the lookup that lets a relaunch adopt whatever UUID an existing row already has —
+    /// including the random v4 UUID written by releases predating the derived-UUID scheme —
+    /// instead of asserting a derived one and orphaning the cache keyed to the old value.
+    pub async fn get_by_type_and_name<C>(conn: &C, backend_type: &str, name: &str) -> Result<Option<backend::Model>>
+    where
+        C: ConnectionTrait,
+    {
+        Ok(backend::Entity::find()
+            .filter(backend::Column::BackendType.eq(backend_type))
+            .filter(backend::Column::Name.eq(name))
+            .one(conn)
+            .await?)
+    }
+
     /// Get all backends.
     pub async fn get_all<C>(conn: &C) -> Result<Vec<backend::Model>>
     where

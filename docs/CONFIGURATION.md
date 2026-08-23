@@ -41,6 +41,13 @@ show_project_colors = false       # Show project colors
 [logging]
 enabled = false                   # Enable logging to file
 
+[storage]
+# Directory holding the local SQLite cache. Unset = platform default:
+#   Linux    ~/.local/share/terminalist
+#   macOS    ~/Library/Application Support/terminalist
+#   Windows  %APPDATA%\terminalist
+# data_dir = "/path/to/dir"
+
 [theme]
 accent = "Yellow"                 # Selection highlight color for the sidebar's currently-selected entry
 success = "Green"                 # Completed-task checkmark icon, save/create dialog actions
@@ -72,7 +79,8 @@ visual language, so they're always red/orange/blue/white regardless of your `[th
 ### Sync Configuration
 
 - **auto_sync_interval_minutes**: How often to automatically sync with Todoist
-  - Set to `0` to disable automatic syncing (manual sync only with `r` key)
+  - Set to `0` to disable automatic syncing entirely
+  - Manual sync with the `r` key always works, regardless of this setting
 
 ### Display Configuration
 
@@ -86,6 +94,24 @@ visual language, so they're always red/orange/blue/white regardless of your `[th
 ### Logging Configuration
 
 - **enabled**: Enable debug logging to file for troubleshooting
+
+### Storage Configuration
+
+- **data_dir**: Directory holding the local SQLite cache (`terminalist.db`). Omit the key to use
+  the platform default: `~/.local/share/terminalist` on Linux, `~/Library/Application Support/terminalist`
+  on macOS, `%APPDATA%\terminalist` on Windows.
+  - A leading `~` is expanded to your home directory. Relative paths resolve against the directory
+    you launched Terminalist from.
+  - The directory is created if it does not exist. If it cannot be created or written,
+    Terminalist exits with an error rather than silently falling back to the default location —
+    a wrong path must not send writes to your real database.
+  - The database persists across launches: it is opened (or created) on
+    startup rather than deleted, and each sync reconciles it with Todoist
+    instead of rebuilding it from scratch.
+  - **The database contains your Todoist API token in plaintext.** Terminalist creates the file
+    with owner-only permissions (`0600`) on Unix, but do not point `data_dir` at a shared,
+    world-readable, or cloud-synced directory (Dropbox, iCloud Drive, Syncthing, a network
+    share) — that would copy your token wherever the directory syncs.
 
 ### Theme Configuration
 

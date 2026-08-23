@@ -8,7 +8,7 @@
 //!
 //! * `-h, --help` - Show help message
 //! * `-V, --version` - Show version information
-//! * `-d, --debug` - Use file-backed SQLite database for debugging
+//! * `-d, --debug` - Skip the startup sync and work from the cached data already on disk
 //! * `--generate-config` - Generate a default configuration file
 //!
 //! # Environment Variables
@@ -60,7 +60,7 @@ async fn main() -> Result<()> {
         println!("OPTIONS:");
         println!("    -h, --help           Show this help message");
         println!("    -V, --version        Show version information");
-        println!("    -d, --debug          Debug mode: keep database file and skip initial sync");
+        println!("    -d, --debug          Debug mode: skip the startup sync and use the cached data as-is");
         println!("    --generate-config    Generate a default configuration file");
         println!();
         println!("ENVIRONMENT VARIABLES:");
@@ -106,12 +106,16 @@ async fn main() -> Result<()> {
     }
 
     // Initialize storage
-    let local_storage = Arc::new(Mutex::new(storage::LocalStorage::new(debug_mode).await?));
+    let data_dir = storage::resolve_data_dir(config.storage.data_dir.as_deref())?;
+    let local_storage = Arc::new(Mutex::new(storage::LocalStorage::new_at(&data_dir).await?));
 
     // Initialize backend registry
     let backend_registry = Arc::new(backend_registry::BackendRegistry::new(local_storage.clone()));
+    backend_registry.load_backends().await?;
 
-    // Create initial Todoist backend (DB is always fresh at startup)
+    // Create/refresh the Todoist backend. This adopts an existing row's UUID when one is already
+    // there (including the random one older versions wrote) and derives a stable UUID otherwise,
+    // so a relaunch just refreshes the credentials and keeps the cache attached.
     let api_token = std::env::var("TODOIST_API_TOKEN")?;
     let credentials = serde_json::json!({ "api_token": api_token }).to_string();
 

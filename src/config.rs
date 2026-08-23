@@ -17,6 +17,8 @@ pub struct Config {
     pub sync: SyncConfig,
     pub display: DisplayConfig,
     pub logging: LoggingConfig,
+    #[serde(skip_serializing_if = "StorageConfig::is_unset")]
+    pub storage: StorageConfig,
     pub theme: Theme,
 }
 
@@ -29,6 +31,7 @@ struct RawConfig {
     sync: SyncConfig,
     display: DisplayConfig,
     logging: LoggingConfig,
+    storage: StorageConfig,
     theme: RawTheme,
 }
 
@@ -79,6 +82,24 @@ pub struct DisplayConfig {
 pub struct LoggingConfig {
     /// Enable logging
     pub enabled: bool,
+}
+
+/// Storage configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(default)]
+pub struct StorageConfig {
+    /// Directory holding the local SQLite cache.
+    ///
+    /// Unset means the platform data directory (`~/.local/share/terminalist` on Linux). A
+    /// leading `~` is expanded; relative paths resolve against the working directory.
+    pub data_dir: Option<PathBuf>,
+}
+
+impl StorageConfig {
+    /// True when no override is configured, so the section is omitted from generated files.
+    fn is_unset(&self) -> bool {
+        self.data_dir.is_none()
+    }
 }
 
 impl Default for UiConfig {
@@ -149,6 +170,7 @@ impl Config {
             sync: raw.sync,
             display: raw.display,
             logging: raw.logging,
+            storage: raw.storage,
             theme,
         };
 
@@ -208,6 +230,13 @@ impl Config {
             anyhow::bail!("Invalid time_format '{}': {}", self.display.time_format, e);
         }
 
+        // Validate storage settings
+        if let Some(data_dir) = &self.storage.data_dir {
+            if data_dir.as_os_str().is_empty() || data_dir.to_string_lossy().trim().is_empty() {
+                anyhow::bail!("storage.data_dir must not be empty; remove the key to use the default location");
+            }
+        }
+
         Ok(())
     }
 
@@ -222,7 +251,23 @@ impl Config {
             chrono::Local::now().format(datetime::TODOIST_DATE_FORMAT)
         );
 
-        let full_content = header + &toml_content;
+        // `storage.data_dir` is omitted from serialization when unset, so document it as a
+        // comment to keep --generate-config a complete reference. The `[storage]` header
+        // itself is emitted live (not commented out): an empty `[storage]` table deserializes
+        // to the default, and a live header keeps the commented `data_dir` line inside its own
+        // section — appending this whole block as a comment after the serialized body would
+        // place it after `[theme]`, so uncommenting just `data_dir` would silently land it
+        // inside `[theme]` instead, which discards unknown keys instead of failing.
+        let storage_docs = "\n\
+[storage]\n\
+# Directory holding the local SQLite cache. Unset = platform default:\n\
+#   Linux    ~/.local/share/terminalist\n\
+#   macOS    ~/Library/Application Support/terminalist\n\
+#   Windows  %APPDATA%\\terminalist\n\
+# A leading ~ is expanded; relative paths resolve against the working directory.\n\
+# data_dir = \"/path/to/dir\"\n";
+
+        let full_content = header + &toml_content + storage_docs;
 
         // Ensure the parent directory exists
         if let Some(parent) = path.as_ref().parent() {

@@ -10,6 +10,9 @@ mod dialogs;
 #[path = "components/sidebar_component.rs"]
 mod sidebar_component;
 
+#[path = "components/sync_toast.rs"]
+mod sync_toast;
+
 #[path = "components/task_list_component.rs"]
 mod task_list_component;
 

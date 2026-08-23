@@ -1,6 +1,30 @@
 use crate::sync::SyncStatus;
 use uuid::Uuid;
 
+/// Whether a task-list reload keeps the cursor on the same row or moves it to follow the
+/// task that was selected before the reload.
+///
+/// This travels with each reload (as a field on [`Action::DataLoaded`]) rather than living as
+/// mutable state on the app component, because the reload is handled by shared code
+/// (`sync_component_data`/`TaskListComponent::update_data`) that serves every reload origin
+/// and cannot infer the caller's intent on its own. A mutable "pending policy" flag would risk
+/// a later reload from a different origin consuming a stale value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectionPolicy {
+    /// Leave `selected_index` exactly where it was. Use this for user-initiated reloads: after
+    /// a task operation (`Action::RefreshData`), a sidebar navigation, or a debug-mode local
+    /// refresh. The user is looking at a specific row and expects the cursor to stay there even
+    /// if a different task now occupies it — e.g. pressing `t` to mark an overdue task due
+    /// "today" must not drag the cursor along with it as it moves out of the Overdue section.
+    KeepIndex,
+    /// Re-anchor selection to the previously selected task's UUID, so the cursor follows that
+    /// task even though its position in the list may have changed. Use this only for reloads
+    /// triggered by data arriving out-of-band, i.e. a completed sync (manual `r` or the
+    /// auto-sync timer): the user did not initiate the reload and may be navigating while it
+    /// lands, so an index-based selection could silently jump to an unrelated task.
+    FollowTask,
+}
+
 /// Represents the currently selected item in the sidebar
 #[derive(Debug, Clone, PartialEq, Default)]
 pub enum SidebarSelection {
@@ -74,6 +98,7 @@ pub enum Action {
         labels: Vec<crate::entities::label::Model>,
         sections: Vec<crate::entities::section::Model>,
         tasks: Vec<crate::entities::task::Model>,
+        selection_policy: SelectionPolicy,
     },
     SearchTasks(String), // Query for task search
     SearchResultsLoaded {

@@ -179,3 +179,90 @@ fn test_generate_default_config_includes_theme_section() {
     assert!(toml_str.contains("accent = \"Yellow\""));
     assert!(toml_str.contains("danger = \"Red\""));
 }
+
+#[test]
+fn test_default_config_has_no_storage_override() {
+    let config = Config::default();
+    assert!(config.storage.data_dir.is_none());
+}
+
+#[test]
+fn test_load_from_file_reads_storage_data_dir() {
+    use std::fs;
+    use std::path::PathBuf;
+
+    let path = std::env::temp_dir().join("terminalist_test_storage_dir.toml");
+    fs::write(&path, "[storage]\ndata_dir = \"/tmp/terminalist-test\"\n").unwrap();
+
+    let (config, warnings) = Config::load_from_file(&path).unwrap();
+
+    assert_eq!(config.storage.data_dir, Some(PathBuf::from("/tmp/terminalist-test")));
+    assert!(warnings.is_empty());
+
+    let _ = fs::remove_file(&path);
+}
+
+#[test]
+fn test_config_without_storage_section_still_loads() {
+    use std::fs;
+
+    // Backward compatibility: every config file written before this feature existed.
+    let path = std::env::temp_dir().join("terminalist_test_no_storage.toml");
+    fs::write(&path, "[ui]\nsidebar_width = 35\n").unwrap();
+
+    let (config, _) = Config::load_from_file(&path).unwrap();
+
+    assert_eq!(config.ui.sidebar_width, 35);
+    assert!(config.storage.data_dir.is_none());
+
+    let _ = fs::remove_file(&path);
+}
+
+#[test]
+fn test_empty_storage_data_dir_fails_validation() {
+    use std::path::PathBuf;
+
+    let mut config = Config::default();
+    config.storage.data_dir = Some(PathBuf::from("   "));
+    assert!(config.validate().is_err());
+
+    config.storage.data_dir = Some(PathBuf::from(""));
+    assert!(config.validate().is_err());
+
+    config.storage.data_dir = Some(PathBuf::from("/tmp/terminalist-test"));
+    assert!(config.validate().is_ok());
+}
+
+#[test]
+fn test_generated_default_config_still_serializes() {
+    // Guards the toml `None` trap: if an Option field errors instead of being skipped,
+    // --generate-config breaks entirely.
+    let toml_str = toml::to_string_pretty(&Config::default()).unwrap();
+    assert!(toml_str.contains("[ui]"));
+    assert!(!toml_str.contains("data_dir"));
+}
+
+#[test]
+fn test_generate_default_config_documents_storage_section() {
+    use std::fs;
+
+    let path = std::env::temp_dir().join("terminalist_test_generated_storage.toml");
+    let _ = fs::remove_file(&path);
+
+    Config::generate_default_config(&path).unwrap();
+    let written = fs::read_to_string(&path).unwrap();
+
+    // The section header is live (not commented out), so uncommenting only `data_dir`
+    // lands the key inside `[storage]` rather than silently inside whatever section
+    // precedes it in the generated file.
+    assert!(written.contains("\n[storage]\n"));
+    assert!(!written.contains("# [storage]"));
+    assert!(written.contains("# data_dir ="));
+
+    // An empty `[storage]` table (the value still commented out) must deserialize to the
+    // default, i.e. no override.
+    let (config, _) = Config::load_from_file(&path).unwrap();
+    assert!(config.storage.data_dir.is_none());
+
+    let _ = fs::remove_file(&path);
+}
