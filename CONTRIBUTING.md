@@ -34,6 +34,24 @@ Thanks for taking the time to contribute!
 - Show version: `cargo run -- --version`
 - Debug DB mode: `cargo run -- --debug`
 
+## Versioning development builds
+
+Use a SemVer prerelease suffix when a development build needs a distinct version. For
+example, builds leading up to `0.6.0` can use:
+
+```text
+0.6.0-dev.1
+0.6.0-dev.2
+```
+
+Increment the final number when publishing or sharing another development build that needs to
+be identified separately. Ordinary feature and bug-fix changes do not need their own version
+bump.
+
+When changing the package version, update `Cargo.toml` and run `cargo check` to synchronize
+`Cargo.lock`. Commit both files together. Release-preparation changes should replace the
+development suffix with the final release version, such as `0.6.0`.
+
 ## Reporting issues
 
 Please include:
@@ -45,4 +63,3 @@ Please include:
 ---
 
 By contributing, you agree that your contributions will be licensed under the MIT License.
-
