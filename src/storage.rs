@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbBackend, Schema, Statement};
+use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection, Schema};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -47,11 +47,7 @@ impl LocalStorage {
         let conn = Database::connect(opt).await?;
 
         // Enable foreign keys for SQLite
-        conn.execute(Statement::from_string(
-            DbBackend::Sqlite,
-            "PRAGMA foreign_keys = ON;".to_owned(),
-        ))
-        .await?;
+        conn.execute_unprepared("PRAGMA foreign_keys = ON;").await?;
 
         let storage = LocalStorage { conn };
         // A kept debug file already has its schema; only build it for a fresh file.
@@ -78,7 +74,7 @@ impl LocalStorage {
         ];
 
         for statement in table_statements {
-            self.conn.execute(backend.build(&statement)).await?;
+            self.conn.execute(&statement).await?;
         }
 
         // Create composite unique indexes for (backend_uuid, remote_id)
@@ -90,9 +86,7 @@ impl LocalStorage {
         ];
 
         for index_sql in indexes {
-            self.conn
-                .execute(Statement::from_string(DbBackend::Sqlite, index_sql.to_owned()))
-                .await?;
+            self.conn.execute_unprepared(index_sql).await?;
         }
 
         Ok(())

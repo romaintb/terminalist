@@ -67,14 +67,14 @@ jobs:
 
   # MSRV build job
   msrv:
-    name: MSRV 1.78 Build
+    name: MSRV 1.94 Build
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v7
     - name: Install Rust (MSRV)
       uses: dtolnay/rust-toolchain@stable
       with:
-        toolchain: 1.78
+        toolchain: 1.94
         components: rustfmt, clippy
     - name: Rust cache
       uses: Swatinem/rust-cache@v2
