@@ -6,7 +6,7 @@
 
 use anyhow::Result;
 use log::{error, info};
-use sea_orm::{ActiveValue, IntoActiveModel};
+use sea_orm::{ActiveValue, EntityTrait, IntoActiveModel};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -30,6 +30,19 @@ type BackendMap = HashMap<Uuid, Arc<Box<dyn Backend>>>;
 pub struct BackendRegistry {
     storage: Arc<Mutex<LocalStorage>>,
     backends: Arc<Mutex<BackendMap>>,
+}
+
+/// Namespace for deriving stable backend UUIDs (a fixed, arbitrary v4 UUID).
+const BACKEND_NAMESPACE: Uuid = Uuid::from_u128(0x6b1c_2f0e_9d47_4a35_8f21_5c7e_3a9b_0d64);
+
+/// Derive the UUID for a backend from its type and name.
+///
+/// Deterministic: the same pair yields the same UUID on every launch. The local cache keys
+/// every project, task, label, and section to this value, so a random UUID per launch would
+/// silently duplicate the entire dataset against a persistent database.
+#[must_use]
+pub fn derive_backend_uuid(backend_type: &str, name: &str) -> Uuid {
+    Uuid::new_v5(&BACKEND_NAMESPACE, format!("{backend_type}:{name}").as_bytes())
 }
 
 impl BackendRegistry {
@@ -155,10 +168,24 @@ impl BackendRegistry {
         credentials: String,
         settings: String,
     ) -> Result<Uuid> {
+        use sea_orm::sea_query::OnConflict;
+
         // Validate by creating instance first
         let backend_instance = factory::create_backend(&backend_type, &credentials)?;
 
-        let uuid = Uuid::new_v4();
+        let storage = self.storage.lock().await;
+
+        // Reuse the row a previous version wrote, whatever UUID it has, so the cache that hangs
+        // off that `backend_uuid` stays attached to this backend. Releases predating the derived
+        // UUID wrote a random v4 here; inserting the derived v5 instead would both violate
+        // `idx_backends_type_name` (the app would fail to start) and, if that constraint were
+        // widened rather than respected, strand every cached project/task under a dead
+        // `backend_uuid` — which the repositories' unfiltered `get_all` would then render as a
+        // fully duplicated task list.
+        let uuid = match BackendRepository::get_by_type_and_name(&storage.conn, &backend_type, &name).await? {
+            Some(existing) => existing.uuid,
+            None => derive_backend_uuid(&backend_type, &name),
+        };
 
         let backend_model = backend::ActiveModel {
             uuid: ActiveValue::Set(uuid),
@@ -169,8 +196,14 @@ impl BackendRegistry {
             settings: ActiveValue::Set(settings),
         };
 
-        let storage = self.storage.lock().await;
-        BackendRepository::create(&storage.conn, backend_model).await?;
+        backend::Entity::insert(backend_model)
+            .on_conflict(
+                OnConflict::column(backend::Column::Uuid)
+                    .update_columns([backend::Column::Name, backend::Column::Credentials, backend::Column::Settings])
+                    .to_owned(),
+            )
+            .exec(&storage.conn)
+            .await?;
 
         // Add to in-memory cache
         let mut backends = self.backends.lock().await;

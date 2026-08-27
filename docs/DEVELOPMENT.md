@@ -66,15 +66,9 @@ This is a fully-featured TUI application for Todoist. You can extend it by:
 
 ## Dependencies
 
-This project uses the following Rust crates (see `Cargo.toml` for exact versions):
-
-- `todoist-api = "0.3.0"` - Unofficial Todoist API client
-- `ratatui = "0.29"` - Terminal UI framework
-- `crossterm = "0.29"` - Cross-platform terminal handling
-- `tokio = "1.x"` - Async runtime
-- `sqlx = "0.8"` - Database toolkit with SQLite support
-- `serde` - Serialization/deserialization
-- `chrono = "0.4"` - Date and time handling
-- `anyhow = "1.0"` - Error handling
-- `toml = "0.8"` - Configuration file parsing
-- `dirs = "5.0"` - Platform-specific directory paths
+See [`Cargo.toml`](../Cargo.toml) for the full, exact list of dependencies
+and their versions — notably `ratatui` for the TUI, `sea-orm` (with the
+`sqlx-sqlite` backend) for the SQLite cache, `todoist-api` for the Todoist
+client, `tokio` for async, and `toml`/`dirs` for configuration and platform
+paths. A version list copied here would go stale again immediately, so this
+guide doesn't duplicate one.

@@ -27,7 +27,6 @@ pub const SUCCESS_LABEL_DELETED: &str = "✅ Label deleted";
 pub const SUCCESS_LABEL_UPDATED: &str = "✅ Label updated";
 pub const SUCCESS_TASK_PRIORITY_UPDATED: &str = "✅ Task priority updated to P";
 pub const SUCCESS_TASK_RESTORED: &str = "✅ Task restored";
-pub const SUCCESS_SYNC_COMPLETED: &str = "Sync completed successfully";
 
 // Error Messages
 pub const ERROR_TASK_COMPLETION_FAILED: &str = "❌ Failed to complete task";
@@ -77,8 +76,6 @@ pub const ERROR_NO_API_TOKEN: &str = "❌ Error: TODOIST_API_TOKEN environment v
 pub const DIALOG_TITLE_DEBUG_LOGS: &str = "🔍 Debug Logs - Press 'Esc', 'G' or 'q' to close";
 pub const UI_CANNOT_DELETE_TODAY_VIEW: &str = "Cannot delete the Today view";
 pub const UI_NO_TASK_SELECTED_DUE_DATE: &str = "No task selected to set due date";
-pub const UI_LOADING_DATA: &str = "Loading data";
-pub const UI_SYNCING_WITH_TODOIST: &str = "Syncing with Todoist";
 pub const UI_LOADING_DATA_FROM_STORAGE: &str = "Loading data from storage";
 
 // Date header format for upcoming view

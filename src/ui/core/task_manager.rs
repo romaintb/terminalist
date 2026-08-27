@@ -1,4 +1,4 @@
-use super::actions::{Action, SidebarSelection};
+use super::actions::{Action, SelectionPolicy, SidebarSelection};
 use crate::constants::UI_LOADING_DATA_FROM_STORAGE;
 use crate::sync::{SyncService, SyncStatus};
 use std::collections::HashMap;
@@ -180,12 +180,18 @@ impl TaskManager {
         self.tasks.len()
     }
 
-    /// Spawn a background data loading operation
+    /// Spawn a background data loading operation.
+    ///
+    /// `selection_policy` doubles as the initial-load-vs-reload switch, since the two states
+    /// are mutually exclusive: `None` means this is the startup load (no prior selection
+    /// exists yet to keep or follow), and the result is sent as `Action::InitialDataLoaded`.
+    /// `Some(policy)` means this is a reload of an already-showing view, and the result is
+    /// sent as `Action::DataLoaded` carrying that policy.
     pub fn spawn_data_load(
         &mut self,
         sync_service: SyncService,
         sidebar_selection: SidebarSelection,
-        is_initial_load: bool,
+        selection_policy: Option<SelectionPolicy>,
     ) -> TaskId {
         let task_id = self.next_task_id;
         self.next_task_id += 1;
@@ -228,20 +234,20 @@ impl TaskManager {
                         tasks: tasks.clone(),
                     };
 
-                    let action = if is_initial_load {
-                        Action::InitialDataLoaded {
+                    let action = match selection_policy {
+                        None => Action::InitialDataLoaded {
                             projects,
                             labels,
                             sections,
                             tasks,
-                        }
-                    } else {
-                        Action::DataLoaded {
+                        },
+                        Some(selection_policy) => Action::DataLoaded {
                             projects,
                             labels,
                             sections,
                             tasks,
-                        }
+                            selection_policy,
+                        },
                     };
                     let _ = action_sender.send(action);
 

@@ -13,7 +13,7 @@ use crate::ui::components::scrollbar_helper::ScrollbarHelper;
 use crate::ui::components::task_list_item_component::{ListItem, TaskItem, TaskListItemType};
 use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
-    actions::{Action, DialogType},
+    actions::{Action, DialogType, SelectionPolicy},
     Component,
 };
 use crate::utils::datetime;
@@ -93,7 +93,18 @@ impl TaskListComponent {
         projects: Vec<project::Model>,
         labels: Vec<label::Model>,
         sidebar_selection: SidebarSelection,
+        selection_policy: SelectionPolicy,
     ) {
+        // Anchor selection to the task itself only for FollowTask: a background sync can
+        // reload the list while the user is navigating, and an index would silently move the
+        // cursor to a different task. A user-initiated reload (KeepIndex) instead leaves
+        // `selected_index` exactly where it was, even if a different task now occupies that
+        // row -- e.g. an overdue task marked "due today" moving out of the row it was on.
+        let anchor = match selection_policy {
+            SelectionPolicy::FollowTask => self.get_selected_task().map(|task| task.uuid),
+            SelectionPolicy::KeepIndex => None,
+        };
+
         self.tasks = tasks;
         self.sections = sections;
         self.projects = projects;
@@ -102,7 +113,33 @@ impl TaskListComponent {
 
         // Build the flat list of items from the hierarchical task data
         self.build_item_list();
+        if let Some(uuid) = anchor {
+            self.restore_selection(uuid);
+        }
         self.update_list_state();
+    }
+
+    /// Move selection back to `uuid` if that task is still in the list.
+    ///
+    /// If it is gone (completed or deleted elsewhere), `selected_index` is left unchanged.
+    /// `update_list_state`'s clamp then only helps if that stale index is now out of range,
+    /// forcing it down to the last selectable row; if the stale index still happens to be
+    /// in range, selection silently lands on whatever task now occupies that slot.
+    fn restore_selection(&mut self, uuid: Uuid) {
+        let index = self.selectable_task_uuids().position(|candidate| candidate == uuid);
+        if let Some(index) = index {
+            self.selected_index = index;
+        }
+    }
+
+    /// UUIDs of selectable task rows, in logical-index order (i.e. the same order
+    /// `logical_to_physical_index`/`get_selected_task` walk). Section headers and
+    /// separators are not selectable and are skipped, matching `TaskListItemType::is_selectable`.
+    fn selectable_task_uuids(&self) -> impl Iterator<Item = Uuid> + '_ {
+        self.items.iter().filter_map(|item| match item {
+            TaskListItemType::Task(task_item) => Some(task_item.task.uuid),
+            _ => None,
+        })
     }
 
     /// Build the flat list of items from task data

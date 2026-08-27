@@ -14,6 +14,7 @@
 //! - [`dialog_component`] - Modal dialog framework
 //! - [`dialogs`] - Specific dialog implementations (create, edit, confirm)
 //! - [`sidebar_component`] - Navigation sidebar with project/view selection
+//! - [`sync_toast`] - Non-blocking sync status indicator
 //! - [`task_list_component`] - Main task display and management interface
 //! - [`task_list_item_component`] - Individual task rendering and interaction
 //!
@@ -44,10 +45,12 @@ pub mod dialog_component;
 pub mod dialogs;
 pub mod sidebar_component;
 pub mod sidebar_item_component;
+pub mod sync_toast;
 pub mod task_list_component;
 pub mod task_list_item_component;
 
 // Public exports for external use
 pub use dialog_component::DialogComponent;
 pub use sidebar_component::SidebarComponent;
+pub use sync_toast::{should_auto_sync, SyncToast};
 pub use task_list_component::TaskListComponent;

@@ -52,7 +52,7 @@ use crate::storage::LocalStorage;
 /// use tokio::sync::Mutex;
 ///
 /// # async fn example() -> anyhow::Result<()> {
-/// let storage = Arc::new(Mutex::new(LocalStorage::new(false).await?));
+/// let storage = Arc::new(Mutex::new(LocalStorage::new_at("/tmp/terminalist-example").await?));
 /// let backend_registry = Arc::new(BackendRegistry::new(storage));
 /// // ... initialize and load backends ...
 /// # let backend_uuid = uuid::Uuid::new_v4();
@@ -195,8 +195,18 @@ impl SyncService {
     async fn perform_sync(&self) -> Result<SyncStatus> {
         info!("🔄 Starting sync process...");
 
+        // Resolve the backend once and fetch all four resources concurrently.
+        let backend = self.get_backend().await?;
+
+        let (projects_result, tasks_result, labels_result, sections_result) = tokio::join!(
+            backend.fetch_projects(),
+            backend.fetch_tasks(),
+            backend.fetch_labels(),
+            backend.fetch_sections(),
+        );
+
         // Fetch projects from backend
-        let projects = match self.get_backend().await?.fetch_projects().await {
+        let projects = match projects_result {
             Ok(projects) => {
                 info!("✅ Fetched {} projects from backend", projects.len());
                 projects
@@ -210,7 +220,7 @@ impl SyncService {
         };
 
         // Fetch all tasks from backend
-        let tasks = match self.get_backend().await?.fetch_tasks().await {
+        let tasks = match tasks_result {
             Ok(tasks) => {
                 info!("✅ Fetched {} tasks from backend", tasks.len());
                 tasks
@@ -224,7 +234,7 @@ impl SyncService {
         };
 
         // Fetch all labels from backend
-        let labels = match self.get_backend().await?.fetch_labels().await {
+        let labels = match labels_result {
             Ok(labels) => {
                 info!("✅ Fetched {} labels from backend", labels.len());
                 labels
@@ -238,7 +248,7 @@ impl SyncService {
         };
 
         // Fetch all sections from backend
-        let sections = match self.get_backend().await?.fetch_sections().await {
+        let sections = match sections_result {
             Ok(sections) => {
                 info!("✅ Fetched {} sections from backend", sections.len());
                 sections
@@ -274,17 +284,22 @@ impl SyncService {
             }
             info!("✅ Stored labels in database");
 
-            // Store sections BEFORE tasks since tasks have foreign key references to sections
-            if !sections.is_empty() {
-                if let Err(e) = self.store_sections_batch(&storage, &sections).await {
-                    error!("❌ Failed to store sections: {e}");
-                    return Ok(SyncStatus::Error {
-                        message: format!("Failed to store sections: {e}"),
-                    });
-                }
-                info!("✅ Stored sections in database");
+            // Store sections BEFORE tasks since tasks have foreign key references to sections.
+            // The empty case — including a sections fetch that failed above and fell back to an
+            // empty Vec — needs no special case here: `store_sections_batch` treats an empty
+            // slice as "nothing to reconcile" rather than "delete everything", the same policy
+            // all four `store_*_batch` functions apply. Keeping the guard in one layer is what
+            // stops projects/labels/tasks from silently disagreeing with sections about it.
+            if let Err(e) = self.store_sections_batch(&storage, &sections).await {
+                error!("❌ Failed to store sections: {e}");
+                return Ok(SyncStatus::Error {
+                    message: format!("Failed to store sections: {e}"),
+                });
+            }
+            if sections.is_empty() {
+                info!("⚠️  No sections fetched; the cached sections are left untouched");
             } else {
-                info!("⚠️  No sections to store (skipped due to backend issue)");
+                info!("✅ Stored sections in database");
             }
 
             if let Err(e) = self.store_tasks_batch(&storage, &tasks).await {

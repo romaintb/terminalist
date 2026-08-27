@@ -3,21 +3,23 @@ use crate::constants::*;
 use crate::entities::{label, project, section, task};
 use crate::sync::{SyncService, SyncStatus};
 use crate::theme::{self, ThemeWarning};
-use crate::ui::components::{DialogComponent, SidebarComponent, TaskListComponent};
+use crate::ui::components::sync_toast::sync_completed_successfully;
+use crate::ui::components::{should_auto_sync, DialogComponent, SidebarComponent, SyncToast, TaskListComponent};
 use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
-    actions::{Action, DialogType},
+    actions::{Action, DialogType, SelectionPolicy},
     event_handler::EventType,
     task_manager::{TaskId, TaskManager},
     Component,
 };
 use crate::utils::datetime;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-use log::info;
+use log::{error, info};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     Frame,
 };
+use std::time::Instant;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
@@ -64,6 +66,7 @@ pub struct AppComponent {
     sidebar: SidebarComponent,
     task_list: TaskListComponent,
     dialog: DialogComponent,
+    sync_toast: SyncToast,
 
     // Application state
     state: AppState,
@@ -79,7 +82,12 @@ pub struct AppComponent {
     // Simple UI state
     should_quit: bool,
     active_sync_task: Option<TaskId>,
-    is_initial_sync: bool,
+    /// True from startup until the first local data load lands and establishes the sidebar
+    /// selection from `config.ui.default_project`. Nothing else may set the initial selection:
+    /// doing it a second time snaps the user back to the default view and rebuilds the task
+    /// list underneath them.
+    initial_selection_pending: bool,
+    last_sync_attempt_at: Option<Instant>,
 
     // Layout state
     sidebar_visible: bool,
@@ -108,6 +116,7 @@ impl AppComponent {
             sidebar,
             task_list,
             dialog,
+            sync_toast: SyncToast::new(),
             state,
             sync_service,
             task_manager,
@@ -116,7 +125,8 @@ impl AppComponent {
             config,
             should_quit: false,
             active_sync_task: None,
-            is_initial_sync: false,
+            initial_selection_pending: false,
+            last_sync_attempt_at: None,
             sidebar_width: 30, // Default width
             screen_width: 100, // Default width
             screen_height: 50, // Default height
@@ -137,6 +147,32 @@ impl AppComponent {
         self.active_sync_task.is_some()
     }
 
+    /// Whether a tick can change what the sync toast shows — true only while a success
+    /// toast is counting down to its own expiry.
+    ///
+    /// The render loop uses this, not "is the toast visible", to decide whether a tick has
+    /// to repaint. A failed sync's toast stays up until the user dismisses it, so keying the
+    /// repaint off visibility would redraw the whole TUI ten times a second for as long as
+    /// that notice is on screen.
+    pub fn sync_toast_expires_on_tick(&self) -> bool {
+        self.sync_toast.expires_on_tick()
+    }
+
+    /// The sidebar entry the task list is currently showing.
+    pub fn sidebar_selection(&self) -> &SidebarSelection {
+        &self.state.sidebar_selection
+    }
+
+    /// Await the next background action rather than draining whatever has already arrived.
+    ///
+    /// Same channel as [`Self::process_background_actions`], which the render loop polls
+    /// without blocking. Widened for the integration tests under `tests/ui/`, which need to
+    /// step the component across a background data load deterministically — no polling, no
+    /// sleeping, no wall-clock dependency.
+    pub async fn next_background_action(&mut self) -> Option<Action> {
+        self.background_action_rx.recv().await
+    }
+
     /// Get total number of tasks
     pub fn total_tasks(&self) -> usize {
         self.state.tasks.len()
@@ -148,21 +184,29 @@ impl AppComponent {
     }
 
     /// Trigger initial sync on startup (unless in debug mode)
+    ///
+    /// The initial *selection* is established by the local data load scheduled here, not by the
+    /// sync finishing. `initial_selection_pending` stays set until that load is handled, so a
+    /// sync that fails, succeeds, or never happens at all (debug mode) all end up in the same
+    /// place.
     pub fn trigger_initial_sync(&mut self) {
+        if self.active_sync_task.is_some() {
+            return;
+        }
+
+        // Paint cached data immediately so the user has something to look at and navigate; the
+        // background sync refreshes the view again once it completes. Debug mode differs by
+        // exactly one thing — it skips the network sync — so the pending-selection lifecycle is
+        // identical on both paths and cannot drift apart.
+        self.initial_selection_pending = true;
+        self.schedule_initial_data_fetch();
+
         if self.sync_service.is_debug_mode() {
-            info!("AppComponent: Skipping initial sync (debug mode)");
-            // In debug mode, just load existing data from database
-            self.is_initial_sync = true;
-            self.schedule_initial_data_fetch();
-            self.is_initial_sync = false;
+            info!("AppComponent: Skipping initial sync (debug mode), loading cached data only");
         } else {
             info!("AppComponent: Starting initial sync");
-            if self.active_sync_task.is_none() {
-                self.is_initial_sync = true;
-                self.start_background_sync();
-                // Data fetch will be triggered automatically when sync completes
-                info!("AppComponent: Initial sync scheduled");
-            }
+            self.start_background_sync();
+            info!("AppComponent: Initial sync scheduled");
         }
     }
 
@@ -209,8 +253,13 @@ impl AppComponent {
         );
     }
 
-    /// Update all components with current data
-    fn sync_component_data(&mut self) {
+    /// Update all components with current data.
+    ///
+    /// `selection_policy` is forwarded to the task list's reload and only matters when the
+    /// data actually changed (a `DataLoaded`/`InitialDataLoaded` handler). Callers that are not
+    /// reacting to a fresh data load pass `SelectionPolicy::KeepIndex`: the data has not
+    /// changed, so it is a no-op, and it is the conservative choice.
+    fn sync_component_data(&mut self, selection_policy: SelectionPolicy) {
         // Update sidebar
         self.sidebar.update_data(self.state.projects.clone(), self.state.labels.clone());
         self.sidebar.selection = self.state.sidebar_selection.clone();
@@ -225,6 +274,7 @@ impl AppComponent {
             self.state.projects.clone(),
             self.state.labels.clone(),
             self.state.sidebar_selection.clone(),
+            selection_policy,
         );
 
         // Update dialog
@@ -236,6 +286,9 @@ impl AppComponent {
             self.state.tasks.clone(),
         );
         self.dialog.set_sync_service(self.sync_service.clone());
+
+        // Update sync toast
+        self.sync_toast.update_theme(self.config.theme.clone());
     }
 
     /// Handle global keyboard shortcuts that aren't component-specific
@@ -446,6 +499,12 @@ impl AppComponent {
                 Action::None
             }
             Action::StartSync => {
+                // Show the "syncing" toast regardless of whether this call actually
+                // starts a new sync: it also covers the async "sync started"
+                // notification that arrives after `start_background_sync` was already
+                // called directly (e.g. from `trigger_initial_sync`), which otherwise
+                // would hit the "already in progress" branch below and never surface.
+                self.sync_toast.started();
                 if self.active_sync_task.is_none() {
                     info!("Starting background sync");
                     self.state.loading = true;
@@ -457,30 +516,51 @@ impl AppComponent {
             }
             Action::RefreshLocalData => {
                 info!("Refreshing local data from database (debug mode)");
-                // Schedule a data fetch directly from local storage without API sync
-                self.schedule_data_fetch();
+                // Schedule a data fetch directly from local storage without API sync. User-
+                // initiated (the debug-mode `R` key), so the cursor stays on its row.
+                self.schedule_data_fetch(SelectionPolicy::KeepIndex);
                 Action::None
             }
             Action::SyncCompleted(status) => {
                 info!("Sync: Completed with status {:?}", status);
                 self.active_sync_task = None;
                 self.state.loading = false;
+                let now = Instant::now();
+                // Record every terminal attempt, success or failure, so a failure waits
+                // a full auto-sync interval before retrying instead of re-firing on the
+                // very next tick (see `should_auto_sync`'s doc comment).
+                self.last_sync_attempt_at = Some(now);
 
-                // Extract data from sync status and update components
+                if sync_completed_successfully(&status) {
+                    self.sync_toast.succeeded(now);
+                } else {
+                    error!("Sync: Completed with a non-success status: {:?}", status);
+                    self.sync_toast.failed();
+                }
+
+                // Extract data from sync status and update components. The actual data reload
+                // (if any) happens asynchronously via `update_data_from_sync`'s `DataLoaded`,
+                // which carries its own policy; this call just repaints components with
+                // whatever data is already in `self.state`, unchanged, so KeepIndex is a no-op.
                 self.update_data_from_sync(status);
-                self.sync_component_data();
+                self.sync_component_data(SelectionPolicy::KeepIndex);
 
-                self.state.info_message = Some(SUCCESS_SYNC_COMPLETED.to_string());
-                info!("Sync: Showing completion info dialog");
-                Action::ShowDialog(DialogType::Info(self.state.info_message.clone().unwrap()))
+                Action::None
             }
             Action::SyncFailed(error) => {
-                info!("Sync: Failed with error: {}", error);
+                error!("Sync: Failed with error: {}", error);
                 self.active_sync_task = None;
                 self.state.loading = false;
-                self.is_initial_sync = false; // Reset flag on failure
-                self.state.error_message = Some(error);
-                Action::ShowDialog(DialogType::Error(self.state.error_message.clone().unwrap_or_default()))
+                // `initial_selection_pending` is deliberately NOT cleared here. It is owned by
+                // the local data load, which runs independently of the sync and still has to
+                // establish the initial selection; clearing it on a sync failure would leave a
+                // startup with no network stuck on whatever `SidebarSelection::default()` is,
+                // ignoring `default_project`.
+
+                // Record the attempt, same reasoning as the `SyncCompleted` arm above.
+                self.last_sync_attempt_at = Some(Instant::now());
+                self.sync_toast.failed();
+                Action::None
             }
             Action::ShowDialog(ref dialog_type) => {
                 info!("Dialog: Showing dialog {:?}", dialog_type);
@@ -516,8 +596,8 @@ impl AppComponent {
 
                 info!("Navigation: Sidebar selection changed to {}", selection_desc);
                 self.state.sidebar_selection = selection.clone();
-                // Reload data for the new selection
-                self.schedule_data_fetch();
+                // Reload data for the new selection. User-initiated navigation, so KeepIndex.
+                self.schedule_data_fetch(SelectionPolicy::KeepIndex);
                 info!("Navigation: Scheduled data fetch for new selection");
                 Action::None
             }
@@ -745,15 +825,28 @@ impl AppComponent {
                 // Update app state with loaded data
                 self.state.update_data(projects, labels, sections, tasks);
 
-                // Set initial sidebar selection based on config (now we have projects loaded)
-                self.set_initial_sidebar_selection();
-                info!("AppComponent: Set initial sidebar selection after initial data load");
+                // The initial selection is established exactly once, here, on the first local
+                // load after startup. Guarding on the flag (and clearing it immediately) is what
+                // keeps a later reload from snapping the user back to `default_project` and
+                // rebuilding the task list under them.
+                if self.initial_selection_pending {
+                    self.initial_selection_pending = false;
 
-                // Fetch data for the newly selected sidebar item
-                self.schedule_data_fetch();
-                info!("AppComponent: Scheduled data fetch for initial sidebar selection");
+                    // Set initial sidebar selection based on config (now we have projects loaded)
+                    self.set_initial_sidebar_selection();
+                    info!("AppComponent: Set initial sidebar selection after initial data load");
 
-                self.sync_component_data();
+                    // Fetch data for the newly selected sidebar item. User-initiated in effect
+                    // (it applies `default_project`, not a task the user was looking at), so
+                    // KeepIndex.
+                    self.schedule_data_fetch(SelectionPolicy::KeepIndex);
+                    info!("AppComponent: Scheduled data fetch for initial sidebar selection");
+                }
+
+                // No prior selection exists yet at startup, so there is nothing to keep or
+                // follow: KeepIndex is a no-op here, same as for every other non-data-load
+                // caller of `sync_component_data`.
+                self.sync_component_data(SelectionPolicy::KeepIndex);
                 info!("InitialData: Updated all component data after initial data load");
                 Action::None
             }
@@ -762,6 +855,7 @@ impl AppComponent {
                 labels,
                 sections,
                 tasks,
+                selection_policy,
             } => {
                 info!(
                     "Data: Loaded {} projects, {} labels, {} sections, {} tasks",
@@ -773,7 +867,7 @@ impl AppComponent {
 
                 // Update app state with loaded data
                 self.state.update_data(projects, labels, sections, tasks);
-                self.sync_component_data();
+                self.sync_component_data(selection_policy);
                 info!("Data: Updated all component data after data load");
                 Action::None
             }
@@ -799,8 +893,12 @@ impl AppComponent {
             }
             Action::RefreshData => {
                 info!("Data: Refreshing UI data after task operation");
-                // Schedule a data fetch to reload current view with updated data
-                self.schedule_data_fetch();
+                // Schedule a data fetch to reload current view with updated data. This is
+                // always user-initiated (a task operation the user just performed), so the
+                // cursor stays on its row rather than following the task it just changed --
+                // e.g. pressing `t` to mark an overdue task due "today" must not drag the
+                // cursor along with it as it moves out of the Overdue section.
+                self.schedule_data_fetch(SelectionPolicy::KeepIndex);
                 Action::None
             }
             // Help panel scrolling actions
@@ -1090,17 +1188,19 @@ impl AppComponent {
         );
     }
 
+    /// Refresh the view from local storage after a sync landed new data.
+    ///
+    /// Always the selection-preserving path. The initial sync is not special here: startup
+    /// already scheduled its own initial load (see [`Self::trigger_initial_sync`]), so routing
+    /// the *completion* through `schedule_initial_data_fetch` too would re-run
+    /// `set_initial_sidebar_selection` and undo every bit of navigation the user did while the
+    /// sync was running — which is exactly what the non-blocking sync exists to allow. The
+    /// auto-sync timer makes that reset recur with no user action at all.
     fn update_data_from_sync(&mut self, status: SyncStatus) {
-        // Only proceed if sync was successful
+        // Only proceed if sync was successful. The user may be navigating while the sync
+        // lands, so the reload must anchor to the selected task rather than its index.
         if matches!(status, SyncStatus::Success) {
-            if self.is_initial_sync {
-                // For initial sync, use initial data fetch which sets default selection
-                self.schedule_initial_data_fetch();
-                self.is_initial_sync = false;
-            } else {
-                // For manual refresh, use regular data fetch to maintain current selection
-                self.schedule_data_fetch();
-            }
+            self.schedule_data_fetch(SelectionPolicy::FollowTask);
         }
     }
 
@@ -1108,14 +1208,21 @@ impl AppComponent {
     fn schedule_initial_data_fetch(&mut self) {
         let _task_id =
             self.task_manager
-                .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection.clone(), true);
+                .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection.clone(), None);
     }
 
-    /// Schedule a background task to fetch data after navigation or changes
-    fn schedule_data_fetch(&mut self) {
-        let _task_id =
-            self.task_manager
-                .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection.clone(), false);
+    /// Schedule a background task to fetch data after navigation or changes.
+    ///
+    /// `selection_policy` is forwarded onto the resulting `Action::DataLoaded` unchanged, so
+    /// every call site must state its intent explicitly: `KeepIndex` for a user-initiated
+    /// reload, `FollowTask` for one triggered by a completed sync. See [`SelectionPolicy`]'s
+    /// doc comment for the full rationale.
+    fn schedule_data_fetch(&mut self, selection_policy: SelectionPolicy) {
+        let _task_id = self.task_manager.spawn_data_load(
+            self.sync_service.clone(),
+            self.state.sidebar_selection.clone(),
+            Some(selection_policy),
+        );
     }
 
     /// Process background actions from task manager
@@ -1133,6 +1240,21 @@ impl AppComponent {
         if !completed_tasks.is_empty() {
             let count = completed_tasks.len();
             info!("Background: Cleaned up {} finished tasks", count);
+        }
+
+        // This is the tick path: advance the toast's own timer (so a success toast can
+        // expire and a spinner can animate) and decide whether the auto-sync interval
+        // has elapsed.
+        let now = Instant::now();
+        self.sync_toast.tick(now);
+        if should_auto_sync(
+            self.last_sync_attempt_at,
+            now,
+            self.config.sync.auto_sync_interval_minutes,
+            self.active_sync_task.is_some(),
+        ) {
+            info!("AppComponent: Auto-sync interval elapsed, starting background sync");
+            actions.push(Action::StartSync);
         }
 
         actions
@@ -1163,6 +1285,9 @@ impl AppComponent {
                 }
             }
             EventType::Key(key) => {
+                // Any keypress dismisses a failed sync toast (no-op otherwise).
+                self.sync_toast.dismiss();
+
                 // Route keyboard events to components or handle globally
                 if self.dialog.is_visible() {
                     // Dialog has priority when visible
@@ -1212,8 +1337,11 @@ impl AppComponent {
         // Handle app-level actions
         let _final_action = self.handle_app_action(action).await;
 
-        // Update component data after any changes
-        self.sync_component_data();
+        // Update component data after any changes. Key/mouse/resize events handled here never
+        // carry a fresh data load (`DataLoaded`/`InitialDataLoaded` only arrive through the
+        // background-action path in the render loop), so this is always a non-data-load
+        // caller: KeepIndex.
+        self.sync_component_data(SelectionPolicy::KeepIndex);
 
         Ok(())
     }
@@ -1270,57 +1398,12 @@ impl Component for AppComponent {
         }
         self.task_list.render(f, main_chunks[1]);
 
-        // Render sync status if syncing or loading
-        if self.state.loading || self.is_syncing() {
-            AppComponent::render_sync_status_impl(self, f, rect);
-        }
+        // Render the non-blocking sync toast in the task list's lower-right corner.
+        self.sync_toast.render(f, main_chunks[1]);
 
         // Render dialog on top if visible (includes help dialog)
         if self.dialog.is_visible() {
             self.dialog.render(f, rect);
         }
-    }
-}
-
-impl AppComponent {
-    /// Render sync status indicator
-    fn render_sync_status_impl(&self, f: &mut Frame, rect: Rect) {
-        use ratatui::{
-            layout::{Alignment, Constraint, Layout},
-            style::Style,
-            text::{Line, Span},
-            widgets::{Block, Borders, Clear, Paragraph},
-        };
-
-        // Calculate centered area for the sync indicator
-        let popup_area = {
-            let popup_layout =
-                Layout::vertical([Constraint::Percentage(40), Constraint::Min(3), Constraint::Percentage(40)])
-                    .split(rect);
-
-            Layout::horizontal([Constraint::Percentage(30), Constraint::Min(30), Constraint::Percentage(30)])
-                .split(popup_layout[1])[1]
-        };
-
-        let title = if self.state.loading {
-            UI_LOADING_DATA
-        } else {
-            UI_SYNCING_WITH_TODOIST
-        };
-
-        let spinner = "⟳";
-        let content = Paragraph::new(Line::from(Span::styled(
-            format!("{} {}…", spinner, title),
-            Style::default().fg(self.config.theme.warning),
-        )))
-        .alignment(Alignment::Center)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .style(Style::default().fg(self.config.theme.warning)),
-        );
-
-        f.render_widget(Clear, popup_area);
-        f.render_widget(content, popup_area);
     }
 }
