@@ -72,7 +72,7 @@ This project uses the following Rust crates (see `Cargo.toml` for exact versions
 - `ratatui = "0.29"` - Terminal UI framework
 - `crossterm = "0.29"` - Cross-platform terminal handling
 - `tokio = "1.x"` - Async runtime
-- `sqlx = "0.8"` - Database toolkit with SQLite support
+- `sea-orm = "1.1"` - ORM with SQLite support (via its `sqlx-sqlite` feature)
 - `serde` - Serialization/deserialization
 - `chrono = "0.4"` - Date and time handling
 - `anyhow = "1.0"` - Error handling

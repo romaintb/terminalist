@@ -58,14 +58,15 @@ src/
 
 ### Local Storage
 - Data is cached locally in a **file-backed SQLite database**
-- Database is recreated from scratch on each startup by syncing with the backend
+- Database persists between runs and is treated as a disposable cache; the backend stays authoritative
+- The schema revision is stamped in `PRAGMA user_version`; a mismatch drops and rebuilds every table rather than migrating
 - Uses Sea-ORM for type-safe database operations
 - Repository pattern provides clean data access layer
 - UUID-based primary keys for robust entity management
 
 ### Sync Behavior
 - **First Run**: Automatically syncs all data from Todoist
-- **Startup**: Loads local data instantly, then syncs in background if data is older than 5 minutes
+- **Startup**: Shows the cached data immediately, then syncs in the background; a failed sync leaves the cached view in place
 - **Manual Sync**: Press `r` to force refresh from Todoist API
 - **Sync Indicators**: Sync progress is shown during operations
 
