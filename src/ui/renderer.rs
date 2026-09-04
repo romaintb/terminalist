@@ -115,7 +115,10 @@ where
                         }
                     }
                 }
-                // Don't render on every tick - only when there are actual background actions
+                // Otherwise don't render on every tick, only to sweep away a stale toast.
+                if app.sweep_toast() {
+                    needs_render = true;
+                }
             }
             EventType::Render => {
                 needs_render = true;

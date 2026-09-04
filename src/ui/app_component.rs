@@ -3,7 +3,7 @@ use crate::constants::*;
 use crate::entities::{label, project, section, task};
 use crate::sync::{SyncService, SyncStatus};
 use crate::theme::{self, ThemeWarning};
-use crate::ui::components::{DialogComponent, SidebarComponent, TaskListComponent};
+use crate::ui::components::{toast::Toast, DialogComponent, SidebarComponent, TaskListComponent};
 use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
     actions::{Action, DialogType},
@@ -31,8 +31,6 @@ pub struct AppState {
     pub sections: Vec<section::Model>,
     pub sidebar_selection: SidebarSelection,
     pub loading: bool,
-    pub error_message: Option<String>,
-    pub info_message: Option<String>,
     pub show_help: bool,
     /// didnt we just got rid of custom scrolling ?
     pub help_scroll_offset: usize,
@@ -51,12 +49,6 @@ impl AppState {
         self.labels = labels;
         self.sections = sections;
         self.tasks = tasks;
-    }
-
-    /// Clear any transient messages
-    pub fn clear_messages(&mut self) {
-        self.error_message = None;
-        self.info_message = None;
     }
 }
 
@@ -82,6 +74,7 @@ pub struct AppComponent {
     active_sync_task: Option<TaskId>,
     is_initial_sync: bool,
     last_sync_attempt: Option<Instant>,
+    toast: Option<Toast>,
 
     // Layout state
     sidebar_visible: bool,
@@ -120,6 +113,7 @@ impl AppComponent {
             active_sync_task: None,
             is_initial_sync: false,
             last_sync_attempt: None,
+            toast: None,
             sidebar_width: 30, // Default width
             screen_width: 100, // Default width
             screen_height: 50, // Default height
@@ -128,11 +122,6 @@ impl AppComponent {
 
     pub fn should_quit(&self) -> bool {
         self.should_quit
-    }
-
-    /// Get the number of active background tasks
-    pub fn active_task_count(&self) -> usize {
-        self.task_manager.task_count()
     }
 
     /// Check if currently syncing
@@ -475,14 +464,13 @@ impl AppComponent {
                     SyncStatus::Success => {
                         self.update_data_from_sync(SyncStatus::Success);
                         self.sync_component_data();
-                        self.state.info_message = Some(SUCCESS_SYNC_COMPLETED.to_string());
-                        info!("Sync: Showing completion info dialog");
-                        Action::ShowDialog(DialogType::Info(self.state.info_message.clone().unwrap()))
+                        self.toast = Some(Toast::success(SUCCESS_SYNC_COMPLETED, &self.config.theme));
+                        Action::None
                     }
                     SyncStatus::Error { message } => {
                         self.is_initial_sync = false;
-                        self.state.error_message = Some(message);
-                        Action::ShowDialog(DialogType::Error(self.state.error_message.clone().unwrap_or_default()))
+                        self.toast = Some(Toast::error(&message, &self.config.theme));
+                        Action::None
                     }
                     SyncStatus::Idle | SyncStatus::InProgress => Action::None,
                 }
@@ -492,8 +480,8 @@ impl AppComponent {
                 self.active_sync_task = None;
                 self.state.loading = false;
                 self.is_initial_sync = false; // Reset flag on failure
-                self.state.error_message = Some(error);
-                Action::ShowDialog(DialogType::Error(self.state.error_message.clone().unwrap_or_default()))
+                self.toast = Some(Toast::error(&error, &self.config.theme));
+                Action::None
             }
             Action::ShowDialog(ref dialog_type) => {
                 info!("Dialog: Showing dialog {:?}", dialog_type);
@@ -1168,11 +1156,6 @@ impl AppComponent {
         actions
     }
 
-    /// Check if any background operations are running
-    pub fn is_busy(&self) -> bool {
-        self.task_manager.task_count() > 0
-    }
-
     /// Process an event through the component hierarchy
     pub async fn handle_event(&mut self, event_type: EventType) -> anyhow::Result<()> {
         let action = match event_type {
@@ -1300,9 +1283,16 @@ impl Component for AppComponent {
         }
         self.task_list.render(f, main_chunks[1]);
 
-        // Render sync status if syncing or loading
+        // An in-flight sync outranks whatever the last one left behind.
         if self.state.loading || self.is_syncing() {
-            AppComponent::render_sync_status_impl(self, f, rect);
+            let title = if self.state.loading {
+                UI_LOADING_DATA
+            } else {
+                UI_SYNCING_WITH_TODOIST
+            };
+            Toast::spinner(title, &self.config.theme).render(f, main_chunks[1]);
+        } else if let Some(toast) = &self.toast {
+            toast.render(f, main_chunks[1]);
         }
 
         // Render dialog on top if visible (includes help dialog)
@@ -1313,44 +1303,18 @@ impl Component for AppComponent {
 }
 
 impl AppComponent {
-    /// Render sync status indicator
-    fn render_sync_status_impl(&self, f: &mut Frame, rect: Rect) {
-        use ratatui::{
-            layout::{Alignment, Constraint, Layout},
-            style::Style,
-            text::{Line, Span},
-            widgets::{Block, Borders, Clear, Paragraph},
-        };
+    /// Whether a notice is parked in the corner.
+    pub fn has_toast(&self) -> bool {
+        self.toast.is_some()
+    }
 
-        // Calculate centered area for the sync indicator
-        let popup_area = {
-            let popup_layout =
-                Layout::vertical([Constraint::Percentage(40), Constraint::Min(3), Constraint::Percentage(40)])
-                    .split(rect);
-
-            Layout::horizontal([Constraint::Percentage(30), Constraint::Min(30), Constraint::Percentage(30)])
-                .split(popup_layout[1])[1]
-        };
-
-        let title = if self.state.loading {
-            UI_LOADING_DATA
-        } else {
-            UI_SYNCING_WITH_TODOIST
-        };
-
-        let spinner = "⟳";
-        let content = Paragraph::new(Line::from(Span::styled(
-            format!("{} {}…", spinner, title),
-            Style::default().fg(self.config.theme.warning),
-        )))
-        .alignment(Alignment::Center)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .style(Style::default().fg(self.config.theme.warning)),
-        );
-
-        f.render_widget(Clear, popup_area);
-        f.render_widget(content, popup_area);
+    /// Drops an expired toast, reporting whether it did. The event loop only repaints on
+    /// input or background work, so it sweeps on tick to make stale toasts disappear.
+    pub fn sweep_toast(&mut self) -> bool {
+        let stale = self.toast.as_ref().is_some_and(Toast::expired);
+        if stale {
+            self.toast = None;
+        }
+        stale
     }
 }

@@ -9,6 +9,7 @@
 //!
 //! ## Visual Elements
 //! - [`badge`] - Small status indicators and labels
+//! - [`toast`] - Transient corner notices for background work
 //!
 //! ## Interactive Components
 //! - [`dialog_component`] - Modal dialog framework
@@ -35,6 +36,7 @@
 
 // Visual element components
 pub mod badge;
+pub mod toast;
 
 // Utility components
 pub mod scrollbar_helper;

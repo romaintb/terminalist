@@ -5,10 +5,6 @@ fn test_app_state_default() {
     // Test that AppState can be created with default values
     let state = AppState::default();
     assert!(!state.loading, "Default AppState should not be loading");
-    assert!(
-        state.error_message.is_none(),
-        "Default AppState should have no error message"
-    );
 }
 
 #[tokio::test]
@@ -63,7 +59,7 @@ async fn startup_loads_cached_data_when_the_backend_is_unavailable() {
             for action in actions {
                 app.handle_app_action(action).await;
             }
-            if app.total_projects() == 1 && app.state.error_message.is_some() {
+            if app.total_projects() == 1 && app.has_toast() {
                 break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
@@ -77,7 +73,10 @@ async fn startup_loads_cached_data_when_the_backend_is_unavailable() {
     );
     assert_eq!(app.total_projects(), 1);
     assert_eq!(app.state.projects[0].name, "Cached project");
-    assert!(app.state.error_message.is_some());
+    assert!(
+        app.has_toast(),
+        "the failed sync should have left a notice in the corner"
+    );
 
     drop(app); // TaskManager cancels its tasks on drop
     storage.lock().await.conn.clone().close().await.unwrap();
