@@ -206,8 +206,17 @@ impl SyncService {
     async fn perform_sync(&self) -> Result<SyncStatus> {
         info!("🔄 Starting sync process...");
 
-        // Fetch projects from backend
-        let projects = match self.get_backend().await?.fetch_projects().await {
+        // One backend, four requests in flight at once. Each arm below keeps its own error
+        // handling, sections included: it degrades to an empty Vec instead of failing the sync.
+        let backend = self.get_backend().await?;
+        let (projects, tasks, labels, sections) = tokio::join!(
+            backend.fetch_projects(),
+            backend.fetch_tasks(),
+            backend.fetch_labels(),
+            backend.fetch_sections(),
+        );
+
+        let projects = match projects {
             Ok(projects) => {
                 info!("✅ Fetched {} projects from backend", projects.len());
                 projects
@@ -220,8 +229,7 @@ impl SyncService {
             }
         };
 
-        // Fetch all tasks from backend
-        let tasks = match self.get_backend().await?.fetch_tasks().await {
+        let tasks = match tasks {
             Ok(tasks) => {
                 info!("✅ Fetched {} tasks from backend", tasks.len());
                 tasks
@@ -234,8 +242,7 @@ impl SyncService {
             }
         };
 
-        // Fetch all labels from backend
-        let labels = match self.get_backend().await?.fetch_labels().await {
+        let labels = match labels {
             Ok(labels) => {
                 info!("✅ Fetched {} labels from backend", labels.len());
                 labels
@@ -248,8 +255,7 @@ impl SyncService {
             }
         };
 
-        // Fetch all sections from backend
-        let sections = match self.get_backend().await?.fetch_sections().await {
+        let sections = match sections {
             Ok(sections) => {
                 info!("✅ Fetched {} sections from backend", sections.len());
                 sections
