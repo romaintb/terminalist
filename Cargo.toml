@@ -36,7 +36,7 @@ sea-orm = { version = "1.1", features = [
   "with-uuid",
 ] }
 chrono = { version = "0.4", features = ["serde"] }
-todoist-api = { version = "1.0.0-alpha.2" }
+todoist-api = "1.0.0-alpha.3"
 toml = "1.0"
 dirs = "6.0"
 log = "0.4"
