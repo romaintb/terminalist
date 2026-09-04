@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Sync status toast** - Replace blocking sync dialog with a toast.
 
+### Fixed
+- **Pipes in task and project names** - Creating a task or project whose text contained a `|` failed outright, because the name and the parent id were packed into one string that got split on the first separator. The id now comes first, so your text keeps whatever you typed.
+
 ### Security
 - **Cache file permissions** - The local SQLite cache stores the Todoist API token, and is now created with `0600` so only its owner can read it. Existing cache files are tightened on the next launch.
 

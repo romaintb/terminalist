@@ -10,6 +10,7 @@
 //! - [`component`] - Base component trait and rendering abstractions
 //! - [`context`] - Application context and shared state management
 //! - [`event_handler`] - Event processing and keyboard/mouse input handling
+//! - [`operations`] - Argument encoding for background operations
 //! - [`task_manager`] - Background task management and async operation handling
 //!
 //! # Architecture
@@ -30,6 +31,7 @@ pub mod actions;
 pub mod component;
 pub mod context;
 pub mod event_handler;
+pub mod operations;
 pub mod task_manager;
 
 // Re-export core types for easier access from other modules

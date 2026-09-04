@@ -10,5 +10,8 @@ mod context;
 #[path = "core/event_handler.rs"]
 mod event_handler;
 
+#[path = "core/operations.rs"]
+mod operations;
+
 #[path = "core/task_manager.rs"]
 mod task_manager;
