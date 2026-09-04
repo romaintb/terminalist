@@ -27,7 +27,9 @@ async fn test_local_storage_creation() {
 
     first.conn.close().await.expect("first connection should close");
     second.conn.close().await.expect("second connection should close");
-    std::fs::remove_file(db_path).expect("test database should be removed");
+    // Best-effort: sqlx closes the sqlite handle on a worker thread that can outlive
+    // pool.close(), and Windows refuses to unlink a file that still has one open.
+    let _ = std::fs::remove_file(db_path);
 }
 
 #[tokio::test]
@@ -98,7 +100,9 @@ async fn test_stale_schema_version_rebuilds_cache() {
     );
 
     reopened.conn.close().await.expect("connection should close");
-    std::fs::remove_file(db_path).expect("test database should be removed");
+    // Best-effort: sqlx closes the sqlite handle on a worker thread that can outlive
+    // pool.close(), and Windows refuses to unlink a file that still has one open.
+    let _ = std::fs::remove_file(db_path);
 }
 
 #[cfg(unix)]
