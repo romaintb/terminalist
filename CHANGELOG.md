@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Periodic auto-sync** - `auto_sync_interval_minutes` is now actually honoured; until now the key was read from the config file and then ignored. Defaults to every 5 minutes, `0` disables it and leaves syncing manual.
+
 ### Security
 - **Cache file permissions** - The local SQLite cache stores the Todoist API token, and is now created with `0600` so only its owner can read it. Existing cache files are tightened on the next launch.
 
