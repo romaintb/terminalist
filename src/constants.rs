@@ -27,7 +27,7 @@ pub const SUCCESS_LABEL_DELETED: &str = "✅ Label deleted";
 pub const SUCCESS_LABEL_UPDATED: &str = "✅ Label updated";
 pub const SUCCESS_TASK_PRIORITY_UPDATED: &str = "✅ Task priority updated to P";
 pub const SUCCESS_TASK_RESTORED: &str = "✅ Task restored";
-pub const SUCCESS_SYNC_COMPLETED: &str = "Sync completed successfully";
+pub const SUCCESS_SYNC_COMPLETED: &str = "✅ Synced";
 
 // Error Messages
 pub const ERROR_TASK_COMPLETION_FAILED: &str = "❌ Failed to complete task";
@@ -83,6 +83,11 @@ pub const UI_LOADING_DATA_FROM_STORAGE: &str = "Loading data from storage";
 
 // Date header format for upcoming view
 pub const UPCOMING_DATE_FORMAT: &str = "📊 {} - {}";
+
+/// How long a success toast lingers before it fades on its own.
+pub const TOAST_TTL_SECS: u64 = 3;
+/// Failures get longer: they carry information the user has to actually read.
+pub const TOAST_ERROR_TTL_SECS: u64 = 15;
 
 // UI Layout Constants (width in columns)
 pub const SIDEBAR_MIN_WIDTH: u16 = 15;

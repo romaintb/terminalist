@@ -5,10 +5,6 @@ fn test_app_state_default() {
     // Test that AppState can be created with default values
     let state = AppState::default();
     assert!(!state.loading, "Default AppState should not be loading");
-    assert!(
-        state.error_message.is_none(),
-        "Default AppState should have no error message"
-    );
 }
 
 #[tokio::test]
@@ -63,7 +59,7 @@ async fn startup_loads_cached_data_when_the_backend_is_unavailable() {
             for action in actions {
                 app.handle_app_action(action).await;
             }
-            if app.total_projects() == 1 && app.state.error_message.is_some() {
+            if app.total_projects() == 1 && app.has_toast() {
                 break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
@@ -77,9 +73,45 @@ async fn startup_loads_cached_data_when_the_backend_is_unavailable() {
     );
     assert_eq!(app.total_projects(), 1);
     assert_eq!(app.state.projects[0].name, "Cached project");
-    assert!(app.state.error_message.is_some());
+    assert!(
+        app.has_toast(),
+        "the failed sync should have left a notice in the corner"
+    );
 
     drop(app); // TaskManager cancels its tasks on drop
     storage.lock().await.conn.clone().close().await.unwrap();
     std::fs::remove_file(db_path).unwrap();
+}
+
+mod sync_toast {
+    use ratatui::layout::Rect;
+    use terminalist::ui::app_component::toast_rect;
+
+    /// The toast must always land inside its area, borders included, whatever the
+    /// terminal size or message length.
+    #[test]
+    fn toast_rect_stays_inside_its_area() {
+        for w in 0..60u16 {
+            for h in 0..30u16 {
+                let area = Rect::new(3, 2, w, h);
+                for len in [0usize, 1, 8, 40, 400, usize::MAX] {
+                    let Some(r) = toast_rect(area, len) else { continue };
+                    assert!(r.width >= 3 && r.height >= 3, "degenerate box {r:?}");
+                    assert!(r.x > area.x && r.y > area.y, "{r:?} not inset in {area:?}");
+                    assert!(r.right() < area.right(), "{r:?} overflows {area:?}");
+                    assert!(r.bottom() < area.bottom(), "{r:?} overflows {area:?}");
+                }
+            }
+        }
+    }
+
+    /// A long message grows the box downward rather than being silently clipped.
+    #[test]
+    fn toast_rect_grows_for_wrapped_text() {
+        let area = Rect::new(0, 0, 40, 20);
+        let short = toast_rect(area, 5).unwrap();
+        let long = toast_rect(area, 200).unwrap();
+        assert_eq!(short.height, 3);
+        assert!(long.height > short.height, "{long:?} should wrap onto more lines");
+    }
 }
