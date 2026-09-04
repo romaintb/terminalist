@@ -1,4 +1,6 @@
 [advisories]
 # rsa comes from sqlx's optional mysql backend, which we never enable
 # (sqlx-sqlite only). No fix exists upstream; not compiled into our binary.
-ignore = ["RUSTSEC-2023-0071"]
+# rkyv comes from rust_decimal's optional rkyv feature, which we never enable.
+# Not compiled into our binary. Drop this once rust_decimal moves to rkyv 0.8.
+ignore = ["RUSTSEC-2023-0071", "RUSTSEC-2026-0235"]
