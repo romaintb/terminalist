@@ -129,11 +129,6 @@ impl AppComponent {
         self.active_sync_task.is_some()
     }
 
-    /// Get total number of tasks
-    pub fn total_tasks(&self) -> usize {
-        self.state.tasks.len()
-    }
-
     /// Get total number of projects
     pub fn total_projects(&self) -> usize {
         self.state.projects.len()

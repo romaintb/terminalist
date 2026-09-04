@@ -121,14 +121,6 @@ impl ScrollbarHelper {
         }
     }
 
-    /// Get a mutable reference to the internal scrollbar state.
-    ///
-    /// This can be useful for advanced scrollbar state manipulation
-    /// that isn't covered by the helper methods.
-    pub fn state_mut(&mut self) -> &mut ScrollbarState {
-        &mut self.state
-    }
-
     /// Get an immutable reference to the internal scrollbar state.
     pub fn state(&self) -> &ScrollbarState {
         &self.state

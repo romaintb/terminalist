@@ -161,18 +161,6 @@ impl SidebarComponent {
         }
     }
 
-    /// Toggle the expanded/collapsed state of a project folder
-    pub fn toggle_folder(&mut self, key: &str) {
-        if let Some(is_expanded) = self.folder_states.get_mut(key) {
-            *is_expanded = !*is_expanded;
-        } else {
-            // If folder state doesn't exist, create it as collapsed
-            self.folder_states.insert(key.to_string(), false);
-        }
-        // Rebuild items list after toggling
-        self.build_item_list();
-    }
-
     /// Check if the current position is on a foldable item and return its key
     fn get_folder_at_position(&self, index: usize) -> Option<String> {
         if let Some(item) = self.items.get(index) {

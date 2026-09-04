@@ -22,21 +22,6 @@ impl SyncService {
         TaskRepository::get_for_project(&storage.conn, project_id).await
     }
 
-    /// Retrieves all tasks from local storage across all projects.
-    ///
-    /// This method is primarily used for search functionality and global task operations.
-    /// It provides fast access to the complete task dataset.
-    ///
-    /// # Returns
-    /// A vector of all `task::Model` objects in the local database
-    ///
-    /// # Errors
-    /// Returns an error if local storage access fails
-    pub async fn get_all_tasks(&self) -> Result<Vec<task::Model>> {
-        let storage = self.storage.lock().await;
-        TaskRepository::get_all(&storage.conn).await
-    }
-
     /// Searches for tasks by content using database-level filtering.
     ///
     /// This method performs fast text search across task content using SQL LIKE queries.
