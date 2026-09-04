@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **Cache file permissions** - The local SQLite cache stores the Todoist API token, and is now created with `0600` so only its owner can read it. Existing cache files are tightened on the next launch.
+
 ## [0.5.0] - 2026-03-25
 
 ### Added
