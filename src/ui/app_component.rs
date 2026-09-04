@@ -8,6 +8,7 @@ use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
     actions::{Action, DialogType},
     event_handler::EventType,
+    operations::{pack_owned, unpack_owned},
     task_manager::{TaskId, TaskManager},
     Component,
 };
@@ -525,12 +526,7 @@ impl AppComponent {
                 };
                 info!("Task: Creating task with content '{}'{}", content, project_desc);
 
-                // Format task info to include both content and project_uuid
-                let task_info = match project_uuid {
-                    Some(pid) => format!("{}|{}", content, pid),
-                    None => content,
-                };
-                self.spawn_task_operation("Create task".to_string(), task_info);
+                self.spawn_task_operation("Create task".to_string(), pack_owned(project_uuid, &content));
                 Action::None
             }
             Action::CompleteTask(task_id) => {
@@ -667,12 +663,7 @@ impl AppComponent {
                 };
                 info!("Project: Creating project '{}'{}", name, parent_desc);
 
-                // Format project info to include both name and parent_uuid
-                let project_info = match parent_uuid {
-                    Some(pid) => format!("{}|{}", name, pid),
-                    None => name,
-                };
-                self.spawn_task_operation("Create project".to_string(), project_info);
+                self.spawn_task_operation("Create project".to_string(), pack_owned(parent_uuid, &name));
                 Action::None
             }
             Action::DeleteProject(project_id) => {
@@ -976,25 +967,20 @@ impl AppComponent {
                             Err(ERROR_INVALID_DATE_FORMAT.to_string())
                         }
                     }
-                    "Create task" => {
-                        // task_info format: "content|project_id" or just "content" for inbox
-                        if let Some((content, project_id_str)) = task_info.split_once('|') {
-                            // Task has a specific project - parse the UUID
-                            match Uuid::parse_str(project_id_str) {
-                                Ok(project_uuid) => match sync_service.create_task(content, Some(project_uuid)).await {
-                                    Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_CREATED_PROJECT, content)),
-                                    Err(e) => Err(format!("{}: {}", ERROR_TASK_CREATE_FAILED, e)),
-                                },
-                                Err(e) => Err(format!("Invalid project UUID: {}", e)),
-                            }
-                        } else {
-                            // Task goes to inbox (no project_id)
-                            match sync_service.create_task(&task_info, None).await {
-                                Ok(()) => Ok(format!("{}: {}", SUCCESS_TASK_CREATED_INBOX, task_info)),
+                    "Create task" => match unpack_owned(&task_info) {
+                        Ok((project_uuid, content)) => {
+                            let landed = if project_uuid.is_some() {
+                                SUCCESS_TASK_CREATED_PROJECT
+                            } else {
+                                SUCCESS_TASK_CREATED_INBOX
+                            };
+                            match sync_service.create_task(content, project_uuid).await {
+                                Ok(()) => Ok(format!("{}: {}", landed, content)),
                                 Err(e) => Err(format!("{}: {}", ERROR_TASK_CREATE_FAILED, e)),
                             }
                         }
-                    }
+                        Err(e) => Err(format!("Invalid project UUID: {}", e)),
+                    },
                     "Edit task" => {
                         // task_info format: "task_id: new_content"
                         if let Some((task_id_str, content)) = task_info.split_once(": ") {
@@ -1016,25 +1002,20 @@ impl AppComponent {
                         },
                         Err(e) => Err(format!("Invalid task UUID: {}", e)),
                     },
-                    "Create project" => {
-                        // project_info format: "name|parent_id" or just "name" for root project
-                        if let Some((name, parent_id_str)) = task_info.split_once('|') {
-                            // Project has a parent - parse the UUID
-                            match Uuid::parse_str(parent_id_str) {
-                                Ok(parent_uuid) => match sync_service.create_project(name, Some(parent_uuid)).await {
-                                    Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_CREATED_PARENT, name)),
-                                    Err(e) => Err(format!("{}: {}", ERROR_PROJECT_CREATE_FAILED, e)),
-                                },
-                                Err(e) => Err(format!("Invalid parent project UUID: {}", e)),
-                            }
-                        } else {
-                            // Root project (no parent)
-                            match sync_service.create_project(&task_info, None).await {
-                                Ok(()) => Ok(format!("{}: {}", SUCCESS_PROJECT_CREATED_ROOT, task_info)),
+                    "Create project" => match unpack_owned(&task_info) {
+                        Ok((parent_uuid, name)) => {
+                            let landed = if parent_uuid.is_some() {
+                                SUCCESS_PROJECT_CREATED_PARENT
+                            } else {
+                                SUCCESS_PROJECT_CREATED_ROOT
+                            };
+                            match sync_service.create_project(name, parent_uuid).await {
+                                Ok(()) => Ok(format!("{}: {}", landed, name)),
                                 Err(e) => Err(format!("{}: {}", ERROR_PROJECT_CREATE_FAILED, e)),
                             }
                         }
-                    }
+                        Err(e) => Err(format!("Invalid parent project UUID: {}", e)),
+                    },
                     "Delete project" => {
                         // task_info is a UUID string
                         match Uuid::parse_str(&task_info) {
