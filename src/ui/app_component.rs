@@ -156,12 +156,14 @@ impl AppComponent {
             self.schedule_initial_data_fetch();
             self.is_initial_sync = false;
         } else {
-            info!("AppComponent: Starting initial sync");
+            info!("AppComponent: Loading cached data before initial sync");
             if self.active_sync_task.is_none() {
                 self.is_initial_sync = true;
+                self.schedule_initial_data_fetch();
                 self.start_background_sync();
-                // Data fetch will be triggered automatically when sync completes
-                info!("AppComponent: Initial sync scheduled");
+                // A successful sync refreshes the view again. A failed sync leaves the
+                // already-scheduled cached snapshot visible.
+                info!("AppComponent: Cached data load and initial sync scheduled");
             }
         }
     }
@@ -466,13 +468,21 @@ impl AppComponent {
                 self.active_sync_task = None;
                 self.state.loading = false;
 
-                // Extract data from sync status and update components
-                self.update_data_from_sync(status);
-                self.sync_component_data();
-
-                self.state.info_message = Some(SUCCESS_SYNC_COMPLETED.to_string());
-                info!("Sync: Showing completion info dialog");
-                Action::ShowDialog(DialogType::Info(self.state.info_message.clone().unwrap()))
+                match status {
+                    SyncStatus::Success => {
+                        self.update_data_from_sync(SyncStatus::Success);
+                        self.sync_component_data();
+                        self.state.info_message = Some(SUCCESS_SYNC_COMPLETED.to_string());
+                        info!("Sync: Showing completion info dialog");
+                        Action::ShowDialog(DialogType::Info(self.state.info_message.clone().unwrap()))
+                    }
+                    SyncStatus::Error { message } => {
+                        self.is_initial_sync = false;
+                        self.state.error_message = Some(message);
+                        Action::ShowDialog(DialogType::Error(self.state.error_message.clone().unwrap_or_default()))
+                    }
+                    SyncStatus::Idle | SyncStatus::InProgress => Action::None,
+                }
             }
             Action::SyncFailed(error) => {
                 info!("Sync: Failed with error: {}", error);
@@ -1322,5 +1332,78 @@ impl AppComponent {
 
         f.render_widget(Clear, popup_area);
         f.render_widget(content, popup_area);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::entities::{backend, project};
+    use crate::storage::LocalStorage;
+    use sea_orm::{EntityTrait, Set};
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    #[tokio::test]
+    async fn startup_loads_cached_data_when_the_backend_is_unavailable() {
+        let db_path = std::env::temp_dir().join(format!("terminalist-offline-{}.db", Uuid::new_v4()));
+        let storage = LocalStorage::new_at(db_path.clone()).await.unwrap();
+        let backend_uuid = Uuid::new_v4();
+
+        backend::Entity::insert(backend::ActiveModel {
+            uuid: Set(backend_uuid),
+            backend_type: Set("test".to_string()),
+            name: Set("Unavailable backend".to_string()),
+            is_enabled: Set(true),
+            credentials: Set("{}".to_string()),
+            settings: Set("{}".to_string()),
+        })
+        .exec(&storage.conn)
+        .await
+        .unwrap();
+        project::Entity::insert(project::ActiveModel {
+            uuid: Set(Uuid::new_v4()),
+            backend_uuid: Set(backend_uuid),
+            remote_id: Set("cached-project".to_string()),
+            name: Set("Cached project".to_string()),
+            is_favorite: Set(false),
+            is_inbox_project: Set(false),
+            order_index: Set(1),
+            parent_uuid: Set(None),
+        })
+        .exec(&storage.conn)
+        .await
+        .unwrap();
+
+        let storage = Arc::new(Mutex::new(storage));
+        let sync_service = SyncService::new_for_test(storage.clone(), backend_uuid);
+        let mut app = AppComponent::new(sync_service, Config::default(), Vec::new());
+        app.trigger_initial_sync();
+
+        let startup_result = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+            loop {
+                let actions = app.process_background_actions();
+                for action in actions {
+                    app.handle_app_action(action).await;
+                }
+                if app.total_projects() == 1 && app.state.error_message.is_some() {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await;
+
+        assert!(
+            startup_result.is_ok(),
+            "cached startup did not finish within five seconds"
+        );
+        assert_eq!(app.total_projects(), 1);
+        assert_eq!(app.state.projects[0].name, "Cached project");
+        assert!(app.state.error_message.is_some());
+
+        app.task_manager.cancel_all_tasks();
+        storage.lock().await.conn.clone().close().await.unwrap();
+        std::fs::remove_file(db_path).unwrap();
     }
 }
