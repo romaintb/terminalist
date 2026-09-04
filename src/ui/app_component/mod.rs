@@ -1,6 +1,7 @@
+pub mod state;
+
 use crate::config::Config;
 use crate::constants::*;
-use crate::entities::{label, project, section, task};
 use crate::sync::{SyncService, SyncStatus};
 use crate::theme::{self, ThemeWarning};
 use crate::ui::components::{toast::Toast, DialogComponent, SidebarComponent, TaskListComponent};
@@ -19,39 +20,10 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     Frame,
 };
+pub use state::AppState;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use uuid::Uuid;
-
-/// Application state separate from UI concerns
-#[derive(Debug, Clone, Default)]
-pub struct AppState {
-    pub projects: Vec<project::Model>,
-    pub tasks: Vec<task::Model>,
-    pub labels: Vec<label::Model>,
-    pub sections: Vec<section::Model>,
-    pub sidebar_selection: SidebarSelection,
-    pub loading: bool,
-    pub show_help: bool,
-    /// didnt we just got rid of custom scrolling ?
-    pub help_scroll_offset: usize,
-}
-
-impl AppState {
-    /// Update all data at once
-    pub fn update_data(
-        &mut self,
-        projects: Vec<project::Model>,
-        labels: Vec<label::Model>,
-        sections: Vec<section::Model>,
-        tasks: Vec<task::Model>,
-    ) {
-        self.projects = projects;
-        self.labels = labels;
-        self.sections = sections;
-        self.tasks = tasks;
-    }
-}
 
 pub struct AppComponent {
     // Component composition
