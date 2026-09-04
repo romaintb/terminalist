@@ -57,16 +57,10 @@ impl LocalStorage {
             .min_connections(1)
             .connect_timeout(Duration::from_secs(8))
             .idle_timeout(Duration::from_secs(3600))
-            .sqlx_logging(false);
+            .sqlx_logging(false)
+            .map_sqlx_sqlite_opts(|o| o.foreign_keys(true));
 
         let conn = Database::connect(opt).await?;
-
-        // Enable foreign keys for SQLite
-        conn.execute(Statement::from_string(
-            DbBackend::Sqlite,
-            "PRAGMA foreign_keys = ON;".to_owned(),
-        ))
-        .await?;
 
         let storage = LocalStorage { conn };
         storage.discard_stale_schema().await?;
@@ -93,7 +87,8 @@ impl LocalStorage {
             return Ok(());
         }
 
-        // A transaction pins one pooled connection, so the pragma below applies to the drops.
+        // The drops and the version bump commit together, so a crash can't leave a half-dropped
+        // cache stamped with the new revision.
         let txn = self.conn.begin().await?;
 
         // Asking the file what it holds beats hardcoding a list: it also clears out tables from
