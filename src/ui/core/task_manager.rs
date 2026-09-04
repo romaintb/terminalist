@@ -175,11 +175,6 @@ impl TaskManager {
         }
     }
 
-    /// Get the number of active tasks
-    pub fn task_count(&self) -> usize {
-        self.tasks.len()
-    }
-
     /// Spawn a background data loading operation
     pub fn spawn_data_load(
         &mut self,

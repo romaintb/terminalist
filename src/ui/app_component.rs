@@ -134,11 +134,6 @@ impl AppComponent {
         self.should_quit
     }
 
-    /// Get the number of active background tasks
-    pub fn active_task_count(&self) -> usize {
-        self.task_manager.task_count()
-    }
-
     /// Check if currently syncing
     pub fn is_syncing(&self) -> bool {
         self.active_sync_task.is_some()
@@ -1170,11 +1165,6 @@ impl AppComponent {
         }
 
         actions
-    }
-
-    /// Check if any background operations are running
-    pub fn is_busy(&self) -> bool {
-        self.task_manager.task_count() > 0
     }
 
     /// Process an event through the component hierarchy
