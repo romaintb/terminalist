@@ -18,6 +18,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     Frame,
 };
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
@@ -80,6 +81,7 @@ pub struct AppComponent {
     should_quit: bool,
     active_sync_task: Option<TaskId>,
     is_initial_sync: bool,
+    last_sync_attempt: Option<Instant>,
 
     // Layout state
     sidebar_visible: bool,
@@ -117,6 +119,7 @@ impl AppComponent {
             should_quit: false,
             active_sync_task: None,
             is_initial_sync: false,
+            last_sync_attempt: None,
             sidebar_width: 30, // Default width
             screen_width: 100, // Default width
             screen_height: 50, // Default height
@@ -851,7 +854,19 @@ impl AppComponent {
         }
     }
 
+    /// Whether the configured auto-sync interval has elapsed since the last attempt.
+    ///
+    /// The stamp is taken when a sync *starts*, so a backend that fails fast can't re-fire
+    /// on every tick. It stays `None` in debug mode, where no sync ever runs.
+    fn auto_sync_due(&self) -> bool {
+        let interval = Duration::from_secs(self.config.sync.auto_sync_interval_minutes * 60);
+        !interval.is_zero()
+            && self.active_sync_task.is_none()
+            && self.last_sync_attempt.is_some_and(|at| at.elapsed() >= interval)
+    }
+
     fn start_background_sync(&mut self) {
+        self.last_sync_attempt = Some(Instant::now());
         let sync_service = self.sync_service.clone();
         let task_id = self.task_manager.spawn_sync(sync_service);
         self.active_sync_task = Some(task_id);
@@ -1136,6 +1151,11 @@ impl AppComponent {
         while let Ok(action) = self.background_action_rx.try_recv() {
             info!("Background: Received action {:?}", action);
             actions.push(action);
+        }
+
+        if self.auto_sync_due() {
+            info!("Auto-sync: interval elapsed, queueing sync");
+            actions.push(Action::StartSync);
         }
 
         // Clean up finished tasks
