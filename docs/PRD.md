@@ -160,7 +160,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - **NFR-017**: Supports terminals with 80x24 minimum size
 - **NFR-018**: Compatible with major terminal emulators
 - **NFR-019**: Works with Todoist API v2
-- **NFR-020**: Rust 1.78+ compatibility
+- **NFR-020**: Rust 1.94+ compatibility
 
 ## 4. User Stories
 

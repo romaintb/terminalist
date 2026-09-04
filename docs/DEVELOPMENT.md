@@ -50,7 +50,7 @@ GitHub Actions workflow is configured in `.github/workflows/ci.yml` with:
 - Format checking with rustfmt
 - Linting with clippy
 - Testing on multiple Rust versions and OSes
-- MSRV 1.78 build job
+- MSRV 1.94 build job
 - Smoke tests for `--help` and `--version`
 - Security auditing
 

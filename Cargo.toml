@@ -2,7 +2,7 @@
 name = "terminalist"
 version = "0.5.0"
 edition = "2021"
-rust-version = "1.78"
+rust-version = "1.94"
 keywords = ["terminal", "tui", "todoist", "productivity", "cli"]
 description = "A terminal-based Todoist client with modern TUI interface"
 authors = ["Romain Bertrand <romain@doxin.net>"]
@@ -29,7 +29,7 @@ async-trait = "0.1"
 thiserror = "2.0"
 ratatui = "0.30"
 crossterm = "0.29"
-sea-orm = { version = "1.1", features = [
+sea-orm = { version = "2.0", features = [
   "sqlx-sqlite",
   "runtime-tokio-rustls",
   "macros",

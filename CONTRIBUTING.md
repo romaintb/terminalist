@@ -4,7 +4,7 @@ Thanks for taking the time to contribute!
 
 ## Development setup
 
-- Rust 1.78+ (MSRV pinned)
+- Rust 1.94+ (MSRV pinned)
 - Install components: `rustup component add rustfmt clippy`
 
 ## Workflow
