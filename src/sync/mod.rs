@@ -95,8 +95,8 @@ pub enum SyncStatus {
 }
 
 impl SyncService {
-    #[cfg(test)]
-    pub(crate) fn new_for_test(storage: Arc<Mutex<LocalStorage>>, backend_uuid: Uuid) -> Self {
+    #[doc(hidden)]
+    pub fn new_for_test(storage: Arc<Mutex<LocalStorage>>, backend_uuid: Uuid) -> Self {
         Self {
             backend_registry: Arc::new(crate::backend_registry::BackendRegistry::new(storage.clone())),
             backend_uuid,
