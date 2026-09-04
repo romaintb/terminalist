@@ -62,6 +62,16 @@ impl LocalStorage {
 
         let conn = Database::connect(opt).await?;
 
+        // backends.credentials holds the API token in plaintext, so the cache is a credential
+        // file. Best-effort: a filesystem without Unix modes must not block startup.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Err(e) = std::fs::set_permissions(&db_path, std::fs::Permissions::from_mode(0o600)) {
+                log::warn!("Failed to restrict permissions on {}: {e}", db_path.display());
+            }
+        }
+
         let storage = LocalStorage { conn };
         storage.discard_stale_schema().await?;
         storage.init_schema().await?;

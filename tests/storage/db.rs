@@ -100,3 +100,28 @@ async fn test_stale_schema_version_rebuilds_cache() {
     reopened.conn.close().await.expect("connection should close");
     std::fs::remove_file(db_path).expect("test database should be removed");
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn test_database_file_is_owner_only() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let db_path = std::env::temp_dir().join(format!("terminalist-perms-{}.db", uuid::Uuid::new_v4()));
+
+    let storage = LocalStorage::new_at(db_path.clone())
+        .await
+        .expect("LocalStorage should be created successfully");
+    storage.conn.close().await.expect("connection should close");
+
+    let mode = std::fs::metadata(&db_path)
+        .expect("database file should exist")
+        .permissions()
+        .mode();
+    assert_eq!(
+        mode & 0o777,
+        0o600,
+        "the cache holds the API token, it must not be readable by others"
+    );
+
+    std::fs::remove_file(db_path).expect("test database should be removed");
+}
