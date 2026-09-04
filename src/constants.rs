@@ -54,35 +54,14 @@ pub const ERROR_INVALID_LABEL_EDIT_FORMAT: &str = "❌ Invalid label edit format
 pub const ERROR_UNKNOWN_OPERATION: &str = "❌ Unknown operation";
 
 // Log Messages
-pub const LOG_FETCHED_PROJECTS: &str = "✅ Fetched {} projects from API";
-pub const LOG_FETCHED_TASKS: &str = "✅ Fetched {} tasks from API";
-pub const LOG_FETCHED_LABELS: &str = "✅ Fetched {} labels from API";
-pub const LOG_FETCHED_SECTIONS: &str = "✅ Fetched {} sections from API";
-pub const LOG_STORED_PROJECTS: &str = "✅ Stored projects in database";
-pub const LOG_STORED_TASKS: &str = "✅ Stored tasks in database";
-pub const LOG_STORED_LABELS: &str = "✅ Stored labels in database";
-pub const LOG_STORED_SECTIONS: &str = "✅ Stored sections in database";
-pub const LOG_ERROR_FETCH_PROJECTS: &str = "❌ Failed to fetch projects";
-pub const LOG_ERROR_FETCH_TASKS: &str = "❌ Failed to fetch tasks";
-pub const LOG_ERROR_FETCH_LABELS: &str = "❌ Failed to fetch labels";
-pub const LOG_ERROR_FETCH_SECTIONS: &str = "❌ Failed to fetch sections";
-pub const LOG_ERROR_STORE_PROJECTS: &str = "❌ Failed to store projects";
-pub const LOG_ERROR_STORE_TASKS: &str = "❌ Failed to store tasks";
-pub const LOG_ERROR_STORE_LABELS: &str = "❌ Failed to store labels";
-pub const LOG_ERROR_STORE_SECTIONS: &str = "❌ Failed to store sections";
 
 // UI Messages
 pub const CONFIG_GENERATED: &str = "✅ Generated default configuration file";
-pub const ERROR_NO_API_TOKEN: &str = "❌ Error: TODOIST_API_TOKEN environment variable not set";
-pub const DIALOG_TITLE_DEBUG_LOGS: &str = "🔍 Debug Logs - Press 'Esc', 'G' or 'q' to close";
 pub const UI_CANNOT_DELETE_TODAY_VIEW: &str = "Cannot delete the Today view";
 pub const UI_NO_TASK_SELECTED_DUE_DATE: &str = "No task selected to set due date";
 pub const UI_LOADING_DATA: &str = "Loading data";
 pub const UI_SYNCING_WITH_TODOIST: &str = "Syncing with Todoist";
 pub const UI_LOADING_DATA_FROM_STORAGE: &str = "Loading data from storage";
-
-// Date header format for upcoming view
-pub const UPCOMING_DATE_FORMAT: &str = "📊 {} - {}";
 
 /// How long a success toast lingers before it fades on its own.
 pub const TOAST_TTL_SECS: u64 = 3;
