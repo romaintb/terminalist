@@ -32,7 +32,7 @@ pub mod operations;
 pub mod task_manager;
 
 // Re-export core types for easier access from other modules
-pub use actions::{Action, DialogType, SidebarSelection};
+pub use actions::{Action, DialogType, LoadKind, SidebarSelection};
 pub use component::Component;
 pub use event_handler::{EventHandler, EventType};
 pub use task_manager::{TaskId, TaskKind, TaskManager, TaskResult};

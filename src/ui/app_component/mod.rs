@@ -7,7 +7,6 @@ use crate::constants::*;
 use crate::sync::{SyncService, SyncStatus};
 use crate::theme::{self, ThemeWarning};
 use crate::ui::components::{toast::Toast, DialogComponent, SidebarComponent, TaskListComponent};
-use crate::ui::core::SidebarSelection;
 use crate::ui::core::{
     actions::{Action, DialogType},
     event_handler::EventType,
@@ -15,6 +14,7 @@ use crate::ui::core::{
     task_manager::{TaskId, TaskManager},
     Component,
 };
+use crate::ui::core::{LoadKind, SidebarSelection};
 use crossterm::event::KeyEvent;
 use log::info;
 use ratatui::{
@@ -114,13 +114,13 @@ impl AppComponent {
             info!("AppComponent: Skipping initial sync (debug mode)");
             // In debug mode, just load existing data from database
             self.is_initial_sync = true;
-            self.schedule_initial_data_fetch();
+            self.schedule_data_load(LoadKind::Initial);
             self.is_initial_sync = false;
         } else {
             info!("AppComponent: Loading cached data before initial sync");
             if self.active_sync_task.is_none() {
                 self.is_initial_sync = true;
-                self.schedule_initial_data_fetch();
+                self.schedule_data_load(LoadKind::Initial);
                 self.start_background_sync();
                 // A successful sync refreshes the view again. A failed sync leaves the
                 // already-scheduled cached snapshot visible.
@@ -265,28 +265,21 @@ impl AppComponent {
         // Only proceed if sync was successful
         if matches!(status, SyncStatus::Success) {
             if self.is_initial_sync {
-                // For initial sync, use initial data fetch which sets default selection
-                self.schedule_initial_data_fetch();
+                // Nothing was on screen to preserve, and the default project is resolvable now.
+                self.schedule_data_load(LoadKind::Initial);
                 self.is_initial_sync = false;
             } else {
-                // For manual refresh, use regular data fetch to maintain current selection
-                self.schedule_data_fetch();
+                self.schedule_data_load(LoadKind::Background);
             }
         }
     }
 
-    /// Schedule a background task to fetch initial data after sync completion
-    fn schedule_initial_data_fetch(&mut self) {
+    /// Schedule a background task to reload the current view. `kind` travels with the load
+    /// and decides what happens to the cursor when it lands.
+    fn schedule_data_load(&mut self, kind: LoadKind) {
         let _task_id =
             self.task_manager
-                .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection.clone(), true);
-    }
-
-    /// Schedule a background task to fetch data after navigation or changes
-    fn schedule_data_fetch(&mut self) {
-        let _task_id =
-            self.task_manager
-                .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection.clone(), false);
+                .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection.clone(), kind);
     }
 
     /// Process background actions from task manager

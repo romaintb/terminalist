@@ -8,7 +8,7 @@ use crate::sync::SyncStatus;
 use crate::ui::components::toast::Toast;
 use crate::ui::core::actions::Action;
 use crate::ui::core::operations::{Due, Operation};
-use crate::ui::core::SidebarSelection;
+use crate::ui::core::{LoadKind, SidebarSelection};
 use log::info;
 
 impl AppComponent {
@@ -36,7 +36,7 @@ impl AppComponent {
             Action::RefreshLocalData => {
                 info!("Refreshing local data from database (debug mode)");
                 // Schedule a data fetch directly from local storage without API sync
-                self.schedule_data_fetch();
+                self.schedule_data_load(LoadKind::User);
                 Action::None
             }
             Action::SyncCompleted(status) => {
@@ -105,7 +105,7 @@ impl AppComponent {
                 self.is_initial_sync = false;
                 self.state.sidebar_selection = selection.clone();
                 // Reload data for the new selection
-                self.schedule_data_fetch();
+                self.schedule_data_load(LoadKind::User);
                 info!("Navigation: Scheduled data fetch for new selection");
                 Action::None
             }
@@ -221,53 +221,41 @@ impl AppComponent {
                 });
                 Action::None
             }
-            Action::InitialDataLoaded {
-                projects,
-                labels,
-                sections,
-                tasks,
-            } => {
-                info!(
-                    "InitialData: Loaded {} projects, {} labels, {} sections, {} tasks",
-                    projects.len(),
-                    labels.len(),
-                    sections.len(),
-                    tasks.len()
-                );
-
-                // Update app state with loaded data
-                self.state.update_data(projects, labels, sections, tasks);
-
-                // Set initial sidebar selection based on config (now we have projects loaded)
-                self.set_initial_sidebar_selection();
-                info!("AppComponent: Set initial sidebar selection after initial data load");
-
-                // Fetch data for the newly selected sidebar item
-                self.schedule_data_fetch();
-                info!("AppComponent: Scheduled data fetch for initial sidebar selection");
-
-                self.sync_component_data();
-                info!("InitialData: Updated all component data after initial data load");
-                Action::None
-            }
             Action::DataLoaded {
+                kind,
                 projects,
                 labels,
                 sections,
                 tasks,
             } => {
                 info!(
-                    "Data: Loaded {} projects, {} labels, {} sections, {} tasks",
+                    "Data: Loaded {} projects, {} labels, {} sections, {} tasks ({:?})",
                     projects.len(),
                     labels.len(),
                     sections.len(),
-                    tasks.len()
+                    tasks.len(),
+                    kind
                 );
 
-                // Update app state with loaded data
+                // Read before the rebuild: the task list still holds the pre-reload items.
+                let anchor = match kind {
+                    LoadKind::Background => self.task_list.get_selected_task().map(|task| task.uuid),
+                    _ => None,
+                };
+
                 self.state.update_data(projects, labels, sections, tasks);
+
+                if kind == LoadKind::Initial {
+                    // `default_project` is only resolvable post-load.
+                    self.set_initial_sidebar_selection();
+                    self.schedule_data_load(LoadKind::User);
+                }
+
                 self.sync_component_data();
-                info!("Data: Updated all component data after data load");
+
+                if let Some(task_uuid) = anchor {
+                    self.task_list.select_task(task_uuid);
+                }
                 Action::None
             }
             Action::SearchTasks(query) => {
@@ -293,7 +281,7 @@ impl AppComponent {
             Action::RefreshData => {
                 info!("Data: Refreshing UI data after task operation");
                 // Schedule a data fetch to reload current view with updated data
-                self.schedule_data_fetch();
+                self.schedule_data_load(LoadKind::User);
                 Action::None
             }
             // Help panel scrolling actions

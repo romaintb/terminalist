@@ -453,6 +453,23 @@ impl TaskListComponent {
         None
     }
 
+    /// Move the cursor onto `task_uuid` if the rebuilt list still holds it.
+    ///
+    /// The cursor is a position among selectable rows, so a reload that adds or removes a
+    /// task above it silently slides it onto a different one.
+    pub fn select_task(&mut self, task_uuid: Uuid) {
+        let logical_index = self
+            .items
+            .iter()
+            .filter(|item| item.is_selectable())
+            .position(|item| matches!(item, TaskListItemType::Task(task_item) if task_item.task.uuid == task_uuid));
+
+        if let Some(logical_index) = logical_index {
+            self.selected_index = logical_index;
+            self.update_list_state();
+        }
+    }
+
     pub fn get_selected_task(&self) -> Option<&task::Model> {
         // Find the currently selected task item
         if let Some(physical_index) = self.logical_to_physical_index(self.selected_index) {
