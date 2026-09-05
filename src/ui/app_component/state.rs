@@ -31,4 +31,16 @@ impl AppState {
         self.sections = sections;
         self.tasks = tasks;
     }
+
+    /// Whether the sidebar selection still names something that exists.
+    ///
+    /// A project or label deleted from another client is simply absent from the next sync,
+    /// which leaves the selection pointing at nothing.
+    pub fn selection_is_live(&self) -> bool {
+        match self.sidebar_selection {
+            SidebarSelection::Project(uuid) => self.projects.iter().any(|project| project.uuid == uuid),
+            SidebarSelection::Label(uuid) => self.labels.iter().any(|label| label.uuid == uuid),
+            SidebarSelection::Today | SidebarSelection::Tomorrow | SidebarSelection::Upcoming => true,
+        }
+    }
 }

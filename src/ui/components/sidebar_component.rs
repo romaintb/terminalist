@@ -104,30 +104,23 @@ impl SidebarComponent {
         });
 
         // Add labels
-        for (index, label) in self.labels.iter().enumerate() {
-            self.items.push(SidebarItemType::Label {
-                label: label.clone(),
-                original_index: index,
-            });
+        for label in &self.labels {
+            self.items.push(SidebarItemType::Label { label: label.clone() });
         }
 
         // Add projects (sorted hierarchically), respecting fold states
         // Clone the data we need before mutating self.items
-        let sorted_projects: Vec<_> = self
-            .get_sorted_projects()
-            .into_iter()
-            .map(|(idx, proj)| (idx, proj.clone()))
-            .collect();
+        let sorted_projects: Vec<project::Model> = self.get_sorted_projects().into_iter().cloned().collect();
 
         // Build a map of which projects have children
         let mut has_children_map: HashMap<Uuid, bool> = HashMap::new();
-        for (_, project) in sorted_projects.iter() {
+        for project in sorted_projects.iter() {
             if let Some(parent_uuid) = project.parent_uuid {
                 has_children_map.insert(parent_uuid, true);
             }
         }
 
-        for (i, (original_index, project)) in sorted_projects.iter().enumerate() {
+        for (i, project) in sorted_projects.iter().enumerate() {
             // Check if this project is a child of a collapsed parent
             if let Some(parent_uuid) = project.parent_uuid {
                 let parent_key = parent_uuid.to_string();
@@ -141,13 +134,12 @@ impl SidebarComponent {
 
             let depth = if project.parent_uuid.is_some() { 1 } else { 0 };
             let is_last_sibling =
-                i + 1 == sorted_projects.len() || sorted_projects[i + 1].1.parent_uuid != project.parent_uuid;
+                i + 1 == sorted_projects.len() || sorted_projects[i + 1].parent_uuid != project.parent_uuid;
             let has_children = has_children_map.get(&project.uuid).copied().unwrap_or(false);
             let is_expanded = self.folder_states.get(&project.uuid.to_string()).copied().unwrap_or(true); // Default to expanded
 
             self.items.push(SidebarItemType::Project {
                 project: project.clone(),
-                original_index: *original_index,
                 depth,
                 is_last_sibling,
                 has_children,
@@ -216,11 +208,11 @@ impl SidebarComponent {
         self.scrollbar_helper.update_state(total_items, selection_index, None);
     }
 
-    fn get_sorted_projects(&self) -> Vec<(usize, &project::Model)> {
-        let mut projects_with_indices: Vec<(usize, &project::Model)> = self.projects.iter().enumerate().collect();
+    fn get_sorted_projects(&self) -> Vec<&project::Model> {
+        let mut sorted: Vec<&project::Model> = self.projects.iter().collect();
 
         // Sort projects hierarchically: root → parent → favorites → name
-        projects_with_indices.sort_by(|(_, a_project), (_, b_project)| {
+        sorted.sort_by(|a_project, b_project| {
             // First, sort by root project to keep tree structures together
             let a_root_project = self.get_root_project(a_project);
             let b_root_project = self.get_root_project(b_project);
@@ -251,7 +243,7 @@ impl SidebarComponent {
                 _ => a_project.name.cmp(&b_project.name),  // Same favorite status, sort by name
             }
         });
-        projects_with_indices
+        sorted
     }
 
     /// Get the root project ID (top-level parent)
@@ -449,7 +441,7 @@ impl Component for SidebarComponent {
     fn update(&mut self, action: Action) -> Action {
         match action {
             Action::NavigateToSidebar(selection) => {
-                self.selection = selection.clone();
+                self.selection = selection;
                 self.update_list_state();
                 // Pass the action through to AppComponent for further processing
                 Action::NavigateToSidebar(selection)

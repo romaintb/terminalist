@@ -83,27 +83,21 @@ impl AppComponent {
                     SidebarSelection::Today => "Today".to_string(),
                     SidebarSelection::Tomorrow => "Tomorrow".to_string(),
                     SidebarSelection::Upcoming => "Upcoming".to_string(),
-                    SidebarSelection::Project(index) => {
-                        if let Some(project) = self.state.projects.get(*index) {
-                            format!("Project({}) '{}'", index, project.name)
-                        } else {
-                            format!("Project({}) [unknown]", index)
-                        }
-                    }
-                    SidebarSelection::Label(index) => {
-                        if let Some(label) = self.state.labels.get(*index) {
-                            format!("Label({}) '{}'", index, label.name)
-                        } else {
-                            format!("Label({}) [unknown]", index)
-                        }
-                    }
+                    SidebarSelection::Project(uuid) => match self.state.projects.iter().find(|p| p.uuid == *uuid) {
+                        Some(project) => format!("Project {uuid} '{}'", project.name),
+                        None => format!("Project {uuid} [unknown]"),
+                    },
+                    SidebarSelection::Label(uuid) => match self.state.labels.iter().find(|l| l.uuid == *uuid) {
+                        Some(label) => format!("Label {uuid} '{}'", label.name),
+                        None => format!("Label {uuid} [unknown]"),
+                    },
                 };
 
                 info!("Navigation: Sidebar selection changed to {}", selection_desc);
                 // Once the user has picked a view, the initial sync no longer owns the
                 // selection: completing it must not drag them back to `default_project`.
                 self.is_initial_sync = false;
-                self.state.sidebar_selection = selection.clone();
+                self.state.sidebar_selection = selection;
                 // Reload data for the new selection
                 self.schedule_data_load(LoadKind::User);
                 info!("Navigation: Scheduled data fetch for new selection");
@@ -248,6 +242,11 @@ impl AppComponent {
                 if kind == LoadKind::Initial {
                     // `default_project` is only resolvable post-load.
                     self.set_initial_sidebar_selection();
+                    self.schedule_data_load(LoadKind::User);
+                } else if !self.state.selection_is_live() {
+                    // The project or label being viewed was deleted from another client.
+                    info!("Navigation: selection no longer exists, falling back to Today");
+                    self.state.sidebar_selection = SidebarSelection::Today;
                     self.schedule_data_load(LoadKind::User);
                 }
 
