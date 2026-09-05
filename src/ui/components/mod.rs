@@ -42,11 +42,11 @@ pub mod toast;
 pub mod scrollbar_helper;
 
 // Core interactive components
-pub mod dialog_component;
-pub mod dialogs;
-pub mod sidebar_component;
-pub mod sidebar_item_component;
-pub mod task_list_component;
+pub(crate) mod dialog_component;
+pub(crate) mod dialogs;
+pub(crate) mod sidebar_component;
+pub(crate) mod sidebar_item_component;
+pub(crate) mod task_list_component;
 pub mod task_list_item_component;
 
 // Public exports for external use

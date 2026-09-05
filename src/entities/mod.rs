@@ -1,9 +1,9 @@
 pub mod backend;
-pub mod label;
+pub(crate) mod label;
 pub mod project;
 pub mod section;
 pub mod task;
-pub mod task_label;
+pub(crate) mod task_label;
 
 pub use backend::Entity as Backend;
 pub use label::Entity as Label;

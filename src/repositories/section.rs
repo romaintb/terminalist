@@ -33,17 +33,6 @@ impl SectionRepository {
             .await?)
     }
 
-    /// Get a single section by UUID.
-    pub async fn get_by_id<C>(conn: &C, uuid: &Uuid) -> Result<Option<section::Model>>
-    where
-        C: ConnectionTrait,
-    {
-        Ok(section::Entity::find()
-            .filter(section::Column::Uuid.eq(*uuid))
-            .one(conn)
-            .await?)
-    }
-
     /// Get a single section by remote_id and backend_uuid.
     pub async fn get_by_remote_id<C>(conn: &C, backend_uuid: &Uuid, remote_id: &str) -> Result<Option<section::Model>>
     where

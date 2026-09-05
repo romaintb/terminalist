@@ -10,14 +10,6 @@ use crate::entities::backend;
 pub struct BackendRepository;
 
 impl BackendRepository {
-    /// Get the first backend (for single-backend scenarios).
-    pub async fn get_first<C>(conn: &C) -> Result<Option<backend::Model>>
-    where
-        C: ConnectionTrait,
-    {
-        Ok(backend::Entity::find().one(conn).await?)
-    }
-
     /// Get a backend by UUID.
     pub async fn get_by_uuid<C>(conn: &C, uuid: &Uuid) -> Result<Option<backend::Model>>
     where

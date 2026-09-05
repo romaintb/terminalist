@@ -5,11 +5,11 @@
 //! Repositories keep entities as pure data models while providing reusable
 //! database access methods.
 
-pub mod backend;
-pub mod label;
-pub mod project;
-pub mod section;
-pub mod task;
+pub(crate) mod backend;
+pub(crate) mod label;
+pub(crate) mod project;
+pub(crate) mod section;
+pub(crate) mod task;
 
 pub use backend::BackendRepository;
 pub use label::LabelRepository;

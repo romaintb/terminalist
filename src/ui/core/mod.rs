@@ -26,7 +26,7 @@
 
 // Core UI modules
 pub mod actions;
-pub mod component;
+pub(crate) mod component;
 pub mod event_handler;
 pub mod operations;
 pub mod task_manager;
