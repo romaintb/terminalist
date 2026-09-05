@@ -1,15 +1,6 @@
 use terminalist::ui::core::EventHandler;
 
 #[tokio::test]
-async fn test_app_creation() {
-    // This would require a mock sync service and config
-    // let config = Config::default();
-    // let sync_service = SyncService::new("dummy_token".to_string(), false).await.unwrap();
-    // let app = AppComponent::new(sync_service, config);
-    // assert!(!app.should_quit());
-}
-
-#[tokio::test]
 async fn test_event_handling() {
     // Test that the event handler can be created
     let event_handler = EventHandler::new();
