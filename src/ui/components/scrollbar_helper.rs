@@ -58,7 +58,7 @@ impl ScrollbarHelper {
     ///
     /// # Returns
     /// `true` if scrollbar is needed, `false` otherwise
-    pub fn needs_scrollbar(total_items: usize, available_height: usize) -> bool {
+    fn needs_scrollbar(total_items: usize, available_height: usize) -> bool {
         total_items > available_height
     }
 
@@ -119,10 +119,5 @@ impl ScrollbarHelper {
 
             f.render_stateful_widget(scrollbar, area, &mut self.state);
         }
-    }
-
-    /// Get an immutable reference to the internal scrollbar state.
-    pub fn state(&self) -> &ScrollbarState {
-        &self.state
     }
 }
