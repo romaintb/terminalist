@@ -50,7 +50,6 @@ pub const ERROR_TASK_RESTORE_FAILED: &str = "❌ Failed to restore task";
 
 // UI Messages
 pub const CONFIG_GENERATED: &str = "✅ Generated default configuration file";
-pub const UI_CANNOT_DELETE_TODAY_VIEW: &str = "Cannot delete the Today view";
 pub const UI_NO_TASK_SELECTED_DUE_DATE: &str = "No task selected to set due date";
 pub const UI_LOADING_DATA: &str = "Loading data";
 pub const UI_LOADING_DATA_FROM_STORAGE: &str = "Loading data from storage";
