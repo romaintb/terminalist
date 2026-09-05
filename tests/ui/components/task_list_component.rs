@@ -100,3 +100,41 @@ fn test_tasks_with_unknown_section_are_still_rendered() {
         vec!["in known section", "loose", "section not loaded", "section of another project",]
     );
 }
+
+/// A background sync landing mid-navigation rebuilds the list. The cursor is a row number,
+/// so a task arriving above it silently slides it onto a different task.
+#[test]
+fn test_select_task_re_anchors_the_cursor_after_a_reload() {
+    let project_uuid = Uuid::new_v4();
+    let first = task_model(project_uuid, None, "first");
+    let second = task_model(project_uuid, None, "second");
+    let second_uuid = second.uuid;
+    let projects = vec![project_model(project_uuid)];
+
+    let mut component = TaskListComponent::new();
+    component.update_data(
+        vec![first.clone(), second.clone()],
+        Vec::new(),
+        projects.clone(),
+        Vec::new(),
+        SidebarSelection::Project(0),
+    );
+    component.selected_index = 1;
+    assert_eq!(component.get_selected_task().map(|task| task.uuid), Some(second_uuid));
+
+    component.update_data(
+        vec![task_model(project_uuid, None, "arrived"), first, second],
+        Vec::new(),
+        projects,
+        Vec::new(),
+        SidebarSelection::Project(0),
+    );
+    assert_eq!(
+        component.get_selected_task().map(|task| task.content.as_str()),
+        Some("first"),
+        "the rebuild alone leaves the cursor on a row number"
+    );
+
+    component.select_task(second_uuid);
+    assert_eq!(component.get_selected_task().map(|task| task.uuid), Some(second_uuid));
+}

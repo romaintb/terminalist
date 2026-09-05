@@ -1,4 +1,4 @@
-use super::actions::{Action, SidebarSelection};
+use super::actions::{Action, LoadKind, SidebarSelection};
 use crate::sync::{SyncService, SyncStatus};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
@@ -173,7 +173,7 @@ impl TaskManager {
         &mut self,
         sync_service: SyncService,
         sidebar_selection: SidebarSelection,
-        is_initial_load: bool,
+        kind: LoadKind,
     ) -> TaskId {
         let task_id = self.next_task_id;
         self.next_task_id += 1;
@@ -215,22 +215,13 @@ impl TaskManager {
                         tasks: tasks.clone(),
                     };
 
-                    let action = if is_initial_load {
-                        Action::InitialDataLoaded {
-                            projects,
-                            labels,
-                            sections,
-                            tasks,
-                        }
-                    } else {
-                        Action::DataLoaded {
-                            projects,
-                            labels,
-                            sections,
-                            tasks,
-                        }
-                    };
-                    let _ = action_sender.send(action);
+                    let _ = action_sender.send(Action::DataLoaded {
+                        kind,
+                        projects,
+                        labels,
+                        sections,
+                        tasks,
+                    });
 
                     Ok(result)
                 }

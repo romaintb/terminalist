@@ -12,6 +12,17 @@ pub enum SidebarSelection {
     Project(usize), // Index into projects vector
 }
 
+/// Why a data load was scheduled; decides what happens to the cursor when the reload lands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoadKind {
+    /// First load of the session; resolves the configured `default_project`.
+    Initial,
+    /// User-triggered (navigation, task op, debug refresh). Cursor stays on its row.
+    User,
+    /// Background sync. Cursor re-anchors to the task it was on.
+    Background,
+}
+
 #[derive(Debug, Clone)]
 pub enum Action {
     // Navigation
@@ -63,13 +74,8 @@ pub enum Action {
     RefreshLocalData, // Debug mode: refresh from local DB without API sync
     SyncCompleted(SyncStatus),
     SyncFailed(String),
-    InitialDataLoaded {
-        projects: Vec<crate::entities::project::Model>,
-        labels: Vec<crate::entities::label::Model>,
-        sections: Vec<crate::entities::section::Model>,
-        tasks: Vec<crate::entities::task::Model>,
-    },
     DataLoaded {
+        kind: LoadKind,
         projects: Vec<crate::entities::project::Model>,
         labels: Vec<crate::entities::label::Model>,
         sections: Vec<crate::entities::section::Model>,
