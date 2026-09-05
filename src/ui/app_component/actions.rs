@@ -100,6 +100,9 @@ impl AppComponent {
                 };
 
                 info!("Navigation: Sidebar selection changed to {}", selection_desc);
+                // Once the user has picked a view, the initial sync no longer owns the
+                // selection: completing it must not drag them back to `default_project`.
+                self.is_initial_sync = false;
                 self.state.sidebar_selection = selection.clone();
                 // Reload data for the new selection
                 self.schedule_data_fetch();
