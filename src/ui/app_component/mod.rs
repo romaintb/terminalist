@@ -541,12 +541,14 @@ impl AppComponent {
     /// Spawn a generic task operation (now with actual API calls and data refresh)
     /// Hands an operation to the background task manager.
     fn spawn(&mut self, operation: Operation) {
-        let description = operation.describe();
-        info!("Background: Spawning task operation '{}'", description);
+        info!("Background: Spawning task operation '{}'", operation.describe());
+        // Deleting the project being viewed would leave the sidebar pointing at nothing.
+        let on_success = matches!(operation, Operation::DeleteProject(_))
+            .then_some(Action::NavigateToSidebar(SidebarSelection::Today));
         let sync_service = self.sync_service.clone();
         let _task_id = self.task_manager.spawn_task_operation(
             move || async move { operation.run(sync_service).await.map_err(anyhow::Error::msg) },
-            description,
+            on_success,
         );
     }
 

@@ -35,4 +35,4 @@ pub mod task_manager;
 pub use actions::{Action, DialogType, SidebarSelection};
 pub use component::Component;
 pub use event_handler::{EventHandler, EventType};
-pub use task_manager::{TaskId, TaskManager, TaskResult};
+pub use task_manager::{TaskId, TaskKind, TaskManager, TaskResult};
