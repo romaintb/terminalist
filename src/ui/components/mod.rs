@@ -32,7 +32,7 @@
 //!
 //! Components are typically instantiated within the main application component
 //! and rendered as part of the overall UI layout. They communicate with the
-//! application through the shared [`AppContext`] and action system.
+//! application through the action system.
 
 // Visual element components
 pub mod badge;
