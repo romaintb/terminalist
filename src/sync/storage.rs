@@ -25,19 +25,25 @@ impl SyncService {
             .await
             .context("Failed to start cache refresh transaction")?;
 
-        // A full remote snapshot is authoritative. Clear only this backend's cached
-        // objects inside the same transaction so removed remote objects do not linger,
-        // while any later write failure still restores the previous cache on rollback.
-        task::Entity::delete_many()
+        // A full remote snapshot is authoritative about *which* objects exist, so drop the
+        // rows it stopped returning. It says nothing about their local UUIDs, which the UI
+        // keys its selection and cursor on, so the rows it still returns are updated in
+        // place by the batches below rather than deleted and re-inserted.
+        //
+        // Parent links are detached first. A parent the remote stopped returning is about to
+        // be deleted, and Todoist never returns completed tasks, so completing a parent makes
+        // it vanish while its still-open subtasks keep coming. The task hierarchy FK cascades
+        // and the project one restricts, so leaving the links in place would either delete a
+        // live subtask or fail the delete outright. The batches relink from the snapshot.
+        task::Entity::update_many()
+            .col_expr(
+                task::Column::ParentUuid,
+                sea_orm::sea_query::Expr::value(Option::<Uuid>::None),
+            )
             .filter(task::Column::BackendUuid.eq(self.backend_uuid))
             .exec(&transaction)
             .await
-            .context("Failed to clear cached tasks")?;
-        section::Entity::delete_many()
-            .filter(section::Column::BackendUuid.eq(self.backend_uuid))
-            .exec(&transaction)
-            .await
-            .context("Failed to clear cached sections")?;
+            .context("Failed to detach cached task hierarchy")?;
         project::Entity::update_many()
             .col_expr(
                 project::Column::ParentUuid,
@@ -47,16 +53,36 @@ impl SyncService {
             .exec(&transaction)
             .await
             .context("Failed to detach cached project hierarchy")?;
+
+        task::Entity::delete_many()
+            .filter(task::Column::BackendUuid.eq(self.backend_uuid))
+            .filter(task::Column::RemoteId.is_not_in(tasks.iter().map(|task| task.remote_id.as_str())))
+            .exec(&transaction)
+            .await
+            .context("Failed to drop tasks missing from the snapshot")?;
+        // An empty section list is ambiguous: `sync` turns a failed section fetch into an
+        // empty slice and carries on, so treat it as "nothing to reconcile". Every other
+        // fetch aborts the sync on failure, where empty honestly means empty.
+        if !sections.is_empty() {
+            section::Entity::delete_many()
+                .filter(section::Column::BackendUuid.eq(self.backend_uuid))
+                .filter(section::Column::RemoteId.is_not_in(sections.iter().map(|s| s.remote_id.as_str())))
+                .exec(&transaction)
+                .await
+                .context("Failed to drop sections missing from the snapshot")?;
+        }
         project::Entity::delete_many()
             .filter(project::Column::BackendUuid.eq(self.backend_uuid))
+            .filter(project::Column::RemoteId.is_not_in(projects.iter().map(|p| p.remote_id.as_str())))
             .exec(&transaction)
             .await
-            .context("Failed to clear cached projects")?;
+            .context("Failed to drop projects missing from the snapshot")?;
         label::Entity::delete_many()
             .filter(label::Column::BackendUuid.eq(self.backend_uuid))
+            .filter(label::Column::RemoteId.is_not_in(labels.iter().map(|l| l.remote_id.as_str())))
             .exec(&transaction)
             .await
-            .context("Failed to clear cached labels")?;
+            .context("Failed to drop labels missing from the snapshot")?;
 
         self.store_projects_batch(&transaction, projects)
             .await
@@ -464,87 +490,16 @@ impl SyncService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::backend::{BackendProject, BackendSection};
-    use crate::backend_registry::BackendRegistry;
+    use crate::backend::{BackendProject, BackendSection, BackendTask};
     use crate::entities::backend;
     use sea_orm::{EntityTrait, Set};
+    use std::path::PathBuf;
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
-    #[tokio::test]
-    async fn failed_snapshot_write_preserves_the_previous_cache() {
-        let db_path = std::env::temp_dir().join(format!("terminalist-snapshot-{}.db", Uuid::new_v4()));
-        let storage = LocalStorage::new_at(db_path.clone()).await.unwrap();
-        let backend_uuid = Uuid::new_v4();
-
-        backend::Entity::insert(backend::ActiveModel {
-            uuid: Set(backend_uuid),
-            backend_type: Set("test".to_string()),
-            name: Set("Test".to_string()),
-            is_enabled: Set(true),
-            credentials: Set("{}".to_string()),
-            settings: Set("{}".to_string()),
-        })
-        .exec(&storage.conn)
-        .await
-        .unwrap();
-
-        let storage = Arc::new(Mutex::new(storage));
-        let service = SyncService {
-            backend_registry: Arc::new(BackendRegistry::new(storage.clone())),
-            backend_uuid,
-            storage: storage.clone(),
-            sync_in_progress: Arc::new(Mutex::new(false)),
-            debug_mode: false,
-        };
-
-        let cached_project = BackendProject {
-            remote_id: "cached-project".to_string(),
-            name: "Cached project".to_string(),
-            is_favorite: false,
-            is_inbox: false,
-            order_index: 1,
-            parent_remote_id: None,
-        };
-        {
-            let storage = storage.lock().await;
-            service
-                .store_snapshot(&storage, std::slice::from_ref(&cached_project), &[], &[], &[])
-                .await
-                .unwrap();
-        }
-
-        let replacement_project = BackendProject {
-            remote_id: "replacement-project".to_string(),
-            name: "Replacement project".to_string(),
-            order_index: 2,
-            ..cached_project
-        };
-        let invalid_section = BackendSection {
-            remote_id: "invalid-section".to_string(),
-            name: "Invalid section".to_string(),
-            project_remote_id: "missing-project".to_string(),
-            order_index: 1,
-        };
-        {
-            let storage = storage.lock().await;
-            let result = service
-                .store_snapshot(&storage, &[replacement_project], &[], &[invalid_section], &[])
-                .await;
-            assert!(result.is_err());
-
-            let projects = ProjectRepository::get_all(&storage.conn).await.unwrap();
-            assert_eq!(projects.len(), 1);
-            assert_eq!(projects[0].remote_id, "cached-project");
-        }
-
-        storage.lock().await.conn.clone().close().await.unwrap();
-        let _ = std::fs::remove_file(db_path);
-    }
-
-    #[tokio::test]
-    async fn successful_snapshot_removes_objects_missing_from_backend() {
-        let db_path = std::env::temp_dir().join(format!("terminalist-replace-snapshot-{}.db", Uuid::new_v4()));
+    /// A sync service over a throwaway database file, with its backend row already present.
+    async fn test_service(label: &str) -> (PathBuf, Arc<Mutex<LocalStorage>>, SyncService) {
+        let db_path = std::env::temp_dir().join(format!("terminalist-{label}-{}.db", Uuid::new_v4()));
         let storage = LocalStorage::new_at(db_path.clone()).await.unwrap();
         let backend_uuid = Uuid::new_v4();
 
@@ -562,32 +517,206 @@ mod tests {
 
         let storage = Arc::new(Mutex::new(storage));
         let service = SyncService::new_for_test(storage.clone(), backend_uuid);
-        let old_project = BackendProject {
-            remote_id: "old-project".to_string(),
-            name: "Old project".to_string(),
+        (db_path, storage, service)
+    }
+
+    /// Closing the pool before removing the file keeps Windows and NFS happy.
+    async fn teardown(db_path: PathBuf, storage: Arc<Mutex<LocalStorage>>) {
+        storage.lock().await.conn.clone().close().await.unwrap();
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    fn project(remote_id: &str, order_index: i32) -> BackendProject {
+        BackendProject {
+            remote_id: remote_id.to_string(),
+            name: format!("Project {remote_id}"),
             is_favorite: false,
             is_inbox: false,
-            order_index: 1,
+            order_index,
             parent_remote_id: None,
+        }
+    }
+
+    fn task(remote_id: &str, project_remote_id: &str, parent_remote_id: Option<&str>) -> BackendTask {
+        BackendTask {
+            remote_id: remote_id.to_string(),
+            content: format!("Task {remote_id}"),
+            description: None,
+            project_remote_id: project_remote_id.to_string(),
+            section_remote_id: None,
+            parent_remote_id: parent_remote_id.map(str::to_string),
+            priority: 1,
+            order_index: 1,
+            due_date: None,
+            due_datetime: None,
+            is_recurring: false,
+            deadline: None,
+            duration: None,
+            is_completed: false,
+            labels: Vec::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn failed_snapshot_write_preserves_the_previous_cache() {
+        let (db_path, storage, service) = test_service("snapshot").await;
+
+        let cached_project = project("cached-project", 1);
+        {
+            let storage = storage.lock().await;
+            service
+                .store_snapshot(&storage, std::slice::from_ref(&cached_project), &[], &[], &[])
+                .await
+                .unwrap();
+        }
+
+        // The section names a project the snapshot does not carry, so storing it fails and
+        // must take the whole transaction down with it.
+        let invalid_section = BackendSection {
+            remote_id: "invalid-section".to_string(),
+            name: "Invalid section".to_string(),
+            project_remote_id: "missing-project".to_string(),
+            order_index: 1,
         };
-        let new_project = BackendProject {
-            remote_id: "new-project".to_string(),
-            name: "New project".to_string(),
-            order_index: 2,
-            ..old_project.clone()
-        };
+        {
+            let storage = storage.lock().await;
+            let result = service
+                .store_snapshot(
+                    &storage,
+                    &[project("replacement-project", 2)],
+                    &[],
+                    &[invalid_section],
+                    &[],
+                )
+                .await;
+            assert!(result.is_err());
+
+            let projects = ProjectRepository::get_all(&storage.conn).await.unwrap();
+            assert_eq!(projects.len(), 1);
+            assert_eq!(projects[0].remote_id, "cached-project");
+        }
+
+        teardown(db_path, storage).await;
+    }
+
+    #[tokio::test]
+    async fn successful_snapshot_removes_objects_missing_from_backend() {
+        let (db_path, storage, service) = test_service("replace-snapshot").await;
 
         {
             let storage = storage.lock().await;
-            service.store_snapshot(&storage, &[old_project], &[], &[], &[]).await.unwrap();
-            service.store_snapshot(&storage, &[new_project], &[], &[], &[]).await.unwrap();
+            service
+                .store_snapshot(&storage, &[project("old-project", 1)], &[], &[], &[])
+                .await
+                .unwrap();
+            service
+                .store_snapshot(&storage, &[project("new-project", 2)], &[], &[], &[])
+                .await
+                .unwrap();
 
             let projects = ProjectRepository::get_all(&storage.conn).await.unwrap();
             assert_eq!(projects.len(), 1);
             assert_eq!(projects[0].remote_id, "new-project");
         }
 
-        storage.lock().await.conn.clone().close().await.unwrap();
-        let _ = std::fs::remove_file(db_path);
+        teardown(db_path, storage).await;
+    }
+
+    /// The UI keys its selection on local UUIDs, so a row the remote still returns has to
+    /// keep the UUID it had, and a subtask has to survive its parent being completed away.
+    #[tokio::test]
+    async fn snapshot_keeps_uuids_and_orphans_subtasks_of_vanished_parents() {
+        let (db_path, storage, service) = test_service("stable-uuids").await;
+        let backend_uuid = service.backend_uuid;
+
+        let (project_uuid, subtask_uuid) = {
+            let storage = storage.lock().await;
+            service
+                .store_snapshot(
+                    &storage,
+                    &[project("p1", 1)],
+                    &[],
+                    &[],
+                    &[task("parent", "p1", None), task("subtask", "p1", Some("parent"))],
+                )
+                .await
+                .unwrap();
+
+            let subtask = TaskRepository::get_by_remote_id(&storage.conn, &backend_uuid, "subtask")
+                .await
+                .unwrap()
+                .expect("subtask cached");
+            let parent = TaskRepository::get_by_remote_id(&storage.conn, &backend_uuid, "parent")
+                .await
+                .unwrap()
+                .expect("parent cached");
+            assert_eq!(subtask.parent_uuid, Some(parent.uuid));
+
+            (
+                ProjectRepository::get_all(&storage.conn).await.unwrap()[0].uuid,
+                subtask.uuid,
+            )
+        };
+
+        // Completing the parent makes Todoist stop returning it, while the subtask keeps
+        // coming. Renaming the project proves the row was updated rather than replaced.
+        {
+            let storage = storage.lock().await;
+            let mut renamed = project("p1", 1);
+            renamed.name = "Renamed".to_string();
+            service
+                .store_snapshot(&storage, &[renamed], &[], &[], &[task("subtask", "p1", Some("parent"))])
+                .await
+                .unwrap();
+
+            let projects = ProjectRepository::get_all(&storage.conn).await.unwrap();
+            assert_eq!(projects.len(), 1);
+            assert_eq!(projects[0].uuid, project_uuid, "project uuid churned across a sync");
+            assert_eq!(projects[0].name, "Renamed");
+
+            let subtask = TaskRepository::get_by_remote_id(&storage.conn, &backend_uuid, "subtask")
+                .await
+                .unwrap()
+                .expect("subtask survives its parent being completed");
+            assert_eq!(subtask.uuid, subtask_uuid, "task uuid churned across a sync");
+            assert_eq!(subtask.parent_uuid, None);
+
+            assert!(TaskRepository::get_by_remote_id(&storage.conn, &backend_uuid, "parent")
+                .await
+                .unwrap()
+                .is_none());
+        }
+
+        teardown(db_path, storage).await;
+    }
+
+    /// `sync` turns a failed section fetch into an empty slice, so an empty section list
+    /// cannot be read as "the remote has no sections".
+    #[tokio::test]
+    async fn empty_section_list_leaves_cached_sections_alone() {
+        let (db_path, storage, service) = test_service("empty-sections").await;
+
+        let section = BackendSection {
+            remote_id: "s1".to_string(),
+            name: "Section".to_string(),
+            project_remote_id: "p1".to_string(),
+            order_index: 1,
+        };
+        {
+            let storage = storage.lock().await;
+            service
+                .store_snapshot(&storage, &[project("p1", 1)], &[], &[section], &[])
+                .await
+                .unwrap();
+            service
+                .store_snapshot(&storage, &[project("p1", 1)], &[], &[], &[])
+                .await
+                .unwrap();
+
+            let sections = SectionRepository::get_all(&storage.conn).await.unwrap();
+            assert_eq!(sections.len(), 1);
+        }
+
+        teardown(db_path, storage).await;
     }
 }
