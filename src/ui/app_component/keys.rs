@@ -2,13 +2,40 @@
 //! and the task list have each had their turn in `handle_event`.
 
 use super::AppComponent;
-use crate::constants::{UI_CANNOT_DELETE_TODAY_VIEW, UI_NO_TASK_SELECTED_DUE_DATE};
+use crate::constants::UI_NO_TASK_SELECTED_DUE_DATE;
+use crate::entities::{label, project};
 use crate::ui::core::actions::{Action, DialogType};
 use crate::ui::core::SidebarSelection;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use log::info;
 
+/// What the sidebar is pointing at, resolved to the item itself. Both 'D' and 'E' need
+/// the same five-way answer and differ only in what they do with it.
+enum Selected<'a> {
+    Project(&'a project::Model),
+    Label(&'a label::Model),
+    /// A built-in view, named as it appears in "Cannot delete the {} view".
+    View(&'static str),
+    /// A project or label slot whose index no longer resolves. Names which one.
+    Missing(&'static str),
+}
+
 impl AppComponent {
+    fn selected(&self) -> Selected<'_> {
+        match &self.state.sidebar_selection {
+            SidebarSelection::Today => Selected::View("Today"),
+            SidebarSelection::Tomorrow => Selected::View("Tomorrow"),
+            SidebarSelection::Upcoming => Selected::View("Upcoming"),
+            SidebarSelection::Project(index) => match self.state.projects.get(*index) {
+                Some(project) => Selected::Project(project),
+                None => Selected::Missing("project"),
+            },
+            SidebarSelection::Label(index) => match self.state.labels.get(*index) {
+                Some(label) => Selected::Label(label),
+                None => Selected::Missing("label"),
+            },
+        }
+    }
     pub(super) fn handle_global_key(&mut self, key: KeyEvent) -> Action {
         // Handle help panel scrolling when help is open
         if self.state.show_help {
@@ -47,94 +74,60 @@ impl AppComponent {
                 info!("Global key: 'A' - opening project creation dialog");
                 Action::ShowDialog(DialogType::ProjectCreation)
             }
-            KeyCode::Char('D') => {
-                // Delete current project (only if a project is selected)
-                match &self.state.sidebar_selection {
-                    SidebarSelection::Project(index) => {
-                        if let Some(project) = self.state.projects.get(*index) {
-                            info!(
-                                "Global key: 'D' - deleting project '{}' (ID: {})",
-                                project.name, project.uuid
-                            );
-                            Action::ShowDialog(DialogType::DeleteConfirmation {
-                                item_type: "project".to_string(),
-                                item_uuid: project.uuid,
-                            })
-                        } else {
-                            info!("Global key: 'D' - no project selected (invalid index)");
-                            Action::ShowDialog(DialogType::Error("No project selected to delete".to_string()))
-                        }
-                    }
-                    SidebarSelection::Today => {
-                        info!("Global key: 'D' - cannot delete Today view");
-                        Action::ShowDialog(DialogType::Info(UI_CANNOT_DELETE_TODAY_VIEW.to_string()))
-                    }
-                    SidebarSelection::Tomorrow => {
-                        info!("Global key: 'D' - cannot delete Tomorrow view");
-                        Action::ShowDialog(DialogType::Info("Cannot delete the Tomorrow view".to_string()))
-                    }
-                    SidebarSelection::Upcoming => {
-                        info!("Global key: 'D' - cannot delete Upcoming view");
-                        Action::ShowDialog(DialogType::Info("Cannot delete the Upcoming view".to_string()))
-                    }
-                    SidebarSelection::Label(index) => {
-                        if let Some(label) = self.state.labels.get(*index) {
-                            info!("Global key: 'D' - deleting label '{}' (ID: {})", label.name, label.uuid);
-                            Action::ShowDialog(DialogType::DeleteConfirmation {
-                                item_type: "label".to_string(),
-                                item_uuid: label.uuid,
-                            })
-                        } else {
-                            info!("Global key: 'D' - no label selected (invalid index)");
-                            Action::ShowDialog(DialogType::Error("No label selected to delete".to_string()))
-                        }
-                    }
+            KeyCode::Char('D') => match self.selected() {
+                Selected::Project(project) => {
+                    info!(
+                        "Global key: 'D' - deleting project '{}' (ID: {})",
+                        project.name, project.uuid
+                    );
+                    Action::ShowDialog(DialogType::DeleteConfirmation {
+                        item_type: "project".to_string(),
+                        item_uuid: project.uuid,
+                    })
                 }
-            }
-            KeyCode::Char('E') => {
-                // Edit current sidebar selection (project or label)
-                match &self.state.sidebar_selection {
-                    SidebarSelection::Project(index) => {
-                        if let Some(project) = self.state.projects.get(*index) {
-                            info!(
-                                "Global key: 'E' - editing project '{}' (ID: {})",
-                                project.name, project.uuid
-                            );
-                            Action::ShowDialog(DialogType::ProjectEdit {
-                                project_uuid: project.uuid,
-                                name: project.name.clone(),
-                            })
-                        } else {
-                            info!("Global key: 'E' - no project selected (invalid index)");
-                            Action::ShowDialog(DialogType::Error("No project selected to edit".to_string()))
-                        }
-                    }
-                    SidebarSelection::Today => {
-                        info!("Global key: 'E' - cannot edit Today view");
-                        Action::ShowDialog(DialogType::Info("Cannot edit the Today view".to_string()))
-                    }
-                    SidebarSelection::Tomorrow => {
-                        info!("Global key: 'E' - cannot edit Tomorrow view");
-                        Action::ShowDialog(DialogType::Info("Cannot edit the Tomorrow view".to_string()))
-                    }
-                    SidebarSelection::Upcoming => {
-                        info!("Global key: 'E' - cannot edit Upcoming view");
-                        Action::ShowDialog(DialogType::Info("Cannot edit the Upcoming view".to_string()))
-                    }
-                    SidebarSelection::Label(index) => {
-                        if let Some(label) = self.state.labels.get(*index) {
-                            info!("Global key: 'E' - editing label '{}' (ID: {})", label.name, label.uuid);
-                            Action::ShowDialog(DialogType::LabelEdit {
-                                label_uuid: label.uuid,
-                                name: label.name.clone(),
-                            })
-                        } else {
-                            info!("Global key: 'E' - no label selected (invalid index)");
-                            Action::ShowDialog(DialogType::Error("No label selected to edit".to_string()))
-                        }
-                    }
+                Selected::Label(label) => {
+                    info!("Global key: 'D' - deleting label '{}' (ID: {})", label.name, label.uuid);
+                    Action::ShowDialog(DialogType::DeleteConfirmation {
+                        item_type: "label".to_string(),
+                        item_uuid: label.uuid,
+                    })
                 }
-            }
+                Selected::View(view) => {
+                    info!("Global key: 'D' - cannot delete {} view", view);
+                    Action::ShowDialog(DialogType::Info(format!("Cannot delete the {view} view")))
+                }
+                Selected::Missing(kind) => {
+                    info!("Global key: 'D' - no {} selected (invalid index)", kind);
+                    Action::ShowDialog(DialogType::Error(format!("No {kind} selected to delete")))
+                }
+            },
+            KeyCode::Char('E') => match self.selected() {
+                Selected::Project(project) => {
+                    info!(
+                        "Global key: 'E' - editing project '{}' (ID: {})",
+                        project.name, project.uuid
+                    );
+                    Action::ShowDialog(DialogType::ProjectEdit {
+                        project_uuid: project.uuid,
+                        name: project.name.clone(),
+                    })
+                }
+                Selected::Label(label) => {
+                    info!("Global key: 'E' - editing label '{}' (ID: {})", label.name, label.uuid);
+                    Action::ShowDialog(DialogType::LabelEdit {
+                        label_uuid: label.uuid,
+                        name: label.name.clone(),
+                    })
+                }
+                Selected::View(view) => {
+                    info!("Global key: 'E' - cannot edit {} view", view);
+                    Action::ShowDialog(DialogType::Info(format!("Cannot edit the {view} view")))
+                }
+                Selected::Missing(kind) => {
+                    info!("Global key: 'E' - no {} selected (invalid index)", kind);
+                    Action::ShowDialog(DialogType::Error(format!("No {kind} selected to edit")))
+                }
+            },
             KeyCode::Char('r') => {
                 info!("Global key: 'r' - starting manual sync");
                 Action::StartSync
