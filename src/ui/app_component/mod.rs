@@ -761,14 +761,11 @@ impl Component for AppComponent {
         }
         self.task_list.render(f, main_chunks[1]);
 
-        // An in-flight sync outranks whatever the last one left behind.
+        // Work in flight outranks whatever the last operation left behind. state.loading
+        // covers a sync from the moment StartSync is handled; is_syncing() covers the two
+        // frames either side of that, before the action lands and after it clears.
         if self.state.loading || self.is_syncing() {
-            let title = if self.state.loading {
-                UI_LOADING_DATA
-            } else {
-                UI_SYNCING_WITH_TODOIST
-            };
-            Toast::spinner(title, &self.config.theme).render(f, main_chunks[1]);
+            Toast::spinner(UI_LOADING_DATA, &self.config.theme).render(f, main_chunks[1]);
         } else if let Some(toast) = &self.toast {
             toast.render(f, main_chunks[1]);
         }

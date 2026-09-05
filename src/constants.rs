@@ -53,7 +53,6 @@ pub const CONFIG_GENERATED: &str = "✅ Generated default configuration file";
 pub const UI_CANNOT_DELETE_TODAY_VIEW: &str = "Cannot delete the Today view";
 pub const UI_NO_TASK_SELECTED_DUE_DATE: &str = "No task selected to set due date";
 pub const UI_LOADING_DATA: &str = "Loading data";
-pub const UI_SYNCING_WITH_TODOIST: &str = "Syncing with Todoist";
 pub const UI_LOADING_DATA_FROM_STORAGE: &str = "Loading data from storage";
 
 /// How long a success toast lingers before it fades on its own.
