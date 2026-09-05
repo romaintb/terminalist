@@ -73,5 +73,5 @@ async fn startup_loads_cached_data_when_the_backend_is_unavailable() {
 
     drop(app); // TaskManager cancels its tasks on drop
     storage.lock().await.conn.clone().close().await.unwrap();
-    std::fs::remove_file(db_path).unwrap();
+    let _ = std::fs::remove_file(db_path);
 }

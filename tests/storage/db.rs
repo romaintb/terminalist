@@ -127,5 +127,5 @@ async fn test_database_file_is_owner_only() {
         "the cache holds the API token, it must not be readable by others"
     );
 
-    std::fs::remove_file(db_path).expect("test database should be removed");
+    let _ = std::fs::remove_file(db_path);
 }
