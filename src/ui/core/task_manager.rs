@@ -1,5 +1,4 @@
 use super::actions::{Action, SidebarSelection};
-use crate::constants::UI_LOADING_DATA_FROM_STORAGE;
 use crate::sync::{SyncService, SyncStatus};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
@@ -7,12 +6,22 @@ use tokio::task::JoinHandle;
 
 pub type TaskId = u64;
 
+/// What a background task is doing. The UI asks about kinds rather than matching on a
+/// human-readable description, which user text can imitate: a label or a search query
+/// containing "sync" used to read as a sync in progress.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaskKind {
+    Sync,
+    DataLoad,
+    Search,
+    Operation,
+}
+
 #[derive(Debug)]
 pub struct BackgroundTask {
     pub id: TaskId,
     pub handle: JoinHandle<anyhow::Result<TaskResult>>,
-    pub description: String,
-    pub started_at: std::time::Instant,
+    pub kind: TaskKind,
 }
 
 #[derive(Debug, Clone)]
@@ -59,7 +68,6 @@ impl TaskManager {
         self.next_task_id += 1;
 
         let action_sender = self.action_sender.clone();
-        let description = "Background sync".to_string();
 
         let handle = tokio::spawn(async move {
             // Send sync started notification
@@ -80,19 +88,14 @@ impl TaskManager {
             }
         });
 
-        let task = BackgroundTask {
-            id: task_id,
-            handle,
-            description,
-            started_at: std::time::Instant::now(),
-        };
-
-        self.tasks.insert(task_id, task);
+        self.insert(task_id, handle, TaskKind::Sync);
         task_id
     }
 
     /// Spawn a background task operation (create, update, delete)
-    pub fn spawn_task_operation<F, Fut>(&mut self, operation: F, description: String) -> TaskId
+    /// `on_success` is sent after the operation succeeds, for the caller to steer the UI
+    /// afterwards, such as leaving a project view whose project has just been deleted.
+    pub fn spawn_task_operation<F, Fut>(&mut self, operation: F, on_success: Option<Action>) -> TaskId
     where
         F: FnOnce() -> Fut + Send + 'static,
         Fut: std::future::Future<Output = anyhow::Result<String>> + Send + 'static,
@@ -101,8 +104,6 @@ impl TaskManager {
         self.next_task_id += 1;
 
         let action_sender = self.action_sender.clone();
-        let desc_clone = description.clone();
-        let desc_for_task = description.clone();
 
         let handle = tokio::spawn(async move {
             match operation().await {
@@ -111,9 +112,8 @@ impl TaskManager {
                     // Send refresh action to update UI with latest data from database
                     let _ = action_sender.send(Action::RefreshData);
 
-                    // For project deletion, navigate to Today view to avoid empty selection
-                    if desc_clone.starts_with("Delete project") {
-                        let _ = action_sender.send(Action::NavigateToSidebar(SidebarSelection::Today));
+                    if let Some(action) = on_success {
+                        let _ = action_sender.send(action);
                     }
 
                     Ok(result)
@@ -129,14 +129,7 @@ impl TaskManager {
             }
         });
 
-        let task = BackgroundTask {
-            id: task_id,
-            handle,
-            description: desc_for_task,
-            started_at: std::time::Instant::now(),
-        };
-
-        self.tasks.insert(task_id, task);
+        self.insert(task_id, handle, TaskKind::Operation);
         task_id
     }
 
@@ -165,7 +158,7 @@ impl TaskManager {
 
     /// Check if any sync tasks are currently running
     pub fn is_syncing(&self) -> bool {
-        self.tasks.values().any(|task| task.description.contains("sync"))
+        self.tasks.values().any(|task| task.kind == TaskKind::Sync)
     }
 
     /// Cancel all running tasks
@@ -186,7 +179,6 @@ impl TaskManager {
         self.next_task_id += 1;
 
         let action_sender = self.action_sender.clone();
-        let description = UI_LOADING_DATA_FROM_STORAGE.to_string();
 
         let handle = tokio::spawn(async move {
             match (
@@ -252,14 +244,7 @@ impl TaskManager {
             }
         });
 
-        let task = BackgroundTask {
-            id: task_id,
-            handle,
-            description,
-            started_at: std::time::Instant::now(),
-        };
-
-        self.tasks.insert(task_id, task);
+        self.insert(task_id, handle, TaskKind::DataLoad);
         task_id
     }
 
@@ -269,7 +254,6 @@ impl TaskManager {
         self.next_task_id += 1;
 
         let action_sender = self.action_sender.clone();
-        let description = format!("Searching tasks: '{}'", query);
 
         let handle = tokio::spawn(async move {
             match sync_service.search_tasks(&query).await {
@@ -291,15 +275,12 @@ impl TaskManager {
             }
         });
 
-        let task = BackgroundTask {
-            id: task_id,
-            handle,
-            description,
-            started_at: std::time::Instant::now(),
-        };
-
-        self.tasks.insert(task_id, task);
+        self.insert(task_id, handle, TaskKind::Search);
         task_id
+    }
+
+    fn insert(&mut self, id: TaskId, handle: JoinHandle<anyhow::Result<TaskResult>>, kind: TaskKind) {
+        self.tasks.insert(id, BackgroundTask { id, handle, kind });
     }
 }
 
