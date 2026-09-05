@@ -118,21 +118,13 @@ impl TaskListComponent {
             SidebarSelection::Today => self.build_today_items(),
             SidebarSelection::Tomorrow => self.build_tomorrow_items(),
             SidebarSelection::Upcoming => self.build_upcoming_items(),
-            SidebarSelection::Project(index) => {
-                if let Some(project) = self.projects.get(*index) {
-                    let project_id = project.uuid;
-                    self.build_project_items(&project_id);
-                } else {
-                    self.build_simple_items();
-                }
+            SidebarSelection::Project(uuid) => {
+                let uuid = *uuid;
+                self.build_project_items(&uuid);
             }
-            SidebarSelection::Label(index) => {
-                if let Some(label) = self.labels.get(*index) {
-                    let label_id = label.uuid;
-                    self.build_label_items(&label_id);
-                } else {
-                    self.build_simple_items();
-                }
+            SidebarSelection::Label(uuid) => {
+                let uuid = *uuid;
+                self.build_label_items(&uuid);
             }
         }
     }
@@ -343,17 +335,6 @@ impl TaskListComponent {
             .collect();
 
         for task in filtered_tasks {
-            self.add_task_and_children_to_items(task, 0);
-        }
-    }
-
-    /// Build simple items (no sectioning)
-    fn build_simple_items(&mut self) {
-        // SQL already provides proper ordering (completion status -> priority -> order_index)
-        let root_tasks: Vec<task::Model> = self.tasks.iter().filter(|t| t.parent_uuid.is_none()).cloned().collect();
-
-        // Add each root task and its children recursively
-        for task in root_tasks {
             self.add_task_and_children_to_items(task, 0);
         }
     }
@@ -588,8 +569,8 @@ impl Component for TaskListComponent {
             }
             KeyCode::Char('a') => {
                 // When viewing a specific project, preselect it as the default project
-                let default_project_uuid = match &self.sidebar_selection {
-                    SidebarSelection::Project(index) => self.projects.get(*index).map(|p| p.uuid),
+                let default_project_uuid = match self.sidebar_selection {
+                    SidebarSelection::Project(uuid) => Some(uuid),
                     _ => None,
                 };
                 Action::ShowDialog(DialogType::TaskCreation { default_project_uuid })

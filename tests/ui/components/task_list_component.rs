@@ -90,7 +90,7 @@ fn test_tasks_with_unknown_section_are_still_rendered() {
         ],
         vec![project_model(project_uuid)],
         Vec::new(),
-        SidebarSelection::Project(0),
+        SidebarSelection::Project(project_uuid),
     );
 
     let mut rendered = rendered_task_contents(&component);
@@ -117,7 +117,7 @@ fn test_select_task_re_anchors_the_cursor_after_a_reload() {
         Vec::new(),
         projects.clone(),
         Vec::new(),
-        SidebarSelection::Project(0),
+        SidebarSelection::Project(project_uuid),
     );
     component.selected_index = 1;
     assert_eq!(component.get_selected_task().map(|task| task.uuid), Some(second_uuid));
@@ -127,7 +127,7 @@ fn test_select_task_re_anchors_the_cursor_after_a_reload() {
         Vec::new(),
         projects,
         Vec::new(),
-        SidebarSelection::Project(0),
+        SidebarSelection::Project(project_uuid),
     );
     assert_eq!(
         component.get_selected_task().map(|task| task.content.as_str()),

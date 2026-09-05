@@ -192,19 +192,11 @@ impl TaskManager {
                         SidebarSelection::Today => sync_service.get_tasks_for_today().await.unwrap_or_default(),
                         SidebarSelection::Tomorrow => sync_service.get_tasks_for_tomorrow().await.unwrap_or_default(),
                         SidebarSelection::Upcoming => sync_service.get_tasks_for_upcoming().await.unwrap_or_default(),
-                        SidebarSelection::Project(index) => {
-                            if let Some(project) = projects.get(index) {
-                                sync_service.get_tasks_for_project(&project.uuid).await.unwrap_or_default()
-                            } else {
-                                Vec::new()
-                            }
+                        SidebarSelection::Project(uuid) => {
+                            sync_service.get_tasks_for_project(&uuid).await.unwrap_or_default()
                         }
-                        SidebarSelection::Label(index) => {
-                            if let Some(label) = labels.get(index) {
-                                sync_service.get_tasks_with_label(label.uuid).await.unwrap_or_default()
-                            } else {
-                                Vec::new()
-                            }
+                        SidebarSelection::Label(uuid) => {
+                            sync_service.get_tasks_with_label(uuid).await.unwrap_or_default()
                         }
                     };
 

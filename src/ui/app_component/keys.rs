@@ -26,11 +26,11 @@ impl AppComponent {
             SidebarSelection::Today => Selected::View("Today"),
             SidebarSelection::Tomorrow => Selected::View("Tomorrow"),
             SidebarSelection::Upcoming => Selected::View("Upcoming"),
-            SidebarSelection::Project(index) => match self.state.projects.get(*index) {
+            SidebarSelection::Project(uuid) => match self.state.projects.iter().find(|p| p.uuid == *uuid) {
                 Some(project) => Selected::Project(project),
                 None => Selected::Missing("project"),
             },
-            SidebarSelection::Label(index) => match self.state.labels.get(*index) {
+            SidebarSelection::Label(uuid) => match self.state.labels.iter().find(|l| l.uuid == *uuid) {
                 Some(label) => Selected::Label(label),
                 None => Selected::Missing("label"),
             },

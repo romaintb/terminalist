@@ -131,37 +131,26 @@ impl AppComponent {
 
     /// Set initial sidebar selection based on config
     fn set_initial_sidebar_selection(&mut self) {
-        let selection = match self.config.ui.default_project.as_str() {
-            "inbox" => {
-                // Find inbox project
-                if let Some(inbox_index) = self.state.projects.iter().position(|p| p.is_inbox_project) {
-                    SidebarSelection::Project(inbox_index)
-                } else {
-                    SidebarSelection::Today
-                }
-            }
+        let default_project = self.config.ui.default_project.as_str();
+        let selection = match default_project {
             "today" => SidebarSelection::Today,
             "tomorrow" => SidebarSelection::Tomorrow,
             "upcoming" => SidebarSelection::Upcoming,
-            project_id_or_name => {
-                // Try to find project by ID first (parse as UUID), then by name
-                if let Ok(uuid) = Uuid::parse_str(project_id_or_name) {
-                    if let Some(project_index) = self.state.projects.iter().position(|p| p.uuid == uuid) {
-                        SidebarSelection::Project(project_index)
-                    } else if let Some(project_index) =
-                        self.state.projects.iter().position(|p| p.name == project_id_or_name)
-                    {
-                        SidebarSelection::Project(project_index)
-                    } else {
-                        SidebarSelection::Today
-                    }
-                } else if let Some(project_index) =
-                    self.state.projects.iter().position(|p| p.name == project_id_or_name)
-                {
-                    SidebarSelection::Project(project_index)
-                } else {
-                    SidebarSelection::Today
-                }
+            // Anything else names a project: "inbox" for the backend's own inbox, otherwise a
+            // local UUID or a project name. An unknown name falls back to Today.
+            _ => {
+                let by_uuid = Uuid::parse_str(default_project).ok();
+                self.state
+                    .projects
+                    .iter()
+                    .find(|project| match by_uuid {
+                        Some(uuid) => project.uuid == uuid,
+                        None if default_project == "inbox" => project.is_inbox_project,
+                        None => project.name == default_project,
+                    })
+                    .map_or(SidebarSelection::Today, |project| {
+                        SidebarSelection::Project(project.uuid)
+                    })
             }
         };
 
@@ -176,7 +165,7 @@ impl AppComponent {
     fn sync_component_data(&mut self) {
         // Update sidebar
         self.sidebar.update_data(self.state.projects.clone(), self.state.labels.clone());
-        self.sidebar.selection = self.state.sidebar_selection.clone();
+        self.sidebar.selection = self.state.sidebar_selection;
         self.sidebar.update_theme(self.config.theme.clone());
 
         // Update task list
@@ -187,7 +176,7 @@ impl AppComponent {
             self.state.sections.clone(),
             self.state.projects.clone(),
             self.state.labels.clone(),
-            self.state.sidebar_selection.clone(),
+            self.state.sidebar_selection,
         );
 
         // Update dialog
@@ -277,9 +266,9 @@ impl AppComponent {
     /// Schedule a background task to reload the current view. `kind` travels with the load
     /// and decides what happens to the cursor when it lands.
     fn schedule_data_load(&mut self, kind: LoadKind) {
-        let _task_id =
-            self.task_manager
-                .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection.clone(), kind);
+        let _task_id = self
+            .task_manager
+            .spawn_data_load(self.sync_service.clone(), self.state.sidebar_selection, kind);
     }
 
     /// Process background actions from task manager

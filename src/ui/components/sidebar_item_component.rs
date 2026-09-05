@@ -21,14 +21,13 @@ pub enum SidebarItemType {
     /// Project item
     Project {
         project: project::Model,
-        original_index: usize,
         depth: usize,
         is_last_sibling: bool,
         has_children: bool,
         is_expanded: bool,
     },
     /// Label item
-    Label { label: label::Model, original_index: usize },
+    Label { label: label::Model },
 }
 
 /// Trait for sidebar items that can be rendered and navigated
@@ -84,17 +83,13 @@ impl SidebarItem for SidebarItemType {
 
             SidebarItemType::Project {
                 project,
-                original_index,
                 depth,
                 is_last_sibling,
                 has_children,
                 is_expanded,
                 ..
             } => {
-                let is_selected = matches!(
-                    current_selection,
-                    SidebarSelection::Project(idx) if idx == original_index
-                );
+                let is_selected = matches!(current_selection, SidebarSelection::Project(uuid) if *uuid == project.uuid);
                 let style = if is_selected {
                     Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
                 } else {
@@ -134,12 +129,10 @@ impl SidebarItem for SidebarItemType {
                 ListItem::new(Line::from(spans))
             }
 
-            SidebarItemType::Label {
-                label, original_index, ..
-            } => {
+            SidebarItemType::Label { label, .. } => {
                 let is_selected = matches!(
                     current_selection,
-                    SidebarSelection::Label(idx) if idx == original_index
+                    SidebarSelection::Label(uuid) if *uuid == label.uuid
                 );
                 let style = if is_selected {
                     Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
@@ -165,9 +158,9 @@ impl SidebarItem for SidebarItemType {
 
     fn get_selection(&self) -> Option<SidebarSelection> {
         match self {
-            SidebarItemType::SpecialView { selection, .. } => Some(selection.clone()),
-            SidebarItemType::Project { original_index, .. } => Some(SidebarSelection::Project(*original_index)),
-            SidebarItemType::Label { original_index, .. } => Some(SidebarSelection::Label(*original_index)),
+            SidebarItemType::SpecialView { selection, .. } => Some(*selection),
+            SidebarItemType::Project { project, .. } => Some(SidebarSelection::Project(project.uuid)),
+            SidebarItemType::Label { label, .. } => Some(SidebarSelection::Label(label.uuid)),
         }
     }
 }

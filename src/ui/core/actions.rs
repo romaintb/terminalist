@@ -1,15 +1,19 @@
 use crate::sync::SyncStatus;
 use uuid::Uuid;
 
-/// Represents the currently selected item in the sidebar
-#[derive(Debug, Clone, PartialEq, Default)]
+/// Represents the currently selected item in the sidebar.
+///
+/// Projects and labels are named by their local UUID rather than by a position in the loaded
+/// vectors. A sync that adds, removes or reorders a project would otherwise slide the
+/// selection onto a different one without anything noticing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SidebarSelection {
     #[default]
     Today, // Today view (special view)
-    Tomorrow,       // Tomorrow view (special view)
-    Upcoming,       // Upcoming view (tasks with future due dates)
-    Label(usize),   // Index into labels vector
-    Project(usize), // Index into projects vector
+    Tomorrow, // Tomorrow view (special view)
+    Upcoming, // Upcoming view (tasks with future due dates)
+    Label(Uuid),
+    Project(Uuid),
 }
 
 /// Why a data load was scheduled; decides what happens to the cursor when the reload lands.
