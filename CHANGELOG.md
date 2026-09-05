@@ -14,8 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Sync status toast** - Replace blocking sync dialog with a toast.
 
 ### Fixed
+- **Cursor jumping around after a sync** - Every sync used to hand each task a brand new internal id, so the app lost track of which one you were pointing at; the ids now stay put.
+- **Cursor moving on its own** - When a background sync landed while you were browsing, the highlight slid onto a different task; it now stays on the task you were on.
 - **Pipes in task and project names** - Creating a task or project whose text contained a `|` failed outright, because the name and the parent id were packed into one string that got split on the first separator. The id now comes first, so your text keeps whatever you typed.
-
 - **Tasks vanishing from a project view** - A task whose section was not among the ones loaded for the project, which happens on a torn read across a sync or when the section belongs to another project, was filed under a bucket the renderer never visits and simply disappeared. Those tasks now show alongside the ones with no section at all.
 
 ### Security
