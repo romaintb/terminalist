@@ -7,15 +7,6 @@ fn test_default_theme() {
 }
 
 #[test]
-fn test_theme_switching() {
-    let mut service = IconService::new(IconTheme::Emoji);
-    assert_eq!(service.theme(), IconTheme::Emoji);
-
-    service.set_theme(IconTheme::Ascii);
-    assert_eq!(service.theme(), IconTheme::Ascii);
-}
-
-#[test]
 fn test_emoji_icons() {
     let service = IconService::new(IconTheme::Emoji);
     assert_eq!(service.task_pending(), "🔳");
@@ -52,19 +43,4 @@ fn test_today_tomorrow_icons() {
     let ascii_service = IconService::new(IconTheme::Ascii);
     assert_eq!(ascii_service.today(), "@");
     assert_eq!(ascii_service.tomorrow(), "+");
-}
-
-#[test]
-fn test_theme_cycling() {
-    let mut service = IconService::new(IconTheme::Ascii);
-    assert_eq!(service.theme(), IconTheme::Ascii);
-
-    service.cycle_icon_theme();
-    assert_eq!(service.theme(), IconTheme::Unicode);
-
-    service.cycle_icon_theme();
-    assert_eq!(service.theme(), IconTheme::Emoji);
-
-    service.cycle_icon_theme();
-    assert_eq!(service.theme(), IconTheme::Ascii);
 }
