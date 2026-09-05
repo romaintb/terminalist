@@ -284,7 +284,7 @@ impl TaskListComponent {
     /// Build items for Project view (with section headers)
     fn build_project_items(&mut self, project_id: &Uuid) {
         use crate::ui::components::task_list_item_component::{HeaderItem, SeparatorItem};
-        use std::collections::HashMap;
+        use std::collections::{HashMap, HashSet};
 
         // Get sections for the current project
         let project_sections: Vec<_> = self
@@ -293,16 +293,20 @@ impl TaskListComponent {
             .filter(|section| &section.project_uuid == project_id)
             .cloned()
             .collect();
+        let known_sections: HashSet<Uuid> = project_sections.iter().map(|section| section.uuid).collect();
 
-        // Group tasks by section (only root tasks - subtasks will be added recursively)
+        // Group tasks by section (only root tasks - subtasks will be added recursively).
+        // A task pointing at a section we don't have (torn read across a sync, or a section
+        // belonging to another project) falls back to the no-section bucket so it stays visible.
         let mut tasks_by_section: HashMap<Option<Uuid>, Vec<task::Model>> = HashMap::new();
         for task in self.tasks.iter().filter(|t| t.parent_uuid.is_none()) {
             if &task.project_uuid == project_id {
-                tasks_by_section.entry(task.section_uuid).or_default().push(task.clone());
+                let key = task.section_uuid.filter(|uuid| known_sections.contains(uuid));
+                tasks_by_section.entry(key).or_default().push(task.clone());
             }
         }
 
-        // Add tasks without sections first
+        // Add tasks without a resolvable section first
         if let Some(tasks_without_section) = tasks_by_section.get(&None) {
             for task in tasks_without_section {
                 self.add_task_and_children_to_items(task.clone(), 0);
