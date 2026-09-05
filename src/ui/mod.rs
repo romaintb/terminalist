@@ -52,7 +52,7 @@ pub mod app_component;
 pub mod components;
 pub mod core;
 pub mod layout;
-pub mod renderer;
+pub(crate) mod renderer;
 
 // Re-export main UI types for external use
 pub use app_component::AppComponent;

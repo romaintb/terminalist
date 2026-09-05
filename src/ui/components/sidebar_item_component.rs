@@ -18,30 +18,17 @@ use ratatui::{
 pub enum SidebarItemType {
     /// Special views (Today, Tomorrow, Upcoming)
     SpecialView { name: String, selection: SidebarSelection },
-    /// Foldable account folder header
-    AccountFolder {
-        name: String,
-        account_id: String,
-        is_expanded: bool,
-    },
-    /// Project item (with account affiliation)
+    /// Project item
     Project {
         project: project::Model,
-        account_id: String,
         original_index: usize,
         depth: usize,
         is_last_sibling: bool,
         has_children: bool,
         is_expanded: bool,
     },
-    /// Label item (with account affiliation)
-    Label {
-        label: label::Model,
-        account_id: String,
-        original_index: usize,
-    },
-    /// Visual separator
-    Separator { indent: usize },
+    /// Label item
+    Label { label: label::Model, original_index: usize },
 }
 
 /// Trait for sidebar items that can be rendered and navigated
@@ -57,9 +44,6 @@ pub trait SidebarItem {
 
     /// Whether this item can be selected (navigated to)
     fn is_selectable(&self) -> bool;
-
-    /// Get the indentation level for hierarchical display
-    fn indent_level(&self) -> usize;
 
     /// Whether this item can be folded/unfolded
     fn is_foldable(&self) -> bool;
@@ -94,18 +78,6 @@ impl SidebarItem for SidebarItemType {
 
                 ListItem::new(Line::from(vec![
                     Span::styled(icon.to_string(), style),
-                    Span::styled(name.clone(), style),
-                ]))
-            }
-
-            SidebarItemType::AccountFolder { name, is_expanded, .. } => {
-                let style = Style::default().fg(theme.info).add_modifier(Modifier::BOLD);
-                let arrow = if *is_expanded { "▼" } else { "▶" };
-                let icon = "📦";
-
-                ListItem::new(Line::from(vec![
-                    Span::styled(format!("{} ", arrow), style),
-                    Span::styled(format!("{} ", icon), style),
                     Span::styled(name.clone(), style),
                 ]))
             }
@@ -180,49 +152,22 @@ impl SidebarItem for SidebarItemType {
                     Span::styled(label.name.clone(), style),
                 ]))
             }
-
-            SidebarItemType::Separator { indent } => {
-                let spacing = " ".repeat(*indent);
-                ListItem::new(Line::from(Span::raw(spacing)))
-            }
         }
     }
 
     fn is_selectable(&self) -> bool {
-        match self {
-            SidebarItemType::SpecialView { .. } => true,
-            SidebarItemType::AccountFolder { .. } => false, // Folders are not selectable, only foldable
-            SidebarItemType::Project { .. } => true,
-            SidebarItemType::Label { .. } => true,
-            SidebarItemType::Separator { .. } => false,
-        }
-    }
-
-    fn indent_level(&self) -> usize {
-        match self {
-            SidebarItemType::SpecialView { .. } => 0,
-            SidebarItemType::AccountFolder { .. } => 0,
-            SidebarItemType::Project { depth, .. } => *depth,
-            SidebarItemType::Label { .. } => 0,
-            SidebarItemType::Separator { indent } => *indent,
-        }
+        true
     }
 
     fn is_foldable(&self) -> bool {
-        match self {
-            SidebarItemType::AccountFolder { .. } => true,
-            SidebarItemType::Project { has_children, .. } => *has_children,
-            _ => false,
-        }
+        matches!(self, SidebarItemType::Project { has_children, .. } if *has_children)
     }
 
     fn get_selection(&self) -> Option<SidebarSelection> {
         match self {
             SidebarItemType::SpecialView { selection, .. } => Some(selection.clone()),
-            SidebarItemType::AccountFolder { .. } => None,
             SidebarItemType::Project { original_index, .. } => Some(SidebarSelection::Project(*original_index)),
             SidebarItemType::Label { original_index, .. } => Some(SidebarSelection::Label(*original_index)),
-            SidebarItemType::Separator { .. } => None,
         }
     }
 }

@@ -103,14 +103,10 @@ impl SidebarComponent {
             selection: SidebarSelection::Upcoming,
         });
 
-        // Use placeholder account ID for now
-        let account_id = "main".to_string();
-
         // Add labels
         for (index, label) in self.labels.iter().enumerate() {
             self.items.push(SidebarItemType::Label {
                 label: label.clone(),
-                account_id: account_id.clone(),
                 original_index: index,
             });
         }
@@ -151,7 +147,6 @@ impl SidebarComponent {
 
             self.items.push(SidebarItemType::Project {
                 project: project.clone(),
-                account_id: account_id.clone(),
                 original_index: *original_index,
                 depth,
                 is_last_sibling,
@@ -165,18 +160,13 @@ impl SidebarComponent {
     fn get_folder_at_position(&self, index: usize) -> Option<String> {
         if let Some(item) = self.items.get(index) {
             if item.is_foldable() {
-                match item {
-                    SidebarItemType::AccountFolder { account_id, .. } => {
-                        return Some(account_id.clone());
+                if let SidebarItemType::Project {
+                    project, has_children, ..
+                } = item
+                {
+                    if *has_children {
+                        return Some(project.uuid.to_string());
                     }
-                    SidebarItemType::Project {
-                        project, has_children, ..
-                    } => {
-                        if *has_children {
-                            return Some(project.uuid.to_string());
-                        }
-                    }
-                    _ => {}
                 }
             }
         }

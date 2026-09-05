@@ -6,8 +6,8 @@
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-pub mod factory;
-pub mod todoist;
+pub(crate) mod factory;
+pub(crate) mod todoist;
 
 /// Common error types for backend operations.
 #[derive(Debug, thiserror::Error)]

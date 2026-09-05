@@ -1,12 +1,11 @@
 use crossterm::event::{poll, Event, KeyEvent, MouseEvent};
-use tokio::time::{interval, Duration, Instant};
+use tokio::time::{interval, Duration};
 
 pub struct EventHandler {
     #[allow(dead_code)]
     tick_interval: tokio::time::Interval,
     #[allow(dead_code)]
     render_interval: tokio::time::Interval,
-    last_render_time: Instant,
 }
 
 impl EventHandler {
@@ -14,7 +13,6 @@ impl EventHandler {
         Self {
             tick_interval: interval(Duration::from_millis(100)), // 10 Hz for application ticks
             render_interval: interval(Duration::from_millis(16)), // ~60 FPS render rate
-            last_render_time: Instant::now(),
         }
     }
 
@@ -36,16 +34,6 @@ impl EventHandler {
         // If no immediate event, wait a bit and return tick
         tokio::time::sleep(Duration::from_millis(100)).await;
         Ok(EventType::Tick)
-    }
-
-    /// Get the time since last render for frame timing
-    pub fn time_since_last_render(&self) -> Duration {
-        self.last_render_time.elapsed()
-    }
-
-    /// Check if we should render based on timing
-    pub fn should_render(&self) -> bool {
-        self.time_since_last_render() >= Duration::from_millis(16) // Cap at ~60 FPS
     }
 }
 

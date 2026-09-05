@@ -23,18 +23,6 @@ impl TaskRepository {
             .ok_or_else(|| anyhow::anyhow!("Task not found: {}", uuid))
     }
 
-    /// Get all tasks ordered by deletion status, completion status, and order index.
-    pub async fn get_all<C>(conn: &C) -> Result<Vec<task::Model>>
-    where
-        C: ConnectionTrait,
-    {
-        Ok(task::Entity::find()
-            .order_by_asc(task::Column::IsDeleted)
-            .order_by_asc(task::Column::OrderIndex)
-            .all(conn)
-            .await?)
-    }
-
     /// Get a single task by UUID.
     pub async fn get_by_id<C>(conn: &C, uuid: &Uuid) -> Result<Option<task::Model>>
     where

@@ -17,7 +17,7 @@
 //! * [`utils`] - Utility functions and helpers
 
 /// Backend abstraction layer for multi-backend support
-pub mod backend;
+pub(crate) mod backend;
 
 /// Backend registry for managing multiple backend instances
 pub mod backend_registry;
@@ -38,7 +38,7 @@ pub mod icons;
 pub mod logger;
 
 /// Repository layer for database operations
-pub mod repositories;
+pub(crate) mod repositories;
 
 /// Local storage layer for caching Todoist data
 pub mod storage;
@@ -50,13 +50,10 @@ pub mod sync;
 pub mod theme;
 
 /// Todoist API client and data models
-pub mod todoist;
+pub(crate) mod todoist;
 
 /// Terminal user interface components and rendering
 pub mod ui;
 
 /// Utility functions for date/time handling and other helpers
 pub mod utils;
-
-// Re-export entity models for convenient access
-pub use entities::{label, project, section, task, task_label};

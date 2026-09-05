@@ -6,6 +6,3 @@ mod components;
 
 #[path = "ui/core.rs"]
 mod core;
-
-#[path = "ui/layout.rs"]
-mod layout;

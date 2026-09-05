@@ -11,11 +11,11 @@
 //! - CRUD operations for tasks, projects, and labels
 //! - Business logic for special views (Today, Tomorrow, Upcoming)
 
-pub mod labels;
-pub mod projects;
-pub mod sections;
+pub(crate) mod labels;
+pub(crate) mod projects;
+pub(crate) mod sections;
 pub mod storage;
-pub mod tasks;
+pub(crate) mod tasks;
 
 use anyhow::Result;
 use log::{error, info};

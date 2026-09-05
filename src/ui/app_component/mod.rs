@@ -1,6 +1,6 @@
 pub mod actions;
-pub mod keys;
-pub mod state;
+pub(crate) mod keys;
+pub(crate) mod state;
 
 use crate::config::Config;
 use crate::constants::*;

@@ -539,7 +539,7 @@ mod tests {
         }
 
         storage.lock().await.conn.clone().close().await.unwrap();
-        std::fs::remove_file(db_path).unwrap();
+        let _ = std::fs::remove_file(db_path);
     }
 
     #[tokio::test]
@@ -588,6 +588,6 @@ mod tests {
         }
 
         storage.lock().await.conn.clone().close().await.unwrap();
-        std::fs::remove_file(db_path).unwrap();
+        let _ = std::fs::remove_file(db_path);
     }
 }
