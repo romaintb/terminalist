@@ -258,7 +258,7 @@ impl DialogComponent {
             }
             Some(DialogType::DeleteConfirmation { item_type, item_uuid }) => match item_type.as_str() {
                 "task" => {
-                    let action = Action::DeleteTask(item_uuid.to_string());
+                    let action = Action::DeleteTask(*item_uuid);
                     self.clear_dialog();
                     action
                 }

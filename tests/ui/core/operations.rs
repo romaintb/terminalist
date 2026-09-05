@@ -1,37 +1,37 @@
-//! The encoding that carries an optional owner uuid next to free-form user text.
-//! User text is the untrusted half here, so the separator has to survive inside it.
+//! The one piece of real logic in the operations module: turning a due-date shorthand
+//! into a date. The rest of an Operation is data the type system carries for us.
 
-use terminalist::ui::core::operations::{pack_owned, unpack_owned};
-use uuid::Uuid;
+use chrono::{Datelike, NaiveDate, Weekday};
+use terminalist::ui::core::operations::Due;
+use terminalist::utils::datetime;
 
-/// A pipe in the user's text used to eat the uuid and break creation outright.
-#[test]
-fn text_keeps_its_separators() {
-    let owner = Uuid::new_v4();
-    for text in [
-        "review PR | urgent",
-        "|leading",
-        "trailing|",
-        "a|b|c|d",
-        "|||",
-        "",
-        "plain text",
-        "name: with a colon",
-    ] {
-        let owned = pack_owned(Some(owner), text);
-        let (got_owner, got_text) = unpack_owned(&owned).unwrap();
-        assert_eq!(got_owner, Some(owner), "owner lost for {text:?}");
-        assert_eq!(got_text, text, "text mangled for {text:?}");
-
-        let ownerless = pack_owned(None, text);
-        let (no_owner, got_text) = unpack_owned(&ownerless).unwrap();
-        assert_eq!(no_owner, None, "phantom owner for {text:?}");
-        assert_eq!(got_text, text, "text mangled for {text:?}");
-    }
+fn parse(due: Due) -> NaiveDate {
+    NaiveDate::parse_from_str(&due.date(), "%Y-%m-%d").unwrap_or_else(|e| panic!("{due:?} gave {:?}: {e}", due.date()))
 }
 
-/// A garbled uuid has to surface as an error, not as a silently ownerless item.
 #[test]
-fn a_bad_owner_uuid_is_an_error() {
-    assert!(unpack_owned("not-a-uuid|some text").is_err());
+fn today_and_tomorrow_match_the_shared_date_helpers() {
+    assert_eq!(Due::Today.date(), datetime::format_today());
+    assert_eq!(Due::Tomorrow.date(), datetime::format_date_with_offset(1));
+    assert_eq!(parse(Due::Tomorrow), parse(Due::Today).succ_opt().unwrap());
+}
+
+/// Next week means Monday and the weekend means Saturday. A swap between the two would
+/// otherwise be invisible: both are plausible dates a few days out.
+#[test]
+fn next_week_lands_on_monday_and_the_weekend_on_saturday() {
+    assert_eq!(parse(Due::NextWeek).weekday(), Weekday::Mon);
+    assert_eq!(parse(Due::Weekend).weekday(), Weekday::Sat);
+    assert!(parse(Due::NextWeek) >= parse(Due::Today));
+    assert!(parse(Due::Weekend) >= parse(Due::Today));
+}
+
+/// Four shorthands, four distinct confirmation messages.
+#[test]
+fn every_due_shorthand_has_its_own_message() {
+    let messages = [Due::Today, Due::Tomorrow, Due::NextWeek, Due::Weekend].map(Due::success);
+    let mut unique = messages.to_vec();
+    unique.sort_unstable();
+    unique.dedup();
+    assert_eq!(unique.len(), messages.len(), "duplicate message in {messages:?}");
 }

@@ -20,9 +20,9 @@ pub enum Action {
     PreviousTask,
 
     // Task operations
-    CompleteTask(String),
-    DeleteTask(String),
-    CyclePriority(String),
+    CompleteTask(Uuid),
+    DeleteTask(Uuid),
+    CyclePriority(Uuid),
     SetTaskDueToday(Uuid),
     SetTaskDueTomorrow(Uuid),
     SetTaskDueNextWeek(Uuid),
@@ -35,7 +35,7 @@ pub enum Action {
         task_uuid: Uuid,
         content: String,
     },
-    RestoreTask(String),
+    RestoreTask(Uuid),
 
     // Project operations
     CreateProject {
