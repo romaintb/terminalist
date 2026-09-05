@@ -45,13 +45,6 @@ pub const ERROR_LABEL_UPDATE_FAILED: &str = "❌ Failed to update label";
 pub const ERROR_TASK_RESTORE_FAILED: &str = "❌ Failed to restore task";
 
 // Validation Error Messages
-pub const ERROR_INVALID_PRIORITY_FORMAT: &str = "❌ Invalid priority value format";
-pub const ERROR_INVALID_PRIORITY_INFO: &str = "❌ Invalid task priority info format";
-pub const ERROR_INVALID_DATE_FORMAT: &str = "❌ Invalid task info format for setting due date";
-pub const ERROR_INVALID_TASK_EDIT_FORMAT: &str = "❌ Invalid task edit format";
-pub const ERROR_INVALID_PROJECT_EDIT_FORMAT: &str = "❌ Invalid project edit format";
-pub const ERROR_INVALID_LABEL_EDIT_FORMAT: &str = "❌ Invalid label edit format";
-pub const ERROR_UNKNOWN_OPERATION: &str = "❌ Unknown operation";
 
 // Log Messages
 
