@@ -26,7 +26,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 
 #### Core Functionality
 - **Interactive TUI Interface**: Modern terminal UI using ratatui framework
-- **Local Data Caching**: In-memory SQLite storage for instant access
+- **Local Data Caching**: On-disk SQLite cache for instant access
 - **Smart Sync**: Automatic sync on startup with manual refresh capability
 - **Project Management**: Hierarchical project browsing and management
 - **Task Management**: Full CRUD operations for tasks
@@ -50,7 +50,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 #### Technical Architecture
 - **Rust Implementation**: Native performance with memory safety
 - **Async Runtime**: Tokio-based async operations
-- **Database**: SQLite with in-memory storage
+- **Database**: SQLite file in the XDG data directory, used as a disposable cache
 - **API Integration**: todoist-api crate for all external communication
 - **Modular Design**: Clean separation of concerns
 
@@ -67,7 +67,6 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - Limited keyboard shortcuts compared to vim/emacs
 - No undo functionality
 - No themes or customization options
-- No persistent local storage (data lost on restart)
 
 #### Data Management
 - No conflict resolution for concurrent edits
@@ -442,7 +441,7 @@ src/
 ├── lib.rs                     # Library exports
 ├── todoist.rs                 # API models & display structs
 ├── sync.rs                    # Sync service with API integration
-├── storage.rs                 # SQLite storage (in-memory)
+├── storage.rs                 # SQLite storage (on-disk cache)
 ├── icons.rs                   # Icon service for terminal compatibility
 ├── logger.rs                  # Debug logging system
 ├── utils/                     # Utility modules
