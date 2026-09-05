@@ -52,7 +52,6 @@ pub const ERROR_TASK_RESTORE_FAILED: &str = "❌ Failed to restore task";
 pub const CONFIG_GENERATED: &str = "✅ Generated default configuration file";
 pub const UI_NO_TASK_SELECTED_DUE_DATE: &str = "No task selected to set due date";
 pub const UI_LOADING_DATA: &str = "Loading data";
-pub const UI_LOADING_DATA_FROM_STORAGE: &str = "Loading data from storage";
 
 /// How long a success toast lingers before it fades on its own.
 pub const TOAST_TTL_SECS: u64 = 3;
