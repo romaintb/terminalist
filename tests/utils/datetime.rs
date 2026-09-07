@@ -49,6 +49,15 @@ fn test_format_human_date_yesterday() {
 }
 
 #[test]
+fn test_format_human_date_within_week_shows_full_weekday_name() {
+    let date = chrono::Local::now().date_naive() + chrono::Duration::days(3);
+    let expected = format!("next {}", date.format("%A"));
+    assert_eq!(format_human_date(&format_ymd(date)), expected);
+    // Guard against abbreviated names sneaking back in ("next Sat" instead of "next Saturday")
+    assert!(expected.len() > "next Sat".len());
+}
+
+#[test]
 fn test_format_human_datetime_iso_format() {
     // Test the specific format from the user's example
     let datetime_str = "2025-09-16T09:00:00";

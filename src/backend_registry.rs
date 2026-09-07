@@ -81,20 +81,13 @@ impl BackendRegistry {
     /// * `backend_type` - Backend type (e.g., "todoist")
     /// * `name` - Human-readable name
     /// * `credentials` - JSON-encoded credentials
-    /// * `settings` - JSON-encoded settings
     ///
     /// # Returns
     /// UUID of the created backend
     ///
     /// # Errors
     /// Returns error if backend creation fails or database insert fails
-    pub async fn add_backend(
-        &self,
-        backend_type: String,
-        name: String,
-        credentials: String,
-        settings: String,
-    ) -> Result<Uuid> {
+    pub async fn add_backend(&self, backend_type: String, name: String, credentials: String) -> Result<Uuid> {
         // Validate by creating instance first
         let backend_instance = factory::create_backend(&backend_type, &credentials)?;
 
@@ -104,9 +97,7 @@ impl BackendRegistry {
             uuid: ActiveValue::Set(uuid),
             backend_type: ActiveValue::Set(backend_type.clone()),
             name: ActiveValue::Set(name.clone()),
-            is_enabled: ActiveValue::Set(true),
             credentials: ActiveValue::Set(credentials),
-            settings: ActiveValue::Set(settings),
         };
 
         let storage = self.storage.lock().await;
@@ -126,17 +117,10 @@ impl BackendRegistry {
     /// * `uuid` - Backend UUID
     /// * `name` - Optional new name
     /// * `credentials` - Optional new credentials
-    /// * `settings` - Optional new settings
     ///
     /// # Errors
     /// Returns error if backend not found or update fails
-    pub async fn update_backend(
-        &self,
-        uuid: &Uuid,
-        name: Option<String>,
-        credentials: Option<String>,
-        settings: Option<String>,
-    ) -> Result<()> {
+    pub async fn update_backend(&self, uuid: &Uuid, name: Option<String>, credentials: Option<String>) -> Result<()> {
         let storage = self.storage.lock().await;
 
         let backend_model = BackendRepository::get_by_uuid(&storage.conn, uuid)
@@ -158,10 +142,6 @@ impl BackendRegistry {
             // Update in-memory cache
             let mut backends = self.backends.lock().await;
             backends.insert(*uuid, Arc::new(backend_instance));
-        }
-
-        if let Some(settings) = settings {
-            active_model.settings = ActiveValue::Set(settings);
         }
 
         BackendRepository::update(&storage.conn, active_model).await?;

@@ -10,9 +10,7 @@ pub struct Model {
     pub uuid: Uuid,
     pub backend_type: String,
     pub name: String,
-    pub is_enabled: bool,
     pub credentials: String, // JSON-encoded credentials (to be encrypted in future)
-    pub settings: String,    // JSON-encoded backend-specific settings
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
