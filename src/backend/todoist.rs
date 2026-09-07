@@ -4,8 +4,8 @@ use super::{
     Backend, BackendError, BackendLabel, BackendProject, BackendSection, BackendTask, CreateLabelArgs,
     CreateProjectArgs, CreateTaskArgs, UpdateLabelArgs, UpdateProjectArgs, UpdateTaskArgs,
 };
-use crate::todoist::{TodoistError, TodoistWrapper};
 use async_trait::async_trait;
+use todoist_api::{TodoistError, TodoistWrapper};
 
 fn map_err(e: TodoistError) -> BackendError {
     match e {
@@ -38,7 +38,7 @@ impl TodoistBackend {
     }
 
     // Helper: Transform Todoist API project → Backend project
-    fn project_to_backend(api_project: &crate::todoist::Project) -> BackendProject {
+    fn project_to_backend(api_project: &todoist_api::Project) -> BackendProject {
         BackendProject {
             remote_id: api_project.id.clone(),
             name: api_project.name.clone(),
@@ -50,7 +50,7 @@ impl TodoistBackend {
     }
 
     // Helper: Transform Todoist API task → Backend task
-    fn task_to_backend(api_task: &crate::todoist::Task) -> BackendTask {
+    fn task_to_backend(api_task: &todoist_api::Task) -> BackendTask {
         BackendTask {
             remote_id: api_task.id.clone(),
             content: api_task.content.clone(),
@@ -71,7 +71,7 @@ impl TodoistBackend {
     }
 
     // Helper: Transform Todoist API label → Backend label
-    fn label_to_backend(api_label: &crate::todoist::Label) -> BackendLabel {
+    fn label_to_backend(api_label: &todoist_api::Label) -> BackendLabel {
         BackendLabel {
             remote_id: api_label.id.clone(),
             name: api_label.name.clone(),
@@ -81,7 +81,7 @@ impl TodoistBackend {
     }
 
     // Helper: Transform Todoist API section → Backend section
-    fn section_to_backend(api_section: &crate::todoist::Section) -> BackendSection {
+    fn section_to_backend(api_section: &todoist_api::Section) -> BackendSection {
         BackendSection {
             remote_id: api_section.id.clone(),
             name: api_section.name.clone(),
@@ -174,7 +174,7 @@ impl Backend for TodoistBackend {
     }
 
     async fn create_project(&self, args: CreateProjectArgs) -> Result<BackendProject, BackendError> {
-        let todoist_args = crate::todoist::CreateProjectArgs {
+        let todoist_args = todoist_api::CreateProjectArgs {
             name: args.name,
             color: None,
             is_favorite: args.is_favorite,
@@ -187,7 +187,7 @@ impl Backend for TodoistBackend {
     }
 
     async fn update_project(&self, remote_id: &str, args: UpdateProjectArgs) -> Result<BackendProject, BackendError> {
-        let todoist_args = crate::todoist::UpdateProjectArgs {
+        let todoist_args = todoist_api::UpdateProjectArgs {
             name: args.name,
             color: None,
             is_favorite: args.is_favorite,
@@ -203,7 +203,7 @@ impl Backend for TodoistBackend {
     }
 
     async fn create_task(&self, args: CreateTaskArgs) -> Result<BackendTask, BackendError> {
-        let todoist_args = crate::todoist::CreateTaskArgs {
+        let todoist_args = todoist_api::CreateTaskArgs {
             content: args.content,
             description: args.description,
             project_id: Some(args.project_remote_id),
@@ -230,7 +230,7 @@ impl Backend for TodoistBackend {
     }
 
     async fn update_task(&self, remote_id: &str, args: UpdateTaskArgs) -> Result<BackendTask, BackendError> {
-        let todoist_args = crate::todoist::UpdateTaskArgs {
+        let todoist_args = todoist_api::UpdateTaskArgs {
             content: args.content,
             description: args.description,
             priority: args.priority,
@@ -266,7 +266,7 @@ impl Backend for TodoistBackend {
     }
 
     async fn create_label(&self, args: CreateLabelArgs) -> Result<BackendLabel, BackendError> {
-        let todoist_args = crate::todoist::CreateLabelArgs {
+        let todoist_args = todoist_api::CreateLabelArgs {
             name: args.name,
             color: None,
             is_favorite: args.is_favorite,
@@ -278,7 +278,7 @@ impl Backend for TodoistBackend {
     }
 
     async fn update_label(&self, remote_id: &str, args: UpdateLabelArgs) -> Result<BackendLabel, BackendError> {
-        let todoist_args = crate::todoist::UpdateLabelArgs {
+        let todoist_args = todoist_api::UpdateLabelArgs {
             name: args.name,
             color: None,
             is_favorite: args.is_favorite,

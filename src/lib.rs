@@ -12,7 +12,6 @@
 //! * [`config`] - Application configuration management
 //! * [`storage`] - Local database and data persistence
 //! * [`sync`] - Synchronization with Todoist API
-//! * [`todoist`] - Todoist API client and data structures
 //! * [`ui`] - Terminal user interface components
 //! * [`utils`] - Utility functions and helpers
 
@@ -48,9 +47,6 @@ pub mod sync;
 
 /// Theme configuration (semantic color palette) for the TUI
 pub mod theme;
-
-/// Todoist API client and data models
-pub(crate) mod todoist;
 
 /// Terminal user interface components and rendering
 pub mod ui;

@@ -11,7 +11,7 @@ use crate::entities::{backend, label, project, section, task, task_label};
 ///
 /// The database is a disposable cache, not a source of truth, so a mismatch drops every
 /// table and rebuilds from scratch instead of running a migration.
-const SCHEMA_VERSION: i32 = 1;
+const SCHEMA_VERSION: i32 = 2;
 
 /// Local storage manager for Todoist data
 pub struct LocalStorage {

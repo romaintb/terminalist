@@ -507,9 +507,7 @@ mod tests {
             uuid: Set(backend_uuid),
             backend_type: Set("test".to_string()),
             name: Set("Test".to_string()),
-            is_enabled: Set(true),
             credentials: Set("{}".to_string()),
-            settings: Set("{}".to_string()),
         })
         .exec(&storage.conn)
         .await

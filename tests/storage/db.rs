@@ -18,8 +18,8 @@ async fn test_local_storage_creation() {
         .execute(Statement::from_string(
             DbBackend::Sqlite,
             "INSERT INTO backends \
-             (uuid, backend_type, name, is_enabled, credentials, settings) \
-             VALUES ('00000000-0000-0000-0000-000000000001', 'test', 'Test', 1, '{}', '{}')"
+             (uuid, backend_type, name, credentials) \
+             VALUES ('00000000-0000-0000-0000-000000000001', 'test', 'Test', '{}')"
                 .to_owned(),
         ))
         .await
@@ -44,8 +44,8 @@ async fn test_stale_schema_version_rebuilds_cache() {
         .execute(Statement::from_string(
             DbBackend::Sqlite,
             "INSERT INTO backends \
-             (uuid, backend_type, name, is_enabled, credentials, settings) \
-             VALUES ('00000000-0000-0000-0000-000000000002', 'test', 'Test', 1, '{}', '{}')"
+             (uuid, backend_type, name, credentials) \
+             VALUES ('00000000-0000-0000-0000-000000000002', 'test', 'Test', '{}')"
                 .to_owned(),
         ))
         .await

@@ -79,13 +79,11 @@ pub fn format_human_date(date_str: &str) -> String {
         1 => "tomorrow".to_string(),
         diff if diff > 1 && diff <= 7 => {
             // Within the next week - show day name
-            let weekday = input_date.weekday();
-            format!("next {}", weekday_name(weekday))
+            format!("next {}", input_date.format("%A"))
         }
         diff if (-7..-1).contains(&diff) => {
             // Within the past week - show day name
-            let weekday = input_date.weekday();
-            format!("last {}", weekday_name(weekday))
+            format!("last {}", input_date.format("%A"))
         }
         diff if diff > 7 && diff <= 30 => {
             // Within the next month - show "in X days"
@@ -157,18 +155,5 @@ pub fn format_human_datetime(datetime_str: &str) -> String {
     } else {
         // Fallback to date-only parsing
         format_human_date(datetime_str)
-    }
-}
-
-/// Get a human-readable weekday name
-fn weekday_name(weekday: Weekday) -> &'static str {
-    match weekday {
-        Weekday::Mon => "Monday",
-        Weekday::Tue => "Tuesday",
-        Weekday::Wed => "Wednesday",
-        Weekday::Thu => "Thursday",
-        Weekday::Fri => "Friday",
-        Weekday::Sat => "Saturday",
-        Weekday::Sun => "Sunday",
     }
 }

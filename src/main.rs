@@ -123,18 +123,11 @@ async fn main() -> Result<()> {
         .find(|backend| backend.backend_type == "todoist");
 
     let backend_uuid = if let Some(backend) = existing_todoist {
-        backend_registry
-            .update_backend(&backend.uuid, None, Some(credentials), None)
-            .await?;
+        backend_registry.update_backend(&backend.uuid, None, Some(credentials)).await?;
         backend.uuid
     } else {
         backend_registry
-            .add_backend(
-                "todoist".to_string(),
-                "My Todoist".to_string(),
-                credentials,
-                "{}".to_string(),
-            )
+            .add_backend("todoist".to_string(), "My Todoist".to_string(), credentials)
             .await?
     };
 

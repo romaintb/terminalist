@@ -1,48 +1,38 @@
 use crate::constants::MEMORY_LOGS_LIMIT;
 use chrono::Utc;
-use log::Record;
+use log::{Log, Metadata, Record};
 use std::collections::VecDeque;
-use std::fs::OpenOptions;
-use std::io;
+use std::fs::{File, OpenOptions};
+use std::io::{self, Write};
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::{LazyLock, Mutex};
 
 /// Global in-memory log storage for UI display
-static MEMORY_LOGS: once_cell::sync::Lazy<Arc<Mutex<VecDeque<String>>>> =
-    once_cell::sync::Lazy::new(|| Arc::new(Mutex::new(VecDeque::with_capacity(5000))));
+static MEMORY_LOGS: LazyLock<Mutex<VecDeque<String>>> =
+    LazyLock::new(|| Mutex::new(VecDeque::with_capacity(MEMORY_LOGS_LIMIT)));
 
-/// Initialize the fern logger with file and memory outputs
+static LOGGER: TerminalistLogger = TerminalistLogger { file: Mutex::new(None) };
+
+/// Logger writing to memory (for the UI) and, when enabled, to a file.
+struct TerminalistLogger {
+    file: Mutex<Option<File>>,
+}
+
+/// Initialize the logger, optionally also writing to the log file.
 pub fn init_logger(enabled: bool) -> io::Result<()> {
-    if !enabled {
-        // Set up a logger that only writes to memory
-        // Use Trace level so MemoryLogger receives all logs
-        fern::Dispatch::new()
-            .level(log::LevelFilter::Info)
-            .chain(Box::new(MemoryLogger) as Box<dyn log::Log>)
-            .apply()
-            .map_err(io::Error::other)?;
-        return Ok(());
+    if enabled {
+        let log_file_path = get_log_file_path()?;
+
+        if let Some(parent) = log_file_path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
+        let log_file = OpenOptions::new().create(true).append(true).open(&log_file_path)?;
+        *LOGGER.file.lock().map_err(|_| io::Error::other("logger lock poisoned"))? = Some(log_file);
     }
 
-    let log_file_path = get_log_file_path()?;
-
-    // Ensure the config directory exists
-    if let Some(parent) = log_file_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-
-    // Open log file in append mode
-    let log_file = OpenOptions::new().create(true).append(true).open(&log_file_path)?;
-
-    // Configure fern logger
-    fern::Dispatch::new()
-        .format(|out, message, _record| out.finish(format_args!("[{}] {}", Utc::now().format("%H:%M:%S%.3f"), message)))
-        .level(log::LevelFilter::Info)
-        .chain(log_file)
-        .chain(Box::new(MemoryLogger) as Box<dyn log::Log>)
-        .apply()
-        .map_err(io::Error::other)?;
-
+    log::set_logger(&LOGGER).map_err(|e| io::Error::other(e.to_string()))?;
+    log::set_max_level(log::LevelFilter::Info);
     Ok(())
 }
 
@@ -63,27 +53,34 @@ pub fn get_memory_logs() -> Vec<String> {
     }
 }
 
-/// Custom logger that stores logs in memory for UI display
-struct MemoryLogger;
-
-impl log::Log for MemoryLogger {
-    fn enabled(&self, _metadata: &log::Metadata) -> bool {
+impl Log for TerminalistLogger {
+    fn enabled(&self, _metadata: &Metadata) -> bool {
         true
     }
 
     fn log(&self, record: &Record) {
-        if self.enabled(record.metadata()) {
-            let formatted = format!("{}", record.args());
+        let message = format!("{}", record.args());
 
-            if let Ok(mut logs) = MEMORY_LOGS.lock() {
-                logs.push_back(formatted);
-                // Keep only last 5000 entries
-                while logs.len() > MEMORY_LOGS_LIMIT {
-                    logs.pop_front();
-                }
+        if let Ok(mut logs) = MEMORY_LOGS.lock() {
+            logs.push_back(message.clone());
+            // Keep only the last MEMORY_LOGS_LIMIT entries
+            while logs.len() > MEMORY_LOGS_LIMIT {
+                logs.pop_front();
+            }
+        }
+
+        if let Ok(mut file) = self.file.lock() {
+            if let Some(file) = file.as_mut() {
+                let _ = writeln!(file, "[{}] {}", Utc::now().format("%H:%M:%S%.3f"), message);
             }
         }
     }
 
-    fn flush(&self) {}
+    fn flush(&self) {
+        if let Ok(mut file) = self.file.lock() {
+            if let Some(file) = file.as_mut() {
+                let _ = file.flush();
+            }
+        }
+    }
 }
