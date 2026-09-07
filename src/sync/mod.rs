@@ -81,8 +81,6 @@ pub struct SyncService {
 /// allowing for proper status indicators and error handling.
 #[derive(Debug, Clone)]
 pub enum SyncStatus {
-    /// Sync service is not currently performing any operations
-    Idle,
     /// A sync operation is currently in progress
     InProgress,
     /// The last sync operation completed successfully
@@ -150,17 +148,6 @@ impl SyncService {
     /// This is used to enable debug-only features like local data refresh.
     pub fn is_debug_mode(&self) -> bool {
         self.debug_mode
-    }
-
-    /// Checks if a synchronization operation is currently in progress.
-    ///
-    /// This method is useful for UI components to show loading indicators
-    /// and prevent concurrent sync operations.
-    ///
-    /// # Returns
-    /// `true` if sync is in progress, `false` otherwise
-    pub async fn is_syncing(&self) -> bool {
-        *self.sync_in_progress.lock().await
     }
 
     /// Performs a full synchronization with the remote backend.

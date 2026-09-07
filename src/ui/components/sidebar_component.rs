@@ -5,7 +5,6 @@
 //! It handles keyboard and mouse navigation with proper visual feedback.
 
 use crate::entities::{label, project};
-use crate::icons::IconService;
 use crate::theme::Theme;
 use crate::ui::components::scrollbar_helper::ScrollbarHelper;
 use crate::ui::components::sidebar_item_component::{SidebarItem, SidebarItemType};
@@ -38,7 +37,6 @@ pub struct SidebarComponent {
     pub selection: SidebarSelection,
     pub projects: Vec<project::Model>,
     pub labels: Vec<label::Model>,
-    pub icons: IconService,
     items: Vec<SidebarItemType>,
     folder_states: HashMap<String, bool>,
     list_state: ListState,
@@ -61,7 +59,6 @@ impl SidebarComponent {
             selection: SidebarSelection::Today,
             projects: Vec::new(),
             labels: Vec::new(),
-            icons: IconService::default(),
             items: Vec::new(),
             folder_states: HashMap::new(),
             list_state,
@@ -461,7 +458,7 @@ impl Component for SidebarComponent {
         let all_items: Vec<ListItem> = self
             .items
             .iter()
-            .map(|item| item.render(&self.icons, &self.selection, false, &self.theme))
+            .map(|item| item.render(&self.selection, false, &self.theme))
             .collect();
 
         // Calculate areas for list and scrollbar using helper

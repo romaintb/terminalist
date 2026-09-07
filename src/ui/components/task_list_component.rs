@@ -7,7 +7,6 @@
 use crate::config::DisplayConfig;
 use crate::constants::{HEADER_OVERDUE, HEADER_TODAY, HEADER_TOMORROW};
 use crate::entities::{label, project, section, task};
-use crate::icons::IconService;
 use crate::theme::Theme;
 use crate::ui::components::scrollbar_helper::ScrollbarHelper;
 use crate::ui::components::task_list_item_component::{ListItem, TaskItem, TaskListItemType};
@@ -46,7 +45,6 @@ pub struct TaskListComponent {
     pub sections: Vec<section::Model>,
     pub projects: Vec<project::Model>,
     pub labels: Vec<label::Model>,
-    pub icons: IconService,
     // Keep raw task data for building items
     pub tasks: Vec<task::Model>,
     pub display_config: DisplayConfig,
@@ -71,7 +69,6 @@ impl TaskListComponent {
             sections: Vec::new(),
             projects: Vec::new(),
             labels: Vec::new(),
-            icons: IconService::default(),
             display_config: DisplayConfig::default(),
             scrollbar_helper: ScrollbarHelper::new(),
             theme: Theme::default(),
@@ -344,19 +341,16 @@ impl TaskListComponent {
         // Calculate child count
         let child_count = self.get_child_task_count(&task.uuid);
 
-        // TODO: Load task-label relationships from database to populate labels
-        // For now, we pass an empty vec - labels need to be loaded via task_labels join
-        let task_labels = Vec::new();
+        // Resolve the task's project name once, at build time
+        let project_name = self
+            .projects
+            .iter()
+            .find(|p| p.uuid == task.project_uuid)
+            .map(|p| p.name.clone());
 
         // Create and add the task item
-        let task_item = TaskItem::new(
-            task.clone(),
-            depth,
-            child_count,
-            self.icons.clone(),
-            self.projects.clone(),
-            task_labels,
-        );
+        // TODO: Load task-label relationships from database
+        let task_item = TaskItem::new(task.clone(), depth, child_count, project_name, Vec::new());
         self.items.push(TaskListItemType::Task(Box::new(task_item)));
 
         // Find and add children
@@ -612,22 +606,7 @@ impl Component for TaskListComponent {
         }
     }
 
-    fn update(&mut self, action: Action) -> Action {
-        match action {
-            Action::NextTask => {
-                self.next_task();
-                Action::None
-            }
-            Action::PreviousTask => {
-                self.previous_task();
-                Action::None
-            }
-            _ => action,
-        }
-    }
-
     fn render(&mut self, f: &mut Frame, rect: Rect) {
-        // Calculate areas for list and scrollbar using helper
         let total_items = self.items.len();
 
         // Calculate areas for list and scrollbar using helper

@@ -56,7 +56,7 @@ impl AppComponent {
                         self.toast = Some(Toast::error(&message, &self.config.theme));
                         Action::None
                     }
-                    SyncStatus::Idle | SyncStatus::InProgress => Action::None,
+                    SyncStatus::InProgress => Action::None,
                 }
             }
             Action::SyncFailed(error) => {
@@ -268,14 +268,6 @@ impl AppComponent {
                 // Update dialog with search results
                 self.dialog.update_search_results(&query, results);
                 Action::None
-            }
-            Action::NextTask => {
-                info!("Navigation: Next task (j/down)");
-                action
-            }
-            Action::PreviousTask => {
-                info!("Navigation: Previous task (k/up)");
-                action
             }
             Action::RefreshData => {
                 info!("Data: Refreshing UI data after task operation");

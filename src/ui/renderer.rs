@@ -2,7 +2,8 @@ use crate::config::Config;
 use crate::sync::SyncService;
 use crate::theme::ThemeWarning;
 use crate::ui::app_component::AppComponent;
-use crate::ui::core::{Component, EventHandler, EventType};
+use crate::ui::core::event_handler::next_event;
+use crate::ui::core::{Component, EventType};
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
@@ -13,7 +14,6 @@ use ratatui::{
     Terminal,
 };
 use std::io;
-use tokio::time::{interval, Duration};
 
 /// Enhanced async event loop with proper background task support
 pub async fn run_app(
@@ -39,22 +39,11 @@ pub async fn run_app(
 
     // Initialize application components
     let mut app = AppComponent::new(sync_service, config.clone(), theme_warnings);
-    let mut event_handler = EventHandler::new();
 
     // Start initial sync automatically
     app.trigger_initial_sync();
 
-    // Create intervals for periodic tasks
-    let mut cleanup_interval = interval(Duration::from_secs(5)); // Clean up finished tasks every 5 seconds
-    let mut render_interval = interval(Duration::from_millis(16)); // ~60 FPS rendering
-    let result = run_app_loop(
-        &mut terminal,
-        &mut app,
-        &mut event_handler,
-        &mut cleanup_interval,
-        &mut render_interval,
-    )
-    .await;
+    let result = run_app_loop(&mut terminal, &mut app).await;
 
     // Restore terminal
     disable_raw_mode()?;
@@ -70,13 +59,7 @@ pub async fn run_app(
     result
 }
 
-async fn run_app_loop<B: Backend>(
-    terminal: &mut Terminal<B>,
-    app: &mut AppComponent,
-    event_handler: &mut EventHandler,
-    _cleanup_interval: &mut tokio::time::Interval,
-    _render_interval: &mut tokio::time::Interval,
-) -> anyhow::Result<()>
+async fn run_app_loop<B: Backend>(terminal: &mut Terminal<B>, app: &mut AppComponent) -> anyhow::Result<()>
 where
     B::Error: std::error::Error + Send + Sync + 'static,
 {
@@ -90,7 +73,7 @@ where
         }
 
         // Simplified event loop to avoid deadlocks
-        let event_result = event_handler.next_event().await?;
+        let event_result = next_event().await?;
 
         match event_result {
             EventType::Key(_) | EventType::Mouse(_) | EventType::Resize(_, _) => {
@@ -119,9 +102,6 @@ where
                 if app.sweep_toast() {
                     needs_render = true;
                 }
-            }
-            EventType::Render => {
-                needs_render = true;
             }
             EventType::Other => {
                 // Handle other event types if needed

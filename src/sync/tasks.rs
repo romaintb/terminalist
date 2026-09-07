@@ -226,9 +226,6 @@ impl SyncService {
         let task_args = crate::backend::UpdateTaskArgs {
             content: Some(content.to_string()),
             description: None,
-            project_remote_id: None,
-            section_remote_id: None,
-            parent_remote_id: None,
             priority: None,
             due_date: None,
             due_datetime: None,
@@ -258,9 +255,6 @@ impl SyncService {
         let task_args = crate::backend::UpdateTaskArgs {
             content: None,
             description: None,
-            project_remote_id: None,
-            section_remote_id: None,
-            parent_remote_id: None,
             priority: None,
             due_date: due_date.map(std::string::ToString::to_string),
             due_datetime: None,
@@ -290,9 +284,6 @@ impl SyncService {
         let task_args = crate::backend::UpdateTaskArgs {
             content: None,
             description: None,
-            project_remote_id: None,
-            section_remote_id: None,
-            parent_remote_id: None,
             priority: Some(priority),
             due_date: None,
             due_datetime: None,

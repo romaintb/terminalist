@@ -1,4 +1,4 @@
-use crate::icons::IconService;
+use crate::icons::{INFO, WARNING};
 use crate::logger;
 use crate::theme::Theme;
 use crate::ui::layout::LayoutManager;
@@ -96,18 +96,12 @@ fn render_scrollable_message_dialog(
     }
 }
 
-pub fn render_delete_confirmation_dialog(
-    f: &mut Frame,
-    area: Rect,
-    icons: &IconService,
-    item_type: &str,
-    theme: &Theme,
-) {
+pub fn render_delete_confirmation_dialog(f: &mut Frame, area: Rect, item_type: &str, theme: &Theme) {
     let dialog_area = LayoutManager::centered_rect_lines(60, 8, area);
     f.render_widget(Clear, dialog_area);
 
     // Main dialog block with rounded borders and danger theme (appropriate for deletion)
-    let title = format!("{} Confirm Delete", icons.warning());
+    let title = format!("{WARNING} Confirm Delete");
     let main_block = Block::default()
         .borders(Borders::ALL)
         .border_type(BorderType::Rounded)
@@ -161,14 +155,13 @@ pub fn render_delete_confirmation_dialog(
 pub fn render_info_dialog(
     f: &mut Frame,
     area: Rect,
-    icons: &IconService,
     message: &str,
     scroll_offset: usize,
     scrollbar_state: &mut ScrollbarState,
     theme: &Theme,
 ) {
     let config = ScrollableDialogConfig {
-        title: format!("{} Info", icons.info()),
+        title: format!("{INFO} Info"),
         color: theme.info_dialog,
         width_percent: 60,
         height_lines: 10,
@@ -179,14 +172,13 @@ pub fn render_info_dialog(
 pub fn render_error_dialog(
     f: &mut Frame,
     area: Rect,
-    icons: &IconService,
     message: &str,
     scroll_offset: usize,
     scrollbar_state: &mut ScrollbarState,
     theme: &Theme,
 ) {
     let config = ScrollableDialogConfig {
-        title: format!("{} Error", icons.warning()),
+        title: format!("{WARNING} Error"),
         color: theme.danger,
         width_percent: 70,
         height_lines: 12,

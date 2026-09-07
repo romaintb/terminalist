@@ -1,11 +1,11 @@
-//! Backend registry for managing multiple backend instances.
+//! Backend registry for managing backend instances.
 //!
-//! This module provides the `BackendRegistry` which manages the lifecycle of
-//! backend instances, including loading from database, creating instances,
-//! and coordinating sync operations across multiple backends.
+//! This module provides the `BackendRegistry`, which holds the app's configured
+//! backends: it persists their configuration in the database and keeps the
+//! in-memory backend instance the sync service operates on.
 
 use anyhow::Result;
-use log::{error, info};
+use log::info;
 use sea_orm::{ActiveValue, IntoActiveModel};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -23,10 +23,8 @@ type BackendMap = HashMap<Uuid, Arc<Box<dyn Backend>>>;
 /// Registry for managing backend instances and their configurations.
 ///
 /// The `BackendRegistry` is responsible for:
-/// - Loading backend configurations from the database
 /// - Creating and caching backend instances
-/// - Managing backend lifecycle (add/remove/enable/disable)
-/// - Coordinating sync operations across multiple backends
+/// - Persisting backend configuration to the database
 pub struct BackendRegistry {
     storage: Arc<Mutex<LocalStorage>>,
     backends: Arc<Mutex<BackendMap>>,
@@ -47,43 +45,6 @@ impl BackendRegistry {
         }
     }
 
-    /// Load all backends from the database and create their instances.
-    ///
-    /// This should be called once during application initialization.
-    ///
-    /// # Errors
-    /// Returns error if database access fails or backend creation fails
-    pub async fn load_backends(&self) -> Result<()> {
-        let storage = self.storage.lock().await;
-        let backend_models = BackendRepository::get_all(&storage.conn).await?;
-
-        info!("Loading {} backend(s) from database", backend_models.len());
-
-        let mut backends = self.backends.lock().await;
-
-        for backend_model in backend_models {
-            match Self::create_backend_instance(&backend_model) {
-                Ok(backend_instance) => {
-                    info!(
-                        "✅ Loaded backend: {} ({})",
-                        backend_model.name, backend_model.backend_type
-                    );
-                    backends.insert(backend_model.uuid, Arc::new(backend_instance));
-                }
-                Err(e) => {
-                    error!(
-                        "❌ Failed to load backend {} ({}): {}",
-                        backend_model.name, backend_model.backend_type, e
-                    );
-                    // Continue loading other backends
-                }
-            }
-        }
-
-        info!("Loaded {} backend instance(s)", backends.len());
-        Ok(())
-    }
-
     /// Get a backend instance by UUID.
     ///
     /// # Arguments
@@ -102,15 +63,6 @@ impl BackendRegistry {
             .ok_or_else(|| anyhow::anyhow!("Backend not found: {}", uuid))
     }
 
-    /// Get all backend instances.
-    ///
-    /// # Returns
-    /// Vector of all backend instances
-    pub async fn get_all_backends(&self) -> Vec<Arc<Box<dyn Backend>>> {
-        let backends = self.backends.lock().await;
-        backends.values().cloned().collect()
-    }
-
     /// List all backend configurations from the database.
     ///
     /// # Returns
@@ -121,18 +73,6 @@ impl BackendRegistry {
     pub async fn list_backends(&self) -> Result<Vec<backend::Model>> {
         let storage = self.storage.lock().await;
         BackendRepository::get_all(&storage.conn).await
-    }
-
-    /// List all enabled backend configurations from the database.
-    ///
-    /// # Returns
-    /// Vector of enabled backend models
-    ///
-    /// # Errors
-    /// Returns error if database access fails
-    pub async fn list_enabled_backends(&self) -> Result<Vec<backend::Model>> {
-        let storage = self.storage.lock().await;
-        BackendRepository::get_enabled(&storage.conn).await
     }
 
     /// Add a new backend.
@@ -228,79 +168,6 @@ impl BackendRegistry {
 
         info!("✅ Updated backend: {}", uuid);
         Ok(())
-    }
-
-    /// Remove a backend.
-    ///
-    /// # Arguments
-    /// * `uuid` - Backend UUID
-    ///
-    /// # Errors
-    /// Returns error if deletion fails
-    pub async fn remove_backend(&self, uuid: &Uuid) -> Result<()> {
-        let storage = self.storage.lock().await;
-        BackendRepository::delete(&storage.conn, uuid).await?;
-
-        // Remove from in-memory cache
-        let mut backends = self.backends.lock().await;
-        backends.remove(uuid);
-
-        info!("✅ Removed backend: {}", uuid);
-        Ok(())
-    }
-
-    /// Enable a backend.
-    ///
-    /// # Arguments
-    /// * `uuid` - Backend UUID
-    ///
-    /// # Errors
-    /// Returns error if backend not found or update fails
-    pub async fn enable_backend(&self, uuid: &Uuid) -> Result<()> {
-        self.set_enabled_status(uuid, true).await
-    }
-
-    /// Disable a backend.
-    ///
-    /// # Arguments
-    /// * `uuid` - Backend UUID
-    ///
-    /// # Errors
-    /// Returns error if backend not found or update fails
-    pub async fn disable_backend(&self, uuid: &Uuid) -> Result<()> {
-        self.set_enabled_status(uuid, false).await
-    }
-
-    /// Helper to set enabled status.
-    async fn set_enabled_status(&self, uuid: &Uuid, enabled: bool) -> Result<()> {
-        let storage = self.storage.lock().await;
-
-        let backend_model = BackendRepository::get_by_uuid(&storage.conn, uuid)
-            .await?
-            .ok_or_else(|| anyhow::anyhow!("Backend not found: {}", uuid))?;
-
-        let mut active_model = backend_model.into_active_model();
-        active_model.is_enabled = ActiveValue::Set(enabled);
-
-        BackendRepository::update(&storage.conn, active_model).await?;
-
-        let status = if enabled { "enabled" } else { "disabled" };
-        info!("✅ Backend {} {}", uuid, status);
-        Ok(())
-    }
-
-    /// Create a backend instance from a backend model.
-    ///
-    /// # Arguments
-    /// * `model` - Backend model from database
-    ///
-    /// # Returns
-    /// Boxed backend instance
-    ///
-    /// # Errors
-    /// Returns error if backend creation fails
-    fn create_backend_instance(model: &backend::Model) -> Result<Box<dyn Backend>> {
-        factory::create_backend(&model.backend_type, &model.credentials)
     }
 
     /// Get the storage instance (for creating SyncService instances).

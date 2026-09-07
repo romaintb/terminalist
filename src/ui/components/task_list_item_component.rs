@@ -1,6 +1,6 @@
 use crate::config::DisplayConfig;
-use crate::entities::{project, task};
-use crate::icons::IconService;
+use crate::entities::task;
+use crate::icons::{TASK_COMPLETED, TASK_DELETED, TASK_PENDING};
 use crate::theme::Theme;
 use crate::ui::components::badge::{create_priority_badge, create_task_badges};
 use crate::utils::datetime::{format_human_date, format_human_datetime};
@@ -20,9 +20,6 @@ pub trait ListItem {
 
     /// Whether this item can be selected by the user
     fn is_selectable(&self) -> bool;
-
-    /// Indentation level for hierarchical display (0 = root level)
-    fn indent_level(&self) -> usize;
 }
 
 /// Enum representing different types of items that can appear in the task list
@@ -49,14 +46,6 @@ impl ListItem for TaskListItemType {
             Self::Separator(item) => item.is_selectable(),
         }
     }
-
-    fn indent_level(&self) -> usize {
-        match self {
-            Self::Task(item) => item.indent_level(),
-            Self::Header(item) => item.indent_level(),
-            Self::Separator(item) => item.indent_level(),
-        }
-    }
 }
 
 /// A task item component
@@ -65,8 +54,7 @@ pub struct TaskItem {
     pub task: task::Model,
     pub depth: usize,
     pub child_count: usize,
-    pub icons: IconService,
-    pub projects: Vec<project::Model>,
+    pub project_name: Option<String>,
     pub labels: Vec<crate::entities::label::Model>,
 }
 
@@ -75,16 +63,14 @@ impl TaskItem {
         task: task::Model,
         depth: usize,
         child_count: usize,
-        icons: IconService,
-        projects: Vec<project::Model>,
+        project_name: Option<String>,
         labels: Vec<crate::entities::label::Model>,
     ) -> Self {
         Self {
             task,
             depth,
             child_count,
-            icons,
-            projects,
+            project_name,
             labels,
         }
     }
@@ -104,11 +90,11 @@ impl ListItem for TaskItem {
     fn render(&self, selected: bool, display_config: &DisplayConfig, theme: &Theme) -> RatatuiListItem<'static> {
         // Choose the appropriate icon based on task state
         let status_icon = if self.task.is_deleted {
-            self.icons.task_deleted()
+            TASK_DELETED
         } else if self.task.is_completed {
-            self.icons.task_completed()
+            TASK_COMPLETED
         } else {
-            self.icons.task_pending()
+            TASK_PENDING
         };
         let mut line_spans = Vec::new();
 
@@ -171,16 +157,10 @@ impl ListItem for TaskItem {
             line_spans.push(Span::styled(progress_text, progress_style));
         }
 
-        // Project display (with optional colors)
-        if let Some(project) = self.projects.iter().find(|p| p.uuid == self.task.project_uuid) {
+        // Project tag (resolved at item build time)
+        if let Some(name) = &self.project_name {
             line_spans.push(Span::raw(" "));
-            let project_style = if display_config.show_project_colors {
-                // Use project color if available, otherwise the theme's project tag color
-                Style::default().fg(theme.project_tag)
-            } else {
-                Style::default().fg(theme.project_tag)
-            };
-            line_spans.push(Span::styled(format!("#{}", project.name), project_style));
+            line_spans.push(Span::styled(format!("#{name}"), Style::default().fg(theme.project_tag)));
         }
 
         // Due date/datetime display
@@ -201,7 +181,6 @@ impl ListItem for TaskItem {
         if display_config.show_durations || display_config.show_labels {
             let metadata_badges = create_task_badges(
                 self.task.is_recurring,
-                self.task.due_date.is_some() || self.task.deadline.is_some(),
                 if display_config.show_durations {
                     self.task.duration.as_deref()
                 } else {
@@ -217,7 +196,6 @@ impl ListItem for TaskItem {
             }
         }
 
-        // Add description excerpt if available and configured to show
         // Add description excerpt if available and configured to show
         if display_config.show_descriptions {
             if let Some(desc) = &self.task.description {
@@ -240,10 +218,6 @@ impl ListItem for TaskItem {
 
     fn is_selectable(&self) -> bool {
         true
-    }
-
-    fn indent_level(&self) -> usize {
-        self.depth
     }
 }
 
@@ -272,10 +246,6 @@ impl ListItem for HeaderItem {
     fn is_selectable(&self) -> bool {
         false
     }
-
-    fn indent_level(&self) -> usize {
-        self.indent
-    }
 }
 
 /// A separator item component
@@ -303,9 +273,5 @@ impl ListItem for SeparatorItem {
 
     fn is_selectable(&self) -> bool {
         false
-    }
-
-    fn indent_level(&self) -> usize {
-        self.indent
     }
 }

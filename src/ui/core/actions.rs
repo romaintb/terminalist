@@ -31,8 +31,6 @@ pub enum LoadKind {
 pub enum Action {
     // Navigation
     NavigateToSidebar(SidebarSelection),
-    NextTask,
-    PreviousTask,
 
     // Task operations
     CompleteTask(Uuid),
@@ -97,7 +95,6 @@ pub enum Action {
     // UI operations
     ToggleSidebar,
     ShowHelp(bool),
-    ShowDebug(bool),
     ShowDialog(DialogType),
     HideDialog,
     HelpScrollUp,

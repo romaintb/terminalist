@@ -21,18 +21,6 @@ impl SectionRepository {
             .await?)
     }
 
-    /// Get sections for a specific project.
-    pub async fn get_for_project<C>(conn: &C, project_uuid: &Uuid) -> Result<Vec<section::Model>>
-    where
-        C: ConnectionTrait,
-    {
-        Ok(section::Entity::find()
-            .filter(section::Column::ProjectUuid.eq(*project_uuid))
-            .order_by_asc(section::Column::OrderIndex)
-            .all(conn)
-            .await?)
-    }
-
     /// Get a single section by remote_id and backend_uuid.
     pub async fn get_by_remote_id<C>(conn: &C, backend_uuid: &Uuid, remote_id: &str) -> Result<Option<section::Model>>
     where

@@ -93,10 +93,6 @@ impl TodoistBackend {
 
 #[async_trait]
 impl Backend for TodoistBackend {
-    fn backend_type(&self) -> &str {
-        "todoist"
-    }
-
     async fn fetch_projects(&self) -> Result<Vec<BackendProject>, BackendError> {
         let mut all_projects = Vec::new();
         let mut cursor: Option<String> = None;

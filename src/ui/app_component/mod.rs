@@ -287,10 +287,9 @@ impl AppComponent {
         }
 
         // Clean up finished tasks
-        let completed_tasks = self.task_manager.cleanup_finished_tasks();
-        if !completed_tasks.is_empty() {
-            let count = completed_tasks.len();
-            info!("Background: Cleaned up {} finished tasks", count);
+        let cleaned = self.task_manager.cleanup_finished_tasks();
+        if cleaned > 0 {
+            info!("Background: Cleaned up {cleaned} finished tasks");
         }
 
         actions
@@ -348,10 +347,6 @@ impl AppComponent {
             }
             EventType::Tick => {
                 // Periodic updates
-                Action::None
-            }
-            EventType::Render => {
-                // Render updates
                 Action::None
             }
             EventType::Other => Action::None,
