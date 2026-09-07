@@ -4,7 +4,7 @@
 //! enabling foldable account folders and hierarchical display of projects and labels.
 
 use crate::entities::{label, project};
-use crate::icons::IconService;
+use crate::icons::{LABEL, PROJECT_FAVORITE, PROJECT_REGULAR, TODAY, TOMORROW, UPCOMING};
 use crate::theme::Theme;
 use crate::ui::core::SidebarSelection;
 use ratatui::{
@@ -35,7 +35,6 @@ pub trait SidebarItem {
     /// Render the item as a ListItem with appropriate styling
     fn render<'a>(
         &'a self,
-        icons: &'a IconService,
         current_selection: &'a SidebarSelection,
         is_selected: bool,
         theme: &'a Theme,
@@ -54,7 +53,6 @@ pub trait SidebarItem {
 impl SidebarItem for SidebarItemType {
     fn render<'a>(
         &'a self,
-        icons: &'a IconService,
         current_selection: &'a SidebarSelection,
         _is_selected: bool,
         theme: &'a Theme,
@@ -69,9 +67,9 @@ impl SidebarItem for SidebarItemType {
                 };
 
                 let icon = match selection {
-                    SidebarSelection::Today => icons.today(),
-                    SidebarSelection::Tomorrow => icons.tomorrow(),
-                    SidebarSelection::Upcoming => icons.upcoming(),
+                    SidebarSelection::Today => TODAY,
+                    SidebarSelection::Tomorrow => TOMORROW,
+                    SidebarSelection::Upcoming => UPCOMING,
                     _ => "",
                 };
 
@@ -107,9 +105,9 @@ impl SidebarItem for SidebarItemType {
                 };
 
                 let icon = if project.is_favorite {
-                    icons.project_favorite()
+                    PROJECT_FAVORITE
                 } else {
-                    icons.project_regular()
+                    PROJECT_REGULAR
                 };
 
                 let mut spans = vec![];
@@ -141,7 +139,7 @@ impl SidebarItem for SidebarItemType {
                 };
 
                 ListItem::new(Line::from(vec![
-                    Span::styled(icons.label().to_string(), style),
+                    Span::styled(LABEL, style),
                     Span::styled(label.name.clone(), style),
                 ]))
             }

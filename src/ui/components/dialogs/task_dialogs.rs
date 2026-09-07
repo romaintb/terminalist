@@ -1,6 +1,5 @@
 use super::common::{self, shortcuts};
 use crate::entities::project;
-use crate::icons::IconService;
 use crate::theme::Theme;
 use crate::ui::layout::LayoutManager;
 use ratatui::{
@@ -13,7 +12,6 @@ use ratatui::{
 pub fn render_task_dialog(
     f: &mut Frame,
     area: Rect,
-    _icons: &IconService,
     input_buffer: &str,
     cursor_position: usize,
     task_projects: &[&project::Model],
@@ -81,53 +79,4 @@ pub fn render_task_dialog(
 
     // Set terminal cursor position
     f.set_cursor_position((chunks[0].x + 1 + cursor_position as u16, chunks[0].y + 1));
-}
-
-// Legacy wrapper functions for backward compatibility
-#[allow(clippy::too_many_arguments)]
-pub fn render_task_creation_dialog(
-    f: &mut Frame,
-    area: Rect,
-    icons: &IconService,
-    input_buffer: &str,
-    cursor_position: usize,
-    task_projects: &[&project::Model],
-    selected_task_project_index: Option<usize>,
-    theme: &Theme,
-) {
-    render_task_dialog(
-        f,
-        area,
-        icons,
-        input_buffer,
-        cursor_position,
-        task_projects,
-        selected_task_project_index,
-        false, // is_editing = false for creation
-        theme,
-    );
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn render_task_edit_dialog(
-    f: &mut Frame,
-    area: Rect,
-    icons: &IconService,
-    input_buffer: &str,
-    cursor_position: usize,
-    task_projects: &[&project::Model],
-    selected_task_project_index: Option<usize>,
-    theme: &Theme,
-) {
-    render_task_dialog(
-        f,
-        area,
-        icons,
-        input_buffer,
-        cursor_position,
-        task_projects,
-        selected_task_project_index,
-        true, // is_editing = true for editing
-        theme,
-    );
 }

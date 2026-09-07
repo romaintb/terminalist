@@ -1,5 +1,4 @@
 use super::common::{self, shortcuts};
-use crate::icons::IconService;
 use crate::theme::Theme;
 use crate::ui::layout::LayoutManager;
 use ratatui::{
@@ -12,7 +11,6 @@ use ratatui::{
 pub fn render_project_creation_dialog(
     f: &mut Frame,
     area: Rect,
-    _icons: &IconService,
     input_buffer: &str,
     cursor_position: usize,
     root_projects: &[&crate::entities::project::Model],
@@ -80,7 +78,6 @@ pub fn render_project_creation_dialog(
 pub fn render_project_edit_dialog(
     f: &mut Frame,
     area: Rect,
-    _icons: &IconService,
     input_buffer: &str,
     cursor_position: usize,
     theme: &Theme,

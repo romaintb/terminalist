@@ -49,7 +49,7 @@ pub(crate) mod sidebar_item_component;
 pub(crate) mod task_list_component;
 pub mod task_list_item_component;
 
-// Public exports for external use
-pub use dialog_component::DialogComponent;
+// Re-exports for use across the crate
+pub(crate) use dialog_component::DialogComponent;
 pub use sidebar_component::SidebarComponent;
 pub use task_list_component::TaskListComponent;

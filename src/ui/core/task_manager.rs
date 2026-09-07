@@ -1,5 +1,5 @@
 use super::actions::{Action, LoadKind, SidebarSelection};
-use crate::sync::{SyncService, SyncStatus};
+use crate::sync::SyncService;
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -19,27 +19,8 @@ pub enum TaskKind {
 
 #[derive(Debug)]
 pub struct BackgroundTask {
-    pub id: TaskId,
-    pub handle: JoinHandle<anyhow::Result<TaskResult>>,
+    pub handle: JoinHandle<()>,
     pub kind: TaskKind,
-}
-
-#[derive(Debug, Clone)]
-pub enum TaskResult {
-    SyncCompleted(SyncStatus),
-    SyncFailed(String),
-    TaskOperationCompleted(String),
-    DataLoadCompleted {
-        projects: Vec<crate::entities::project::Model>,
-        labels: Vec<crate::entities::label::Model>,
-        sections: Vec<crate::entities::section::Model>,
-        tasks: Vec<crate::entities::task::Model>,
-    },
-    SearchCompleted {
-        query: String,
-        results: Vec<crate::entities::task::Model>,
-    },
-    Other(String),
 }
 
 pub struct TaskManager {
@@ -73,19 +54,10 @@ impl TaskManager {
             // Send sync started notification
             let _ = action_sender.send(Action::StartSync);
 
-            match sync_service.force_sync().await {
-                Ok(status) => {
-                    let result = TaskResult::SyncCompleted(status.clone());
-                    let _ = action_sender.send(Action::SyncCompleted(status));
-                    Ok(result)
-                }
-                Err(e) => {
-                    let error_msg = e.to_string();
-                    let result = TaskResult::SyncFailed(error_msg.clone());
-                    let _ = action_sender.send(Action::SyncFailed(error_msg));
-                    Ok(result)
-                }
-            }
+            let _ = match sync_service.force_sync().await {
+                Ok(status) => action_sender.send(Action::SyncCompleted(status)),
+                Err(e) => action_sender.send(Action::SyncFailed(e.to_string())),
+            };
         });
 
         self.insert(task_id, handle, TaskKind::Sync);
@@ -107,24 +79,18 @@ impl TaskManager {
 
         let handle = tokio::spawn(async move {
             match operation().await {
-                Ok(message) => {
-                    let result = TaskResult::TaskOperationCompleted(message.clone());
+                Ok(_message) => {
                     // Send refresh action to update UI with latest data from database
                     let _ = action_sender.send(Action::RefreshData);
 
                     if let Some(action) = on_success {
                         let _ = action_sender.send(action);
                     }
-
-                    Ok(result)
                 }
                 Err(e) => {
-                    let error_msg = format!("Operation failed: {}", e);
-                    let result = TaskResult::Other(error_msg.clone());
                     let _ = action_sender.send(Action::ShowDialog(crate::ui::core::actions::DialogType::Error(
-                        error_msg,
+                        format!("Operation failed: {e}"),
                     )));
-                    Ok(result)
                 }
             }
         });
@@ -133,27 +99,12 @@ impl TaskManager {
         task_id
     }
 
-    /// Check for completed tasks and clean them up
-    pub fn cleanup_finished_tasks(&mut self) -> Vec<(TaskId, anyhow::Result<TaskResult>)> {
-        let mut completed = Vec::new();
-        let mut to_remove = Vec::new();
-
-        for (task_id, task) in &mut self.tasks {
-            if task.handle.is_finished() {
-                to_remove.push(*task_id);
-            }
-        }
-
-        for task_id in to_remove {
-            if let Some(_task) = self.tasks.remove(&task_id) {
-                // Since the task is finished, we'll just mark it as completed
-                // The actual result was already sent via the action channel
-                let result = Ok(TaskResult::Other("Task completed".to_string()));
-                completed.push((task_id, result));
-            }
-        }
-
-        completed
+    /// Drop the bookkeeping for tasks that have finished, returning how many went.
+    /// Results travel over the action channel, so there is nothing here to collect.
+    pub fn cleanup_finished_tasks(&mut self) -> usize {
+        let before = self.tasks.len();
+        self.tasks.retain(|_, task| !task.handle.is_finished());
+        before - self.tasks.len()
     }
 
     /// Check if any sync tasks are currently running
@@ -200,13 +151,6 @@ impl TaskManager {
                         }
                     };
 
-                    let result = TaskResult::DataLoadCompleted {
-                        projects: projects.clone(),
-                        labels: labels.clone(),
-                        sections: sections.clone(),
-                        tasks: tasks.clone(),
-                    };
-
                     let _ = action_sender.send(Action::DataLoaded {
                         kind,
                         projects,
@@ -214,15 +158,11 @@ impl TaskManager {
                         sections,
                         tasks,
                     });
-
-                    Ok(result)
                 }
                 (Err(e), _, _) | (_, Err(e), _) | (_, _, Err(e)) => {
-                    let error_msg = format!("Failed to load data: {}", e);
                     let _ = action_sender.send(Action::ShowDialog(crate::ui::core::actions::DialogType::Error(
-                        error_msg.clone(),
+                        format!("Failed to load data: {e}"),
                     )));
-                    Ok(TaskResult::Other(error_msg))
                 }
             }
         });
@@ -241,20 +181,10 @@ impl TaskManager {
         let handle = tokio::spawn(async move {
             match sync_service.search_tasks(&query).await {
                 Ok(results) => {
-                    let result = TaskResult::SearchCompleted {
-                        query: query.clone(),
-                        results: results.clone(),
-                    };
-
                     let _ = action_sender.send(Action::SearchResultsLoaded { query, results });
-
-                    Ok(result)
                 }
-                Err(e) => {
-                    let error_msg = format!("Failed to search tasks: {}", e);
-                    // Don't show error dialog for search failures, just log silently
-                    Ok(TaskResult::Other(error_msg))
-                }
+                // Search failures stay silent: no dialog, no toast.
+                Err(e) => log::warn!("Failed to search tasks: {e}"),
             }
         });
 
@@ -262,8 +192,8 @@ impl TaskManager {
         task_id
     }
 
-    fn insert(&mut self, id: TaskId, handle: JoinHandle<anyhow::Result<TaskResult>>, kind: TaskKind) {
-        self.tasks.insert(id, BackgroundTask { id, handle, kind });
+    fn insert(&mut self, id: TaskId, handle: JoinHandle<()>, kind: TaskKind) {
+        self.tasks.insert(id, BackgroundTask { handle, kind });
     }
 }
 

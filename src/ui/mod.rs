@@ -54,7 +54,5 @@ pub mod core;
 pub mod layout;
 pub(crate) mod renderer;
 
-// Re-export main UI types for external use
-pub use app_component::AppComponent;
-pub use layout::LayoutManager;
+// `renderer` is crate-private, so this is how main reaches the event loop.
 pub use renderer::run_app;

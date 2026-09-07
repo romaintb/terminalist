@@ -22,14 +22,13 @@ pub fn create_paren_badge(text: &str) -> Span<'static> {
 pub fn create_label_badge(name: &str, theme: &Theme) -> Span<'static> {
     let style = Style::default().fg(theme.label).add_modifier(Modifier::BOLD);
 
-    Span::styled(format!("@{}", name), style)
+    Span::styled(format!("@{name}"), style)
 }
 
 /// Create task badges optimized for terminal compatibility
 #[must_use]
 pub fn create_task_badges(
     is_recurring: bool,
-    _has_deadline: bool,
     duration: Option<&str>,
     labels: &[label::Model],
     theme: &Theme,

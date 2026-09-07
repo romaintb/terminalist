@@ -122,9 +122,6 @@ pub struct UpdateProjectArgs {
 pub struct UpdateTaskArgs {
     pub content: Option<String>,
     pub description: Option<String>,
-    pub project_remote_id: Option<String>,
-    pub section_remote_id: Option<String>,
-    pub parent_remote_id: Option<String>,
     pub priority: Option<i32>,
     pub due_date: Option<String>,
     pub due_datetime: Option<String>,
@@ -145,9 +142,6 @@ pub struct UpdateLabelArgs {
 /// task management services (Todoist, TickTick, GitHub, etc.).
 #[async_trait]
 pub trait Backend: Send + Sync {
-    /// Returns the backend type identifier (e.g., "todoist", "ticktick").
-    fn backend_type(&self) -> &str;
-
     // Sync operations - fetch all data
     async fn fetch_projects(&self) -> Result<Vec<BackendProject>, BackendError>;
     async fn fetch_tasks(&self) -> Result<Vec<BackendTask>, BackendError>;

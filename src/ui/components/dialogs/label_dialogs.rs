@@ -1,5 +1,4 @@
 use super::common::{self, shortcuts};
-use crate::icons::IconService;
 use crate::theme::Theme;
 use crate::ui::layout::LayoutManager;
 use ratatui::{
@@ -8,10 +7,9 @@ use ratatui::{
     Frame,
 };
 
-fn render_label_dialog(
+pub fn render_label_dialog(
     f: &mut Frame,
     area: Rect,
-    _icons: &IconService,
     input_buffer: &str,
     cursor_position: usize,
     is_editing: bool,
@@ -58,26 +56,4 @@ fn render_label_dialog(
     let final_x = base_x.saturating_add(cursor_u16);
     let final_y = chunks[0].y.saturating_add(1);
     f.set_cursor_position((final_x, final_y));
-}
-
-pub fn render_label_creation_dialog(
-    f: &mut Frame,
-    area: Rect,
-    icons: &IconService,
-    input_buffer: &str,
-    cursor_position: usize,
-    theme: &Theme,
-) {
-    render_label_dialog(f, area, icons, input_buffer, cursor_position, false, theme);
-}
-
-pub fn render_label_edit_dialog(
-    f: &mut Frame,
-    area: Rect,
-    icons: &IconService,
-    input_buffer: &str,
-    cursor_position: usize,
-    theme: &Theme,
-) {
-    render_label_dialog(f, area, icons, input_buffer, cursor_position, true, theme);
 }

@@ -1,7 +1,7 @@
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use terminalist::entities::project;
 use terminalist::ui::components::SidebarComponent;
-use terminalist::ui::core::{Action, Component, SidebarSelection};
+use terminalist::ui::core::{actions::Action, Component, SidebarSelection};
 use uuid::Uuid;
 
 fn project_model(name: &str) -> project::Model {

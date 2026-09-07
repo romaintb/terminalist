@@ -63,13 +63,6 @@ pub fn get_memory_logs() -> Vec<String> {
     }
 }
 
-/// Clear all logs from memory
-pub fn clear_memory_logs() {
-    if let Ok(mut logs) = MEMORY_LOGS.lock() {
-        logs.clear();
-    }
-}
-
 /// Custom logger that stores logs in memory for UI display
 struct MemoryLogger;
 

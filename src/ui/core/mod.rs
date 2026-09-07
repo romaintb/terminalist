@@ -18,7 +18,7 @@
 //!
 //! 1. **Components** implement the [`Component`] trait for consistent rendering
 //! 2. **Actions** define state transitions and user interactions
-//! 3. **Events** are processed through the [`EventHandler`] system
+//! 3. **Events** are read by the event loop and dispatched as actions
 //! 4. **Tasks** are managed asynchronously via the [`TaskManager`]
 //!
 //! This architecture ensures clean separation of concerns and makes the codebase
@@ -32,7 +32,6 @@ pub mod operations;
 pub mod task_manager;
 
 // Re-export core types for easier access from other modules
-pub use actions::{Action, DialogType, LoadKind, SidebarSelection};
+pub use actions::{LoadKind, SidebarSelection};
 pub use component::Component;
-pub use event_handler::{EventHandler, EventType};
-pub use task_manager::{TaskId, TaskKind, TaskManager, TaskResult};
+pub use event_handler::EventType;
