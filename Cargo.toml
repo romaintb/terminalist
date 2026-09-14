@@ -38,6 +38,6 @@ sea-orm = { version = "1.1", default-features = false, features = [
 chrono = { version = "0.4", features = ["serde"] }
 todoist-api = "1.0.0-alpha.3"
 toml = "1.0"
-dirs = "6.0"
+dirs = "7.0"
 log = "0.4"
 uuid = { version = "1.23", features = ["v4", "serde"] }
