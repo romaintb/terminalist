@@ -8,19 +8,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- **Periodic auto-sync** - `auto_sync_interval_minutes` is now actually honoured; until now the key was read from the config file and then ignored. Defaults to every 5 minutes, `0` disables it and leaves syncing manual.
+- **Configurable themes** - Interface colours, background included, come from the config file. See `docs/CONFIGURATION.md`.
+- **Periodic auto-sync** - `auto_sync_interval_minutes` is honoured at last. Defaults to 5 minutes, `0` keeps syncing manual.
 
 ### Changed
-- **Sync status toast** - Replace blocking sync dialog with a toast.
+- **Cache kept between runs** - Terminalist opens on the last synced data instead of an empty screen, and a failed sync leaves that data in place.
+- **Faster syncing** - Projects, tasks, labels and sections are fetched concurrently.
+- **Sync status toast** - The blocking sync dialog became a toast.
+- **Rust 1.94 to build from source** - Up from 1.80. Building and packaging only.
 
 ### Fixed
-- **Cursor jumping around after a sync** - Every sync used to hand each task a brand new internal id, so the app lost track of which one you were pointing at; the ids now stay put.
-- **Cursor moving on its own** - When a background sync landed while you were browsing, the highlight slid onto a different task; it now stays on the task you were on.
-- **Pipes in task and project names** - Creating a task or project whose text contained a `|` failed outright, because the name and the parent id were packed into one string that got split on the first separator. The id now comes first, so your text keeps whatever you typed.
-- **Tasks vanishing from a project view** - A task whose section was not among the ones loaded for the project, which happens on a torn read across a sync or when the section belongs to another project, was filed under a bucket the renderer never visits and simply disappeared. Those tasks now show alongside the ones with no section at all.
+- **Cursor jumping after a sync** - Task ids are stable across syncs, so the selection holds.
+- **Cursor moving on its own** - Neither a background sync nor the first one moves the selection any more.
+- **Pipes in task and project names** - A `|` in the text no longer makes creation fail.
+- **Tasks missing from a project view** - A task whose section was not loaded now shows with the sectionless ones.
+- **Wrong spinner label** - The label matches the operation that is running.
+- **Unclear error messages** - Todoist failures keep their own wording and category instead of a generic one.
+- **Wrong link for the API token** - The address shown with `TODOIST_API_TOKEN` unset was out of date.
 
 ### Security
-- **Cache file permissions** - The local SQLite cache stores the Todoist API token, and is now created with `0600` so only its owner can read it. Existing cache files are tightened on the next launch.
+- **Cache file permissions** - The cache holds the API token and is now created `0600`. Existing files are tightened at the next launch.
 
 ## [0.5.0] - 2026-03-25
 
