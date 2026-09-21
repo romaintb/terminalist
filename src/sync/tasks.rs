@@ -246,6 +246,27 @@ impl SyncService {
         Ok(())
     }
 
+    /// Move a task to another project. The section is cleared: a section belongs
+    /// to one project, so it cannot survive the move.
+    pub async fn move_task(&self, task_uuid: &Uuid, project_uuid: &Uuid) -> Result<()> {
+        let remote_id = self.get_task_remote_id(task_uuid).await?;
+        let remote_project_id = self.get_project_remote_id(project_uuid).await?;
+
+        self.get_backend().await?.move_task(&remote_id, &remote_project_id).await?;
+
+        // Then update local storage
+        let storage = self.storage.lock().await;
+
+        if let Some(task) = TaskRepository::get_by_id(&storage.conn, task_uuid).await? {
+            let mut active_model: task::ActiveModel = task.into_active_model();
+            active_model.project_uuid = ActiveValue::Set(*project_uuid);
+            active_model.section_uuid = ActiveValue::Set(None);
+            TaskRepository::update(&storage.conn, active_model).await?;
+        }
+
+        Ok(())
+    }
+
     /// Update task due date
     pub async fn update_task_due_date(&self, task_uuid: &Uuid, due_date: Option<&str>) -> Result<()> {
         // Look up the task's remote_id for backend call

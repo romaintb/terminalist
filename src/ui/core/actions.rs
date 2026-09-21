@@ -47,6 +47,8 @@ pub enum Action {
     EditTask {
         task_uuid: Uuid,
         content: String,
+        /// Set when the edit also moves the task to another project.
+        move_to_project: Option<Uuid>,
     },
     RestoreTask(Uuid),
 

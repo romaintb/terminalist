@@ -253,6 +253,11 @@ impl Backend for TodoistBackend {
         Ok(Self::task_to_backend(&task))
     }
 
+    async fn move_task(&self, remote_id: &str, project_remote_id: &str) -> Result<(), BackendError> {
+        self.wrapper.move_task(remote_id, project_remote_id).await.map_err(map_err)?;
+        Ok(())
+    }
+
     async fn delete_task(&self, remote_id: &str) -> Result<(), BackendError> {
         self.wrapper.delete_task(remote_id).await.map_err(map_err)
     }

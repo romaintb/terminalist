@@ -9,3 +9,6 @@ mod task_list_component;
 
 #[path = "components/sidebar_component.rs"]
 mod sidebar_component;
+
+#[path = "components/dialog_component.rs"]
+mod dialog_component;
