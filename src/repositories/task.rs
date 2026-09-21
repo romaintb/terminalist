@@ -1,7 +1,7 @@
 //! Task repository for database operations.
 
 use anyhow::Result;
-use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait};
+use sea_orm::{ColumnTrait, ConnectionTrait, EntityTrait, ExprTrait, QueryFilter, QueryOrder, QuerySelect, QueryTrait};
 use uuid::Uuid;
 
 use crate::entities::{task, task_label};

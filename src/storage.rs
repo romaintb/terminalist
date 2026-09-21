@@ -83,7 +83,7 @@ impl LocalStorage {
     async fn discard_stale_schema(&self) -> Result<()> {
         let row = self
             .conn
-            .query_one(Statement::from_string(
+            .query_one_raw(Statement::from_string(
                 DbBackend::Sqlite,
                 "PRAGMA user_version;".to_owned(),
             ))
@@ -109,7 +109,7 @@ impl LocalStorage {
         // resolving that reference. sqlite_master lists objects in creation order, and
         // init_schema creates parents first, so walking it backwards is dependency order.
         let tables = txn
-            .query_all(Statement::from_string(
+            .query_all_raw(Statement::from_string(
                 DbBackend::Sqlite,
                 "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' \
                  ORDER BY rowid DESC;"
@@ -119,19 +119,12 @@ impl LocalStorage {
 
         for table in tables {
             let name = table.try_get::<String>("", "name")?;
-            txn.execute(Statement::from_string(
-                DbBackend::Sqlite,
-                format!("DROP TABLE IF EXISTS \"{name}\";"),
-            ))
-            .await?;
+            txn.execute_unprepared(&format!("DROP TABLE IF EXISTS \"{name}\";")).await?;
         }
 
         // Not a bind parameter: SQLite only accepts a literal here, and the value is a constant.
-        txn.execute(Statement::from_string(
-            DbBackend::Sqlite,
-            format!("PRAGMA user_version = {SCHEMA_VERSION};"),
-        ))
-        .await?;
+        txn.execute_unprepared(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))
+            .await?;
 
         txn.commit().await?;
 
@@ -155,7 +148,7 @@ impl LocalStorage {
 
         for mut statement in table_statements {
             statement.if_not_exists();
-            self.conn.execute(backend.build(&statement)).await?;
+            self.conn.execute(&statement).await?;
         }
 
         // Create composite unique indexes for (backend_uuid, remote_id)
@@ -167,9 +160,7 @@ impl LocalStorage {
         ];
 
         for index_sql in indexes {
-            self.conn
-                .execute(Statement::from_string(DbBackend::Sqlite, index_sql.to_owned()))
-                .await?;
+            self.conn.execute_unprepared(index_sql).await?;
         }
 
         Ok(())
