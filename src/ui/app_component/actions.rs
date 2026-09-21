@@ -160,11 +160,16 @@ impl AppComponent {
             Action::SetTaskDueTomorrow(task) => self.set_due(task, Due::Tomorrow),
             Action::SetTaskDueNextWeek(task) => self.set_due(task, Due::NextWeek),
             Action::SetTaskDueWeekEnd(task) => self.set_due(task, Due::Weekend),
-            Action::EditTask { task_uuid, content } => {
+            Action::EditTask {
+                task_uuid,
+                content,
+                move_to_project,
+            } => {
                 info!("Task: Editing {} to '{}'", self.describe_task(task_uuid), content);
                 self.spawn(Operation::EditTask {
                     task: task_uuid,
                     content,
+                    move_to: move_to_project,
                 });
                 Action::None
             }

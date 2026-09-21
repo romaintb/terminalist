@@ -49,15 +49,39 @@ pub enum Operation {
     CompleteTask(Uuid),
     DeleteTask(Uuid),
     RestoreTask(Uuid),
-    CyclePriority { task: Uuid, priority: i32 },
-    SetDue { task: Uuid, when: Due },
-    CreateTask { content: String, project: Option<Uuid> },
-    EditTask { task: Uuid, content: String },
-    CreateProject { name: String, parent: Option<Uuid> },
-    EditProject { project: Uuid, name: String },
+    CyclePriority {
+        task: Uuid,
+        priority: i32,
+    },
+    SetDue {
+        task: Uuid,
+        when: Due,
+    },
+    CreateTask {
+        content: String,
+        project: Option<Uuid>,
+    },
+    EditTask {
+        task: Uuid,
+        content: String,
+        move_to: Option<Uuid>,
+    },
+    CreateProject {
+        name: String,
+        parent: Option<Uuid>,
+    },
+    EditProject {
+        project: Uuid,
+        name: String,
+    },
     DeleteProject(Uuid),
-    CreateLabel { name: String },
-    EditLabel { label: Uuid, name: String },
+    CreateLabel {
+        name: String,
+    },
+    EditLabel {
+        label: Uuid,
+        name: String,
+    },
     DeleteLabel(Uuid),
 }
 
@@ -76,7 +100,10 @@ impl Operation {
                 Some(project) => format!("Create task: in project {project}"),
                 None => "Create task: in inbox".to_string(),
             },
-            Operation::EditTask { task, .. } => format!("Edit task: {task}"),
+            Operation::EditTask { task, move_to, .. } => match move_to {
+                Some(project) => format!("Edit task: {task} -> project {project}"),
+                None => format!("Edit task: {task}"),
+            },
             Operation::CreateProject { parent, .. } => match parent {
                 Some(parent) => format!("Create project: under {parent}"),
                 None => "Create project: at root".to_string(),
@@ -131,10 +158,17 @@ impl Operation {
                     Err(e) => failed(ERROR_TASK_CREATE_FAILED, e),
                 }
             }
-            Operation::EditTask { task, content } => match sync.update_task_content(&task, &content).await {
-                Ok(()) => done(SUCCESS_TASK_UPDATED, task),
-                Err(e) => failed(ERROR_TASK_UPDATE_FAILED, e),
-            },
+            Operation::EditTask { task, content, move_to } => {
+                if let Err(e) = sync.update_task_content(&task, &content).await {
+                    return failed(ERROR_TASK_UPDATE_FAILED, e);
+                }
+                if let Some(project) = move_to {
+                    if let Err(e) = sync.move_task(&task, &project).await {
+                        return failed(ERROR_TASK_UPDATE_FAILED, e);
+                    }
+                }
+                done(SUCCESS_TASK_UPDATED, task)
+            }
             Operation::CreateProject { name, parent } => {
                 let landed = if parent.is_some() {
                     SUCCESS_PROJECT_CREATED_PARENT

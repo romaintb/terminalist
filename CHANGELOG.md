@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rust 1.94 to build from source** - Up from 1.80. Building and packaging only.
 
 ### Fixed
+- **Moving a task to another project** - `Tab` in the edit dialog cycles through the projects, inbox included, and saving moves the task. The key did nothing before.
 - **Cursor jumping after a sync** - Task ids are stable across syncs, so the selection holds.
 - **Cursor moving on its own** - Neither a background sync nor the first one moves the selection any more.
 - **Pipes in task and project names** - A `|` in the text no longer makes creation fail.

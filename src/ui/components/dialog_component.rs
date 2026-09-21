@@ -61,6 +61,12 @@ pub struct DialogComponent {
     pub theme: Theme,
 }
 
+impl Default for DialogComponent {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl DialogComponent {
     pub fn new() -> Self {
         Self {
@@ -170,11 +176,18 @@ impl DialogComponent {
                     Action::None
                 }
             }
-            Some(DialogType::TaskEdit { task_uuid, .. }) => {
+            Some(DialogType::TaskEdit {
+                task_uuid,
+                project_uuid,
+                ..
+            }) => {
                 if !self.input_buffer.is_empty() {
+                    // Only move when Tab landed on a project other than the task's own
+                    let move_to_project = self.selected_task_project_uuid.filter(|uuid| uuid != project_uuid);
                     let action = Action::EditTask {
                         task_uuid: *task_uuid,
                         content: self.input_buffer.clone(),
+                        move_to_project,
                     };
                     self.clear_dialog();
                     action
@@ -359,22 +372,19 @@ impl DialogComponent {
     }
 
     fn render_task_edit_dialog(&self, f: &mut Frame, area: Rect) {
-        let task_projects = self.get_task_projects();
-
-        // Find the current project index for the task being edited
-        let current_project_index = if let Some(DialogType::TaskEdit { project_uuid, .. }) = &self.dialog_type {
-            task_projects.iter().position(|p| p.uuid == *project_uuid)
-        } else {
-            None
-        };
+        // Editing cycles through every project, inbox included
+        let projects: Vec<&project::Model> = self.projects.iter().collect();
+        let selected = self
+            .selected_task_project_uuid
+            .and_then(|uuid| projects.iter().position(|p| p.uuid == uuid));
 
         task_dialogs::render_task_dialog(
             f,
             area,
             &self.input_buffer,
             self.cursor_position,
-            &task_projects,
-            current_project_index,
+            &projects,
+            selected,
             true, // is_editing
             &self.theme,
         );
@@ -741,7 +751,17 @@ impl Component for DialogComponent {
                         Action::None
                     }
                     KeyCode::Tab => {
-                        if matches!(self.dialog_type, Some(DialogType::TaskCreation { .. })) {
+                        if matches!(self.dialog_type, Some(DialogType::TaskEdit { .. })) {
+                            // Editing: every project is a valid destination, inbox included,
+                            // and the task always sits in one of them.
+                            if !self.projects.is_empty() {
+                                let current = self
+                                    .selected_task_project_uuid
+                                    .and_then(|uuid| self.projects.iter().position(|p| p.uuid == uuid));
+                                let next = current.map_or(0, |index| (index + 1) % self.projects.len());
+                                self.selected_task_project_uuid = Some(self.projects[next].uuid);
+                            }
+                        } else if matches!(self.dialog_type, Some(DialogType::TaskCreation { .. })) {
                             let task_projects = self.get_task_projects();
                             if !task_projects.is_empty() {
                                 // Clone needed data to avoid borrow issues
@@ -802,9 +822,12 @@ impl Component for DialogComponent {
 
                 // Pre-populate input for edit dialogs
                 match &dialog_type {
-                    DialogType::TaskEdit { content, .. } => {
+                    DialogType::TaskEdit {
+                        content, project_uuid, ..
+                    } => {
                         self.input_buffer = content.clone();
                         self.cursor_position = content.chars().count();
+                        self.selected_task_project_uuid = Some(*project_uuid);
                     }
                     DialogType::ProjectEdit { name, .. } => {
                         self.input_buffer = name.clone();

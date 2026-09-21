@@ -42,7 +42,7 @@ pub mod toast;
 pub mod scrollbar_helper;
 
 // Core interactive components
-pub(crate) mod dialog_component;
+pub mod dialog_component;
 pub(crate) mod dialogs;
 pub(crate) mod sidebar_component;
 pub(crate) mod sidebar_item_component;
@@ -50,6 +50,6 @@ pub(crate) mod task_list_component;
 pub mod task_list_item_component;
 
 // Re-exports for use across the crate
-pub(crate) use dialog_component::DialogComponent;
+pub use dialog_component::DialogComponent;
 pub use sidebar_component::SidebarComponent;
 pub use task_list_component::TaskListComponent;

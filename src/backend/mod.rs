@@ -156,6 +156,7 @@ pub trait Backend: Send + Sync {
     // CRUD operations for tasks
     async fn create_task(&self, args: CreateTaskArgs) -> Result<BackendTask, BackendError>;
     async fn update_task(&self, remote_id: &str, args: UpdateTaskArgs) -> Result<BackendTask, BackendError>;
+    async fn move_task(&self, remote_id: &str, project_remote_id: &str) -> Result<(), BackendError>;
     async fn delete_task(&self, remote_id: &str) -> Result<(), BackendError>;
     async fn complete_task(&self, remote_id: &str) -> Result<(), BackendError>;
     async fn reopen_task(&self, remote_id: &str) -> Result<(), BackendError>;
