@@ -200,10 +200,11 @@ TERMINALIST - Todoist Terminal Client
 NAVIGATION
 ----------
 j/k         Navigate tasks (down/up)
-J/K         Navigate projects (down/up)
-Mouse       Click sidebar items to navigate
+J/K         Navigate sidebar entries (down/up)
+H/L         Collapse/expand the folder under the sidebar cursor
+Mouse       Click sidebar items or tasks, scroll wheel to scroll
 Enter       Select project/task or confirm action
-Esc         Cancel action or close dialogs
+Esc         Close the dialog on screen, or quit if none is open
 
 PROJECT & LABEL MANAGEMENT
 --------------------------
@@ -213,10 +214,11 @@ D           Delete selected item (project or label)
 
 TASK MANAGEMENT
 --------------
-Space       Toggle task completion
+Space       Toggle the task: complete a pending one, restore a completed
+            or deleted one
 a           Create new task
 e           Edit selected task
-d           Delete task (with confirmation)
+d           Delete task (with confirmation), or restore a deleted one
 p           Cycle task priority
 t           Set task due date to today
 T           Set task due date to tomorrow
@@ -226,6 +228,8 @@ W           Set task due date to next week end (Saturday)
 SYNC & DATA
 -----------
 r           Force sync with Todoist
+/           Search across all tasks
+G           Open the log dialog
 Ctrl+C      Quit application
 
 GENERAL CONTROLS
@@ -234,27 +238,25 @@ GENERAL CONTROLS
 h           Toggle help panel
 b           Toggle sidebar visibility
 q           Quit application
-i           Change icon theme
 
 HELP PANEL SCROLLING
 --------------------
-j/k         Scroll help content down/up
 ↑↓          Scroll help content up/down
-PageUp/Down Page through help content
 Home        Jump to top of help
 End         Jump to bottom of help
 
 TASK STATUS INDICATORS
 ----------------------
-🔳          Pending task
-✅          Completed task
-❌          Deleted task
+☐          Pending task
+☒          Completed task
+✗          Deleted task
 
 LAYOUT DETAILS
 --------------
-Left pane:  Projects list with selection
-Right pane: Tasks for selected project
+Left pane:  Views, projects and labels, with selection
+Right pane: Tasks for the selected sidebar entry
 Help:       Modal overlay with scrollable content
+Sync:       Corner toast, it does not block the interface
 
 NOTES
 -----
