@@ -9,9 +9,12 @@ src/
 ├── main.rs                    # Main application entry point
 ├── lib.rs                     # Library exports
 ├── config.rs                  # Configuration management
-├── todoist.rs                 # Todoist API models & display structs
-├── sync.rs                    # Sync service with API integration
-├── storage.rs                 # Storage initialization
+├── constants.rs               # Shared constants and UI strings
+├── theme.rs                   # Theme colors and config parsing
+├── storage.rs                 # SQLite cache: connection, schema, schema versioning
+├── icons.rs                   # Icon glyphs rendered in the UI
+├── logger.rs                  # Logging setup
+├── backend_registry.rs        # Backend registry system
 ├── entities/                  # Sea-ORM domain entities
 │   ├── backend.rs             # Backend entity (Todoist, etc.)
 │   ├── label.rs
@@ -31,27 +34,49 @@ src/
 │   ├── factory.rs
 │   ├── todoist.rs             # Todoist backend implementation
 │   └── mod.rs
-├── backend_registry.rs        # Backend registry system
-├── icons.rs                   # Icon service for terminal compatibility
-├── logger.rs                  # Debug logging system
+├── sync/                      # Sync service, one module per entity type
+│   ├── labels.rs
+│   ├── projects.rs
+│   ├── sections.rs
+│   ├── tasks.rs
+│   ├── storage.rs             # Reconciles fetched data into the cache
+│   └── mod.rs
 ├── utils/                     # Utility modules
 │   ├── mod.rs
 │   └── datetime.rs            # Date/time utilities
-└── ui/                        # Modern Component-Based Architecture
-    ├── app_component.rs       # Main application orchestrator
-    ├── renderer.rs            # Modern rendering system
+└── ui/                        # Component-based architecture
+    ├── app_component/         # Main application orchestrator
+    │   ├── actions.rs         # Action handling
+    │   ├── keys.rs            # Global key bindings
+    │   ├── state.rs           # Application state
+    │   └── mod.rs
+    ├── renderer.rs            # Rendering system
+    ├── layout.rs              # Layout management
     ├── core/                  # Core architecture components
     │   ├── actions.rs         # Action system for component communication
     │   ├── component.rs       # Component trait and lifecycle
-    │   ├── context.rs         # App context
     │   ├── event_handler.rs   # Event processing system
-    │   └── task_manager.rs    # Background async task management
+    │   ├── operations.rs      # Background operation descriptions
+    │   ├── task_manager.rs    # Background async task management
+    │   └── mod.rs
     └── components/            # UI Components
         ├── badge.rs
-        ├── dialog_component.rs    # Unified modal dialog system
-        ├── sidebar_component.rs   # Project/label navigation
-        ├── task_list_component.rs # Task management and display
-        └── task_list_item_component.rs
+        ├── dialog_component.rs        # Unified modal dialog system
+        ├── dialogs/                   # Per-domain dialog rendering
+        │   ├── common.rs
+        │   ├── label_dialogs.rs
+        │   ├── project_dialogs.rs
+        │   ├── scroll_behavior.rs
+        │   ├── system_dialogs.rs      # Help, logs, info, error
+        │   ├── task_dialogs.rs
+        │   └── mod.rs
+        ├── scrollbar_helper.rs
+        ├── sidebar_component.rs       # Project/label navigation
+        ├── sidebar_item_component.rs
+        ├── task_list_component.rs     # Task management and display
+        ├── task_list_item_component.rs
+        ├── toast.rs                   # Corner sync/status toast
+        └── mod.rs
 ```
 
 ## Data Management
@@ -63,12 +88,16 @@ src/
 - Uses Sea-ORM for type-safe database operations
 - Repository pattern provides clean data access layer
 - UUID-based primary keys for robust entity management
+- The file lives in the XDG data directory (`terminalist/terminalist.db`) and holds the API token, so it is created `0600` on Unix
 
 ### Sync Behavior
 - **First Run**: Automatically syncs all data from Todoist
 - **Startup**: Shows the cached data immediately, then syncs in the background; a failed sync leaves the cached view in place
+- **Periodic Sync**: Re-syncs every `auto_sync_interval_minutes` (5 by default, `0` disables it)
 - **Manual Sync**: Press `r` to force refresh from Todoist API
-- **Sync Indicators**: Sync progress is shown during operations
+- **Concurrent Fetch**: Projects, tasks, labels and sections are fetched in parallel
+- **Sync Indicators**: Sync progress is shown in a corner toast that does not block the interface
+- **Debug Mode**: `--debug` skips the initial and periodic syncs, so the cache can be inspected as-is. `r` still syncs on demand, and `R` reloads the view from the cache.
 
 ### Data Types
 - **Backends**: Abstract backend entity supporting multiple task management services (Todoist, etc.)

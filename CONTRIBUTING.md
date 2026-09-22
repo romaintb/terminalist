@@ -32,7 +32,7 @@ Thanks for taking the time to contribute!
 
 - Show help: `cargo run -- --help`
 - Show version: `cargo run -- --version`
-- Debug DB mode: `cargo run -- --debug`
+- Skip the initial and periodic syncs, work off the cache: `cargo run -- --debug`
 
 ## Versioning development builds
 

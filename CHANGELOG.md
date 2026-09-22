@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Faster syncing** - Projects, tasks, labels and sections are fetched concurrently.
 - **Sync status toast** - The blocking sync dialog became a toast.
 - **Rust 1.94 to build from source** - Up from 1.80. Building and packaging only.
+- **Smaller build** - Only the tokio and sea-orm features the code uses are compiled.
 
 ### Fixed
 - **Moving a task to another project** - `Tab` in the edit dialog cycles through the projects, inbox included, and saving moves the task. The key did nothing before.
@@ -26,9 +27,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Wrong spinner label** - The label matches the operation that is running.
 - **Unclear error messages** - Todoist failures keep their own wording and category instead of a generic one.
 - **Wrong link for the API token** - The address shown with `TODOIST_API_TOKEN` unset was out of date.
+- **Stale cache after an upgrade** - The cache is dropped and rebuilt when the schema version changes.
+- **Foreign key constraints** - `foreign_keys` is declared on the pool, so every connection gets it, not only the first one.
+
+### Removed
+- **In-repo PKGBUILD** - The Arch package is tracked in its own repository.
+- **fern and once_cell dependencies** - No longer used.
 
 ### Security
 - **Cache file permissions** - The cache holds the API token and is now created `0600`. Existing files are tightened at the next launch.
+- **h2 denial of service** - Bumped h2 to 0.4.19 for RUSTSEC-2026-0258.
+- **Audit findings cleared** - rustls, lru, event-listener and chacha20 updated; the unreachable rsa advisory is ignored with a note.
 
 ## [0.5.0] - 2026-03-25
 

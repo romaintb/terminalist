@@ -27,10 +27,15 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 #### Core Functionality
 - **Interactive TUI Interface**: Modern terminal UI using ratatui framework
 - **Local Data Caching**: On-disk SQLite cache for instant access
-- **Smart Sync**: Automatic sync on startup with manual refresh capability
+- **Smart Sync**: Automatic sync on startup, on a configurable interval, and manual refresh
 - **Project Management**: Hierarchical project browsing and management
 - **Task Management**: Full CRUD operations for tasks
 - **Task Search**: Database-powered search across all tasks with '/' shortcut
+- **Task Editing**: Edit task content and move a task to another project
+- **Due Date Shortcuts**: Set a task due today, tomorrow, next Monday or Saturday
+- **Time-Based Views**: Today, Tomorrow and Upcoming views across all projects
+- **Sections**: Project sections are synced and tasks are grouped under them
+- **Configurable Theme**: Interface colours, background included, come from the config file
 - **Keyboard Navigation**: Efficient keyboard-only operation
 - **Real-time Updates**: Immediate UI updates for all operations
 
@@ -57,16 +62,15 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 ### 2.2 Current Limitations & Technical Debt
 
 #### Missing Core Features
-- **Sections**: No support for project sections (like web app)
-- **Today/Tomorrow Views**: No dedicated views for time-based task filtering
-- **Task Editing**: Cannot edit existing task content, only create/delete
-- **Due Date Management**: No due date setting or management
+- **Section Management**: Sections are displayed but cannot be created, renamed or deleted from the interface
+- **Free-form Due Dates**: Only the today/tomorrow/next-week shortcuts, no arbitrary date entry
 - **Advanced Filtering**: No filtering by priority, labels, or due dates (basic search implemented)
+- **Task Descriptions**: Shown in the list, but not editable
 
 #### User Experience
 - Limited keyboard shortcuts compared to vim/emacs
 - No undo functionality
-- No themes or customization options
+- Key bindings are not remappable
 
 #### Data Management
 - No conflict resolution for concurrent edits
@@ -75,9 +79,8 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - Limited error recovery options
 
 #### Technical
-- ✅ ~~No configuration file support~~ (Implemented - TOML config with customizable UI, sync, display settings)
-- No automated testing coverage (planned for stable codebase)
-- Limited logging/debugging capabilities
+- ✅ ~~No configuration file support~~ (Implemented - TOML config with customizable UI, sync, display and theme settings)
+- Partial test coverage (integration tests under `tests/`, full coverage planned for a stable codebase)
 - No plugin system
 
 ## 3. Product Requirements
@@ -104,7 +107,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - **FR-015**: Users can assign tasks to specific sections within projects
 
 #### 3.1.3 Data Synchronization
-- **FR-016**: Application syncs with Todoist API on startup
+- **FR-016**: Application syncs with Todoist API on startup and every `auto_sync_interval_minutes`
 - **FR-017**: Users can force sync with 'r' key
 - **FR-018**: Sync status is displayed during operations
 - **FR-019**: Local data is cached for instant access
@@ -125,8 +128,8 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - **FR-030**: Time-based views show tasks sorted by due date and priority
 
 #### 3.1.6 Task Management Enhancements
-- **FR-031**: Users can edit existing task content
-- **FR-032**: Users can set and modify task due dates
+- **FR-031**: ✅ Users can edit existing task content, and move a task to another project (Implemented)
+- **FR-032**: Users can set and modify task due dates (shortcuts only: today, tomorrow, next Monday, Saturday)
 - **FR-033**: Users can assign tasks to sections
 - **FR-034**: ✅ Users can search tasks by content (Implemented)
 - **FR-035**: Users can filter tasks by priority, labels, or due dates
@@ -158,7 +161,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - **NFR-016**: Works on Linux, macOS, and Windows
 - **NFR-017**: Supports terminals with 80x24 minimum size
 - **NFR-018**: Compatible with major terminal emulators
-- **NFR-019**: Works with Todoist API v2
+- **NFR-019**: Works with Todoist API v1
 - **NFR-020**: Rust 1.94+ compatibility
 
 ## 4. User Stories
@@ -223,22 +226,7 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 
 ### 5.2 Component Overview
 
-#### 5.2.1 UI Layer (`src/ui/`)
-- **app.rs**: Application state management
-- **renderer.rs**: Main rendering loop and terminal management
-- **events.rs**: Keyboard event handling and shortcuts
-- **layout.rs**: Layout management and responsive design
-- **components/**: Reusable UI components (lists, dialogs)
-
-#### 5.2.2 Business Logic (`src/`)
-- **sync.rs**: Data synchronization with Todoist API
-- **todoist.rs**: API models and data transformations
-- **storage.rs**: Local SQLite database management
-
-#### 5.2.3 Data Layer
-- **Local Storage**: In-memory SQLite for fast access
-- **Todoist API**: External API integration via todoist-api crate
-- **Models**: ProjectDisplay, TaskDisplay, LabelDisplay for UI
+See [Architecture Overview](ARCHITECTURE.md) for the modules and what each one holds.
 
 ### 5.3 Data Flow
 
@@ -256,33 +244,37 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 - ✅ Keyboard navigation
 - ✅ Help system
 
-### 6.2 Phase 2: Core Features (Next 3 months)
-- [ ] **Sections Support** (High Priority)
-  - Project sections creation and management
-  - Task assignment to sections
-  - Section-based task filtering
-- [ ] **Today/Tomorrow Views** (High Priority)
-  - "Today" view showing all due tasks
-  - "Tomorrow" view for planning
-  - Time-based task filtering
+### 6.2 Phase 2: Core Features
+- [ ] **Sections Support**
+  - ✅ Sections synced and displayed
+  - [ ] Section creation and management
+  - [ ] Task assignment to sections
+  - [ ] Section-based task filtering
+- [x] **Today/Tomorrow Views**
+  - ✅ "Today" view showing all due tasks
+  - ✅ "Tomorrow" view for planning
+  - ✅ "Upcoming" view for later tasks
 - [ ] **Task Editing**
-  - Edit existing task content
-  - Set and modify due dates
-  - Task description editing
+  - ✅ Edit existing task content, and move a task to another project
+  - ✅ Due date shortcuts (today, tomorrow, next Monday, Saturday)
+  - [ ] Arbitrary due date entry
+  - [ ] Task description editing
 - [ ] **Enhanced Navigation**
-  - Quick switching between views
   - ✅ Search functionality (Implemented)
-  - Filter by priority, labels, due dates
+  - [ ] Quick switching between views
+  - [ ] Filter by priority, labels, due dates
 
 ### 6.3 Phase 3: Polish & Performance (6 months)
 - [ ] **Themes & Customization**
-  - Multiple color themes
-  - Customizable key bindings
+  - ✅ Configurable colors, background included, via `[theme]`
   - ✅ Configuration file support (Implemented - TOML config with generate option)
+  - [ ] Shipped color themes to pick from
+  - [ ] Customizable key bindings
 - [ ] **Performance Optimization**
-  - Persistent local storage
-  - Incremental sync
-  - Background sync
+  - ✅ Persistent local storage, kept between runs
+  - ✅ Background sync, on startup and on an interval
+  - ✅ Concurrent fetch of projects, tasks, labels and sections
+  - [ ] Incremental sync
 - [ ] **Advanced Features**
   - Bulk operations
   - Undo functionality
@@ -389,77 +381,18 @@ Terminalist is a high-performance terminal user interface (TUI) application for 
 
 ### 10.1 Current Keyboard Shortcuts
 
-#### Navigation
-- `j/k`: Navigate tasks (down/up)
-- `J/K`: Navigate projects (down/up)
-
-#### Task Management
-- `Space/Enter`: Toggle task completion
-- `a`: Create new task
-- `d`: Delete selected task
-- `t`: Set task due date to today
-- `T`: Set task due date to tomorrow
-- `w`: Set task due date to next week (Monday)
-- `W`: Set task due date to next week end (Saturday)
-
-#### Project Management
-- `A`: Create new project
-- `D`: Delete selected project
-
-#### Search
-- `/`: Open task search dialog
-- Type: Search across all tasks by content
-- `Enter`: Close search dialog
-- `Esc`: Close search dialog
-
-#### System
-- `r`: Force sync with Todoist
-- `i`: Cycle through icon themes
-- `?`: Toggle help panel
-- `q`: Quit application
-- `Esc`: Cancel action or close dialogs
+See [Keyboard Shortcuts](KEYBOARD_SHORTCUTS.md). It is kept there so the list is maintained in
+one place only.
 
 ### 10.2 Dependencies
 
-#### Core Dependencies
-- `ratatui = "0.29"`: Terminal UI framework
-- `crossterm = "0.29"`: Cross-platform terminal handling
-- `tokio = "1.0"`: Async runtime
-- `sqlx = "0.8"`: Database toolkit with SQLite support
-- `todoist-api = "0.2.0"`: Unofficial Todoist API client
-
-#### Development Dependencies
-- `anyhow = "1.0"`: Error handling
-- `serde = "1.0"`: Serialization/deserialization
-- `chrono = "0.4"`: Date and time handling
+See [Development Guide](DEVELOPMENT.md) for the crates and their roles, and `Cargo.toml` for the
+versions.
 
 ### 10.3 File Structure
 
-```
-src/
-├── main.rs                    # Application entry point
-├── lib.rs                     # Library exports
-├── todoist.rs                 # API models & display structs
-├── sync.rs                    # Sync service with API integration
-├── storage.rs                 # SQLite storage (on-disk cache)
-├── icons.rs                   # Icon service for terminal compatibility
-├── logger.rs                  # Debug logging system
-├── utils/                     # Utility modules
-│   ├── mod.rs
-│   └── date.rs                # Date/time utilities
-└── ui/                        # Modern Component-Based Architecture
-    ├── app_component.rs       # Main application orchestrator
-    ├── renderer.rs            # Modern rendering system
-    ├── core/                  # Core architecture components
-    │   ├── actions.rs         # Action system for component communication
-    │   ├── component.rs       # Component trait and lifecycle
-    │   ├── event_handler.rs   # Event processing system
-    │   └── task_manager.rs    # Background async task management
-    └── components/            # UI Components
-        ├── dialog_component.rs    # Unified modal dialog system
-        ├── sidebar_component.rs   # Project/label navigation
-        └── task_list_component.rs # Task management and display
-```
+See [Architecture Overview](ARCHITECTURE.md) for the project structure. It is kept there so the
+tree is maintained in one place only.
 
 ---
 

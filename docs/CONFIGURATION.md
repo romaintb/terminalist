@@ -23,12 +23,13 @@ This creates a config file at `~/.config/terminalist/config.toml` with all avail
 
 ```toml
 [ui]
-default_project = "today"         # Options: "inbox", "today", "tomorrow", "upcoming", project ID, or project name
+default_project = "today"         # Options: "inbox", "today", "tomorrow", "upcoming", or a project name
 mouse_enabled = true              # Enable mouse support
 sidebar_width = 30                # Sidebar width in columns (15-50)
+sidebar_visible = true            # Show the sidebar on startup
 
 [sync]
-auto_sync_interval_minutes = 5    # Auto-sync interval (0 = disabled)
+auto_sync_interval_minutes = 5    # Auto-sync interval in minutes (0 = disabled, 1440 max)
 
 [display]
 date_format = "%Y-%m-%d"          # Date format for task due dates
@@ -57,6 +58,7 @@ text_muted = "DarkGray"           # Descriptions, tree connectors, separators, c
 border = "DarkGray"               # Color of the sidebar and task-list borders
 border_dim = "Gray"               # Dialog chrome borders/scrollbars, child-count badge, instruction separators
 selection_bg = "DarkGray"         # Background color of the currently-highlighted row in the task list
+background = "Reset"              # Background painted behind the whole UI ("Reset" keeps the terminal's own)
 ```
 
 Note: priority-flag colors (P1-P4) are not configurable. They're a fixed part of Terminalist's
@@ -65,14 +67,17 @@ visual language, so they're always red/orange/blue/white regardless of your `[th
 ### UI Configuration
 
 - **default_project**: Set the initial view when starting the app
-  - Options: `"inbox"`, `"today"`, `"tomorrow"`, `"upcoming"`, a specific project ID, or project name
+  - Options: `"inbox"`, `"today"`, `"tomorrow"`, `"upcoming"`, or a project name
+  - A name that matches no project falls back to `"today"`
 - **mouse_enabled**: Enable or disable mouse support
 - **sidebar_width**: Width of the sidebar in columns (must be between 15-50)
+- **sidebar_visible**: Whether the sidebar is shown at startup. `b` toggles it at any time.
 
 ### Sync Configuration
 
 - **auto_sync_interval_minutes**: How often to automatically sync with Todoist
   - Set to `0` to disable automatic syncing (manual sync only with `r` key)
+  - The maximum is `1440` (24 hours). A larger value stops the application at startup.
 
 ### Display Configuration
 
@@ -112,6 +117,8 @@ recolors every matching UI element at once:
 - **border**: Color of the sidebar and task-list borders
 - **border_dim**: Dialog chrome borders/scrollbars, child-count badge, instruction separators
 - **selection_bg**: Background color of the currently-highlighted row in the task list
+- **background**: Background color painted behind the whole UI. The default, `"Reset"`, keeps the
+  terminal's own background. Set it to override the terminal theme.
 
 Priority-flag colors (P1-P4) are intentionally not part of `[theme]` — they're a fixed visual
 language, so they stay hardcoded regardless of your configuration.

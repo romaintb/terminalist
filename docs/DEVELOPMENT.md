@@ -66,15 +66,19 @@ This is a fully-featured TUI application for Todoist. You can extend it by:
 
 ## Dependencies
 
-This project uses the following Rust crates (see `Cargo.toml` for exact versions):
+The crates this project uses and what each one is for. `Cargo.toml` is the source of truth for
+versions, so none are repeated here.
 
-- `todoist-api = "0.3.0"` - Unofficial Todoist API client
-- `ratatui = "0.29"` - Terminal UI framework
-- `crossterm = "0.29"` - Cross-platform terminal handling
-- `tokio = "1.x"` - Async runtime
-- `sea-orm = "1.1"` - ORM with SQLite support (via its `sqlx-sqlite` feature)
-- `serde` - Serialization/deserialization
-- `chrono = "0.4"` - Date and time handling
-- `anyhow = "1.0"` - Error handling
-- `toml = "0.8"` - Configuration file parsing
-- `dirs = "5.0"` - Platform-specific directory paths
+- `todoist-api` - Unofficial Todoist API client
+- `ratatui` - Terminal UI framework
+- `crossterm` - Cross-platform terminal handling
+- `tokio` - Async runtime (only the `rt-multi-thread`, `macros`, `time` and `sync` features)
+- `sea-orm` - ORM with SQLite support (via its `sqlx-sqlite` feature, default features off)
+- `serde` / `serde_json` - Serialization/deserialization
+- `chrono` - Date and time handling
+- `uuid` - Entity primary keys
+- `anyhow` / `thiserror` - Error handling
+- `async-trait` - Async methods in the backend trait
+- `toml` - Configuration file parsing
+- `dirs` - Platform-specific directory paths
+- `log` - Logging facade
