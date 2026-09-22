@@ -522,295 +522,148 @@ impl DialogComponent {
     }
 }
 
+/// Advance a cursor over `len` items, through a virtual "none" slot after the last one.
+fn cycle(current: Option<usize>, len: usize) -> Option<usize> {
+    let next = current.map_or(0, |index| (index + 1) % (len + 1));
+    (next < len).then_some(next)
+}
+
+impl DialogComponent {
+    /// Byte offset of the cursor, which counts characters, in `input_buffer`.
+    fn cursor_byte_pos(&self) -> usize {
+        self.input_buffer.chars().take(self.cursor_position).map(char::len_utf8).sum()
+    }
+
+    /// The scroll keys shared by the info, error, help and logs dialogs. Returns whether the
+    /// key was one of them.
+    fn handle_scroll_key(&mut self, key: KeyCode) -> bool {
+        match key {
+            KeyCode::Up | KeyCode::Char('k') => self.scroll_up(),
+            KeyCode::Down | KeyCode::Char('j') => self.scroll_down(),
+            KeyCode::PageUp => self.page_up(),
+            KeyCode::PageDown => self.page_down(),
+            KeyCode::Home => self.scroll_to_top(),
+            KeyCode::End => self.scroll_to_bottom(),
+            _ => return false,
+        }
+        true
+    }
+
+    /// The text-editing keys shared by every input dialog. Returns whether the text changed,
+    /// which is what tells the search dialog to run a new query.
+    fn handle_input_key(&mut self, key: KeyCode) -> bool {
+        match key {
+            KeyCode::Char(c) => {
+                let at = self.cursor_byte_pos();
+                self.input_buffer.insert(at, c);
+                self.cursor_position += 1;
+                return true;
+            }
+            KeyCode::Backspace if self.cursor_position > 0 => {
+                let at = self.cursor_byte_pos();
+                let previous = self
+                    .input_buffer
+                    .chars()
+                    .nth(self.cursor_position - 1)
+                    .map_or(1, char::len_utf8);
+                self.input_buffer.remove(at - previous);
+                self.cursor_position -= 1;
+                return true;
+            }
+            KeyCode::Delete if self.cursor_position < self.input_buffer.chars().count() => {
+                let at = self.cursor_byte_pos();
+                self.input_buffer.remove(at);
+                return true;
+            }
+            KeyCode::Left if self.cursor_position > 0 => self.cursor_position -= 1,
+            KeyCode::Right if self.cursor_position < self.input_buffer.chars().count() => self.cursor_position += 1,
+            _ => {}
+        }
+        false
+    }
+
+    /// `Tab` cycles the project selector of whichever dialog is open.
+    fn cycle_project_selection(&mut self) {
+        match self.dialog_type {
+            // Editing: every project is a valid destination, inbox included, and the task
+            // always sits in one of them.
+            Some(DialogType::TaskEdit { .. }) if !self.projects.is_empty() => {
+                let current = self
+                    .selected_task_project_uuid
+                    .and_then(|uuid| self.projects.iter().position(|project| project.uuid == uuid));
+                let next = current.map_or(0, |index| (index + 1) % self.projects.len());
+                self.selected_task_project_uuid = Some(self.projects[next].uuid);
+            }
+            // Creating: the inbox is the "none" slot at the end of the cycle.
+            Some(DialogType::TaskCreation { .. }) => {
+                let uuids: Vec<Uuid> = self.get_task_projects().iter().map(|project| project.uuid).collect();
+                self.task_project_explicitly_selected = true;
+                let current = self
+                    .selected_task_project_uuid
+                    .and_then(|uuid| uuids.iter().position(|candidate| *candidate == uuid));
+                self.selected_task_project_uuid = cycle(current, uuids.len()).map(|next| uuids[next]);
+            }
+            Some(DialogType::ProjectCreation) => {
+                self.selected_parent_project_index =
+                    cycle(self.selected_parent_project_index, self.get_root_projects().len());
+            }
+            _ => {}
+        }
+    }
+}
+
 impl Component for DialogComponent {
     fn handle_key_events(&mut self, key: KeyEvent) -> Action {
-        if self.dialog_type.is_none() {
-            return Action::None;
-        }
-
         match &self.dialog_type {
-            Some(DialogType::Info(_)) | Some(DialogType::Error(_)) => {
-                // Info/error dialogs with scrolling support
-                match key.code {
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        self.scroll_up();
-                        Action::None
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        self.scroll_down();
-                        Action::None
-                    }
-                    KeyCode::PageUp => {
-                        self.page_up();
-                        Action::None
-                    }
-                    KeyCode::PageDown => {
-                        self.page_down();
-                        Action::None
-                    }
-                    KeyCode::Home => {
-                        self.scroll_to_top();
-                        Action::None
-                    }
-                    KeyCode::End => {
-                        self.scroll_to_bottom();
-                        Action::None
-                    }
-                    _ => Action::HideDialog, // Any other key dismisses the dialog
+            None => Action::None,
+            // Scrollable dialogs. Any key that does not scroll dismisses the info and error
+            // ones; help and logs keep their own dismiss keys and ignore the rest.
+            Some(DialogType::Info(_) | DialogType::Error(_)) => {
+                if self.handle_scroll_key(key.code) {
+                    Action::None
+                } else {
+                    Action::HideDialog
                 }
             }
-            Some(DialogType::Help) => {
-                // Help dialog with scrolling support
-                match key.code {
-                    KeyCode::Esc | KeyCode::Char('?') | KeyCode::Char('h') => Action::HideDialog,
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        self.scroll_up();
-                        Action::None
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        self.scroll_down();
-                        Action::None
-                    }
-                    KeyCode::PageUp => {
-                        self.page_up();
-                        Action::None
-                    }
-                    KeyCode::PageDown => {
-                        self.page_down();
-                        Action::None
-                    }
-                    KeyCode::Home => {
-                        self.scroll_to_top();
-                        Action::None
-                    }
-                    KeyCode::End => {
-                        self.scroll_to_bottom();
-                        Action::None
-                    }
-                    _ => Action::None,
+            Some(DialogType::Help) => match key.code {
+                KeyCode::Esc | KeyCode::Char('?') | KeyCode::Char('h') => Action::HideDialog,
+                code => {
+                    self.handle_scroll_key(code);
+                    Action::None
                 }
-            }
-            Some(DialogType::Logs) => {
-                // Logs dialog with scrolling support (same as help dialog)
-                match key.code {
-                    KeyCode::Esc | KeyCode::Char('G') | KeyCode::Char('q') => Action::HideDialog,
-                    KeyCode::Up | KeyCode::Char('k') => {
-                        self.scroll_up();
-                        Action::None
-                    }
-                    KeyCode::Down | KeyCode::Char('j') => {
-                        self.scroll_down();
-                        Action::None
-                    }
-                    KeyCode::PageUp => {
-                        self.page_up();
-                        Action::None
-                    }
-                    KeyCode::PageDown => {
-                        self.page_down();
-                        Action::None
-                    }
-                    KeyCode::Home => {
-                        self.scroll_to_top();
-                        Action::None
-                    }
-                    KeyCode::End => {
-                        self.scroll_to_bottom();
-                        Action::None
-                    }
-                    _ => Action::None,
+            },
+            Some(DialogType::Logs) => match key.code {
+                KeyCode::Esc | KeyCode::Char('G') | KeyCode::Char('q') => Action::HideDialog,
+                code => {
+                    self.handle_scroll_key(code);
+                    Action::None
                 }
-            }
+            },
             Some(DialogType::DeleteConfirmation { .. }) => match key.code {
                 KeyCode::Esc => Action::HideDialog,
                 KeyCode::Enter => self.handle_submit(),
                 _ => Action::None,
             },
+            // The search dialog edits text like the input dialogs, but every change runs a
+            // new query instead of waiting for Enter.
             Some(DialogType::TaskSearch) => match key.code {
-                KeyCode::Esc => Action::HideDialog,
-                KeyCode::Enter => Action::HideDialog,
-                KeyCode::Char(c) => {
-                    let byte_pos: usize = self
-                        .input_buffer
-                        .chars()
-                        .take(self.cursor_position)
-                        .map(|ch| ch.len_utf8())
-                        .sum();
-                    self.input_buffer.insert(byte_pos, c);
-                    self.cursor_position += 1;
-                    self.trigger_search()
-                }
-                KeyCode::Backspace => {
-                    if self.cursor_position > 0 {
-                        let byte_pos: usize = self
-                            .input_buffer
-                            .chars()
-                            .take(self.cursor_position)
-                            .map(|ch| ch.len_utf8())
-                            .sum();
-                        let prev_char_len = self
-                            .input_buffer
-                            .chars()
-                            .nth(self.cursor_position - 1)
-                            .map(|ch| ch.len_utf8())
-                            .unwrap_or(1);
-                        self.input_buffer.remove(byte_pos - prev_char_len);
-                        self.cursor_position -= 1;
-                        return self.trigger_search();
-                    }
-                    Action::None
-                }
-                KeyCode::Delete => {
-                    let char_count = self.input_buffer.chars().count();
-                    if self.cursor_position < char_count {
-                        let byte_pos: usize = self
-                            .input_buffer
-                            .chars()
-                            .take(self.cursor_position)
-                            .map(|ch| ch.len_utf8())
-                            .sum();
-                        self.input_buffer.remove(byte_pos);
-                        return self.trigger_search();
-                    }
-                    Action::None
-                }
-                KeyCode::Left => {
-                    if self.cursor_position > 0 {
-                        self.cursor_position -= 1;
-                    }
-                    Action::None
-                }
-                KeyCode::Right => {
-                    let char_count = self.input_buffer.chars().count();
-                    if self.cursor_position < char_count {
-                        self.cursor_position += 1;
-                    }
-                    Action::None
-                }
+                KeyCode::Esc | KeyCode::Enter => Action::HideDialog,
+                code if self.handle_input_key(code) => self.trigger_search(),
                 _ => Action::None,
             },
-            _ => {
-                // Input dialogs
-                match key.code {
-                    KeyCode::Esc => Action::HideDialog,
-                    KeyCode::Enter => self.handle_submit(),
-                    KeyCode::Char(c) => {
-                        let byte_pos: usize = self
-                            .input_buffer
-                            .chars()
-                            .take(self.cursor_position)
-                            .map(|ch| ch.len_utf8())
-                            .sum();
-                        self.input_buffer.insert(byte_pos, c);
-                        self.cursor_position += 1;
-                        Action::None
-                    }
-                    KeyCode::Backspace => {
-                        if self.cursor_position > 0 {
-                            let byte_pos: usize = self
-                                .input_buffer
-                                .chars()
-                                .take(self.cursor_position)
-                                .map(|ch| ch.len_utf8())
-                                .sum();
-                            let prev_char_len = self
-                                .input_buffer
-                                .chars()
-                                .nth(self.cursor_position - 1)
-                                .map(|ch| ch.len_utf8())
-                                .unwrap_or(1);
-                            self.input_buffer.remove(byte_pos - prev_char_len);
-                            self.cursor_position -= 1;
-                        }
-                        Action::None
-                    }
-                    KeyCode::Delete => {
-                        let char_count = self.input_buffer.chars().count();
-                        if self.cursor_position < char_count {
-                            let byte_pos: usize = self
-                                .input_buffer
-                                .chars()
-                                .take(self.cursor_position)
-                                .map(|ch| ch.len_utf8())
-                                .sum();
-                            self.input_buffer.remove(byte_pos);
-                        }
-                        Action::None
-                    }
-                    KeyCode::Left => {
-                        if self.cursor_position > 0 {
-                            self.cursor_position -= 1;
-                        }
-                        Action::None
-                    }
-                    KeyCode::Right => {
-                        let char_count = self.input_buffer.chars().count();
-                        if self.cursor_position < char_count {
-                            self.cursor_position += 1;
-                        }
-                        Action::None
-                    }
-                    KeyCode::Tab => {
-                        if matches!(self.dialog_type, Some(DialogType::TaskEdit { .. })) {
-                            // Editing: every project is a valid destination, inbox included,
-                            // and the task always sits in one of them.
-                            if !self.projects.is_empty() {
-                                let current = self
-                                    .selected_task_project_uuid
-                                    .and_then(|uuid| self.projects.iter().position(|p| p.uuid == uuid));
-                                let next = current.map_or(0, |index| (index + 1) % self.projects.len());
-                                self.selected_task_project_uuid = Some(self.projects[next].uuid);
-                            }
-                        } else if matches!(self.dialog_type, Some(DialogType::TaskCreation { .. })) {
-                            let task_projects = self.get_task_projects();
-                            if !task_projects.is_empty() {
-                                // Clone needed data to avoid borrow issues
-                                let projects_data: Vec<(Uuid, String)> =
-                                    task_projects.iter().map(|p| (p.uuid, p.name.clone())).collect();
-
-                                // Mark that user has explicitly selected a project via Tab
-                                self.task_project_explicitly_selected = true;
-
-                                let current_index = self
-                                    .selected_task_project_uuid
-                                    .and_then(|uuid| projects_data.iter().position(|(id, _)| *id == uuid));
-                                let next_index =
-                                    current_index.map(|index| (index + 1) % (projects_data.len() + 1)).unwrap_or(0);
-
-                                if next_index == projects_data.len() {
-                                    // Cycle back to the "None" option (inbox)
-                                    self.selected_task_project_uuid = None;
-                                    log::info!("Tab: Selected inbox (no project)");
-                                } else {
-                                    self.selected_task_project_uuid = Some(projects_data[next_index].0);
-                                    log::info!(
-                                        "Tab: Selected project {} ({})",
-                                        projects_data[next_index].1,
-                                        projects_data[next_index].0
-                                    );
-                                }
-                            }
-                        } else if matches!(self.dialog_type, Some(DialogType::ProjectCreation)) {
-                            let root_projects = self.get_root_projects();
-                            if !root_projects.is_empty() {
-                                self.selected_parent_project_index = match self.selected_parent_project_index {
-                                    None => Some(0), // First tab: select first parent
-                                    Some(index) => {
-                                        let next_index = (index + 1) % (root_projects.len() + 1);
-                                        if next_index == root_projects.len() {
-                                            None // Cycle back to "None" option
-                                        } else {
-                                            Some(next_index)
-                                        }
-                                    }
-                                };
-                            }
-                        }
-                        Action::None
-                    }
-                    _ => Action::None,
+            // Input dialogs: task, project and label creation and editing.
+            _ => match key.code {
+                KeyCode::Esc => Action::HideDialog,
+                KeyCode::Enter => self.handle_submit(),
+                KeyCode::Tab => {
+                    self.cycle_project_selection();
+                    Action::None
                 }
-            }
+                code => {
+                    self.handle_input_key(code);
+                    Action::None
+                }
+            },
         }
     }
 
