@@ -137,21 +137,18 @@ impl AppComponent {
             "tomorrow" => SidebarSelection::Tomorrow,
             "upcoming" => SidebarSelection::Upcoming,
             // Anything else names a project: "inbox" for the backend's own inbox, otherwise a
-            // local UUID or a project name. An unknown name falls back to Today.
-            _ => {
-                let by_uuid = Uuid::parse_str(default_project).ok();
-                self.state
-                    .projects
-                    .iter()
-                    .find(|project| match by_uuid {
-                        Some(uuid) => project.uuid == uuid,
-                        None if default_project == "inbox" => project.is_inbox_project,
-                        None => project.name == default_project,
-                    })
-                    .map_or(SidebarSelection::Today, |project| {
-                        SidebarSelection::Project(project.uuid)
-                    })
-            }
+            // project name. An unknown name falls back to Today.
+            _ => self
+                .state
+                .projects
+                .iter()
+                .find(|project| match default_project {
+                    "inbox" => project.is_inbox_project,
+                    name => project.name == name,
+                })
+                .map_or(SidebarSelection::Today, |project| {
+                    SidebarSelection::Project(project.uuid)
+                }),
         };
 
         self.state.sidebar_selection = selection;

@@ -37,7 +37,7 @@ struct RawConfig {
 #[serde(default)]
 pub struct UiConfig {
     /// Default project to open on startup
-    /// Options: "inbox", "today", "tomorrow", "upcoming", project ID, or project name
+    /// Options: "inbox", "today", "tomorrow", "upcoming", or a project name
     pub default_project: String,
     /// Enable mouse support
     pub mouse_enabled: bool,
