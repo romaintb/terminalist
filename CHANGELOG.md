@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-22
+
 ### Added
 - **Configurable themes** - Interface colours, background included, come from the config file. See `docs/CONFIGURATION.md`.
 - **Periodic auto-sync** - `auto_sync_interval_minutes` is honoured at last. Defaults to 5 minutes, `0` keeps syncing manual.
@@ -31,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Foreign key constraints** - `foreign_keys` is declared on the pool, so every connection gets it, not only the first one.
 
 ### Removed
+- **UUID form of `default_project`** - The setting takes `inbox`, `today`, `tomorrow`, `upcoming` or a project name. A project UUID is no longer accepted.
 - **In-repo PKGBUILD** - The Arch package is tracked in its own repository.
 - **fern and once_cell dependencies** - No longer used.
 
