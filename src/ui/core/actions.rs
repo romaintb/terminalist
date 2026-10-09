@@ -1,4 +1,5 @@
 use crate::sync::SyncStatus;
+use crate::ui::core::operations::Due;
 use uuid::Uuid;
 
 /// Represents the currently selected item in the sidebar.
@@ -36,10 +37,7 @@ pub enum Action {
     CompleteTask(Uuid),
     DeleteTask(Uuid),
     CyclePriority(Uuid),
-    SetTaskDueToday(Uuid),
-    SetTaskDueTomorrow(Uuid),
-    SetTaskDueNextWeek(Uuid),
-    SetTaskDueWeekEnd(Uuid),
+    SetTaskDue(Uuid, Due),
     CreateTask {
         content: String,
         project_uuid: Option<Uuid>,
