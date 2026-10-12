@@ -7,7 +7,7 @@ use crate::constants::*;
 use crate::sync::SyncStatus;
 use crate::ui::components::toast::Toast;
 use crate::ui::core::actions::Action;
-use crate::ui::core::operations::{Due, Operation};
+use crate::ui::core::operations::Operation;
 use crate::ui::core::{LoadKind, SidebarSelection};
 use log::info;
 
@@ -156,10 +156,7 @@ impl AppComponent {
                 self.spawn(Operation::DeleteTask(task));
                 Action::None
             }
-            Action::SetTaskDueToday(task) => self.set_due(task, Due::Today),
-            Action::SetTaskDueTomorrow(task) => self.set_due(task, Due::Tomorrow),
-            Action::SetTaskDueNextWeek(task) => self.set_due(task, Due::NextWeek),
-            Action::SetTaskDueWeekEnd(task) => self.set_due(task, Due::Weekend),
+            Action::SetTaskDue(task, due) => self.set_due(task, due),
             Action::EditTask {
                 task_uuid,
                 content,

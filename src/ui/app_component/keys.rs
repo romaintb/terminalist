@@ -5,6 +5,7 @@ use super::AppComponent;
 use crate::constants::UI_NO_TASK_SELECTED_DUE_DATE;
 use crate::entities::{label, project};
 use crate::ui::core::actions::{Action, DialogType};
+use crate::ui::core::operations::Due;
 use crate::ui::core::SidebarSelection;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use log::info;
@@ -144,43 +145,18 @@ impl AppComponent {
                 info!("Global key: '/' - opening task search dialog");
                 Action::ShowDialog(DialogType::TaskSearch)
             }
-            KeyCode::Char('t') => {
-                // Set task due date to today
+            KeyCode::Char(c @ ('t' | 'T' | 'w' | 'W')) => {
+                let due = match c {
+                    't' => Due::Today,
+                    'T' => Due::Tomorrow,
+                    'w' => Due::NextWeek,
+                    _ => Due::Weekend,
+                };
                 if let Some(task) = self.task_list.get_selected_task() {
-                    info!("Global key: 't' - setting task '{}' due today", task.content);
-                    Action::SetTaskDueToday(task.uuid)
+                    info!("Global key: '{c}' - setting task '{}' due {due:?}", task.content);
+                    Action::SetTaskDue(task.uuid, due)
                 } else {
-                    info!("Global key: 't' - no task selected");
-                    Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
-                }
-            }
-            KeyCode::Char('T') => {
-                // Set task due date to tomorrow
-                if let Some(task) = self.task_list.get_selected_task() {
-                    info!("Global key: 'T' - setting task '{}' due tomorrow", task.content);
-                    Action::SetTaskDueTomorrow(task.uuid)
-                } else {
-                    info!("Global key: 'T' - no task selected");
-                    Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
-                }
-            }
-            KeyCode::Char('w') => {
-                // Set task due date to next week (Monday)
-                if let Some(task) = self.task_list.get_selected_task() {
-                    info!("Global key: 'w' - setting task '{}' due next week", task.content);
-                    Action::SetTaskDueNextWeek(task.uuid)
-                } else {
-                    info!("Global key: 'w' - no task selected");
-                    Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
-                }
-            }
-            KeyCode::Char('W') => {
-                // Set task due date to weekend (Saturday)
-                if let Some(task) = self.task_list.get_selected_task() {
-                    info!("Global key: 'W' - setting task '{}' due weekend", task.content);
-                    Action::SetTaskDueWeekEnd(task.uuid)
-                } else {
-                    info!("Global key: 'W' - no task selected");
+                    info!("Global key: '{c}' - no task selected");
                     Action::ShowDialog(DialogType::Info(UI_NO_TASK_SELECTED_DUE_DATE.to_string()))
                 }
             }
