@@ -282,14 +282,17 @@ impl SyncService {
             duration: None,
             labels: None,
         };
-        let _task = self.get_backend().await?.update_task(&remote_id, task_args).await?;
+        let updated = self.get_backend().await?.update_task(&remote_id, task_args).await?;
 
         // Then update local storage
         let storage = self.storage.lock().await;
 
         if let Some(task) = TaskRepository::get_by_id(&storage.conn, task_uuid).await? {
             let mut active_model: task::ActiveModel = task.into_active_model();
-            active_model.due_date = ActiveValue::Set(due_date.map(|s| s.to_string()));
+            // The backend can normalize the date: Todoist drops the time from a date-only
+            // update. Caching its answer keeps the list from rendering a time that is gone.
+            active_model.due_date = ActiveValue::Set(updated.due_date);
+            active_model.due_datetime = ActiveValue::Set(updated.due_datetime);
             TaskRepository::update(&storage.conn, active_model).await?;
         }
 
@@ -562,7 +565,11 @@ mod tests {
             Err(BackendError::Other("not used".to_string()))
         }
 
-        async fn update_project(&self, _remote_id: &str, _args: UpdateProjectArgs) -> Result<BackendProject, BackendError> {
+        async fn update_project(
+            &self,
+            _remote_id: &str,
+            _args: UpdateProjectArgs,
+        ) -> Result<BackendProject, BackendError> {
             Err(BackendError::Other("not used".to_string()))
         }
 
@@ -685,12 +692,9 @@ mod tests {
         .unwrap();
 
         let storage = Arc::new(Mutex::new(storage));
-        let service = SyncService::new_for_test_with_backend(
-            storage.clone(),
-            backend_uuid,
-            Box::new(FakeBackend { reported }),
-        )
-        .await;
+        let service =
+            SyncService::new_for_test_with_backend(storage.clone(), backend_uuid, Box::new(FakeBackend { reported }))
+                .await;
 
         (db_path, storage, service, task_uuid)
     }
@@ -719,7 +723,10 @@ mod tests {
             .unwrap()
             .expect("task is still cached");
         assert_eq!(stored.due_date.as_deref(), Some("2026-11-21"));
-        assert_eq!(stored.due_datetime, None, "a time the backend dropped must not survive in the cache");
+        assert_eq!(
+            stored.due_datetime, None,
+            "a time the backend dropped must not survive in the cache"
+        );
 
         teardown(db_path, storage).await;
     }
