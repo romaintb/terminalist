@@ -4,6 +4,7 @@ use super::{
     Backend, BackendError, BackendLabel, BackendProject, BackendSection, BackendTask, CreateLabelArgs,
     CreateProjectArgs, CreateTaskArgs, UpdateLabelArgs, UpdateProjectArgs, UpdateTaskArgs,
 };
+use crate::utils::datetime::split_todoist_due;
 use async_trait::async_trait;
 use todoist_api::{TodoistError, TodoistWrapper};
 
@@ -53,7 +54,7 @@ impl TodoistBackend {
     fn task_to_backend(api_task: &todoist_api::Task) -> BackendTask {
         let (due_date, due_datetime) = match &api_task.due {
             Some(due) => {
-                let (day, time) = crate::utils::datetime::split_todoist_due(&due.date, due.datetime.as_deref());
+                let (day, time) = split_todoist_due(&due.date, due.datetime.as_deref());
                 (Some(day), time)
             }
             None => (None, None),

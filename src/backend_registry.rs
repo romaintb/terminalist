@@ -64,7 +64,7 @@ impl BackendRegistry {
     }
 
     /// Test-only: register an already-built backend instance without persisting it.
-    #[doc(hidden)]
+    #[cfg(test)]
     pub(crate) async fn insert_for_test(&self, uuid: Uuid, backend: Box<dyn Backend>) {
         self.backends.lock().await.insert(uuid, Arc::new(backend));
     }

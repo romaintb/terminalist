@@ -105,7 +105,7 @@ impl SyncService {
     }
 
     /// Test-only: a service wired to a backend instance built by the test.
-    #[doc(hidden)]
+    #[cfg(test)]
     pub(crate) async fn new_for_test_with_backend(
         storage: Arc<Mutex<LocalStorage>>,
         backend_uuid: Uuid,
