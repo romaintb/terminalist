@@ -282,14 +282,17 @@ impl SyncService {
             duration: None,
             labels: None,
         };
-        let _task = self.get_backend().await?.update_task(&remote_id, task_args).await?;
+        let updated = self.get_backend().await?.update_task(&remote_id, task_args).await?;
 
         // Then update local storage
         let storage = self.storage.lock().await;
 
         if let Some(task) = TaskRepository::get_by_id(&storage.conn, task_uuid).await? {
             let mut active_model: task::ActiveModel = task.into_active_model();
-            active_model.due_date = ActiveValue::Set(due_date.map(|s| s.to_string()));
+            // The backend can normalize the date: Todoist drops the time from a date-only
+            // update. Caching its answer keeps the list from rendering a time that is gone.
+            active_model.due_date = ActiveValue::Set(updated.due_date);
+            active_model.due_datetime = ActiveValue::Set(updated.due_datetime);
             TaskRepository::update(&storage.conn, active_model).await?;
         }
 
@@ -514,5 +517,240 @@ impl SyncService {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::backend::{
+        Backend, BackendError, BackendLabel, BackendProject, BackendSection, BackendTask, CreateLabelArgs,
+        CreateProjectArgs, CreateTaskArgs, UpdateLabelArgs, UpdateProjectArgs, UpdateTaskArgs,
+    };
+    use crate::entities::{backend, project};
+    use crate::storage::LocalStorage;
+    use sea_orm::EntityTrait;
+    use std::path::PathBuf;
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    /// A backend that reports a canned task back from `update_task` and fails everything else.
+    struct FakeBackend {
+        reported: BackendTask,
+    }
+
+    #[async_trait::async_trait]
+    impl Backend for FakeBackend {
+        async fn update_task(&self, _remote_id: &str, _args: UpdateTaskArgs) -> Result<BackendTask, BackendError> {
+            Ok(self.reported.clone())
+        }
+
+        async fn fetch_projects(&self) -> Result<Vec<BackendProject>, BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+
+        async fn fetch_tasks(&self) -> Result<Vec<BackendTask>, BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+
+        async fn fetch_labels(&self) -> Result<Vec<BackendLabel>, BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+
+        async fn fetch_sections(&self) -> Result<Vec<BackendSection>, BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+
+        async fn create_project(&self, _args: CreateProjectArgs) -> Result<BackendProject, BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+
+        async fn update_project(
+            &self,
+            _remote_id: &str,
+            _args: UpdateProjectArgs,
+        ) -> Result<BackendProject, BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+
+        async fn delete_project(&self, _remote_id: &str) -> Result<(), BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+
+        async fn create_task(&self, _args: CreateTaskArgs) -> Result<BackendTask, BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+
+        async fn move_task(&self, _remote_id: &str, _project_remote_id: &str) -> Result<(), BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+
+        async fn delete_task(&self, _remote_id: &str) -> Result<(), BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+
+        async fn complete_task(&self, _remote_id: &str) -> Result<(), BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+
+        async fn reopen_task(&self, _remote_id: &str) -> Result<(), BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+
+        async fn create_label(&self, _args: CreateLabelArgs) -> Result<BackendLabel, BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+
+        async fn update_label(&self, _remote_id: &str, _args: UpdateLabelArgs) -> Result<BackendLabel, BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+
+        async fn delete_label(&self, _remote_id: &str) -> Result<(), BackendError> {
+            Err(BackendError::Other("not used".to_string()))
+        }
+    }
+
+    fn reported_task(due_date: Option<&str>, due_datetime: Option<&str>) -> BackendTask {
+        BackendTask {
+            remote_id: "t1".to_string(),
+            content: "Task".to_string(),
+            description: None,
+            project_remote_id: "p1".to_string(),
+            section_remote_id: None,
+            parent_remote_id: None,
+            priority: 1,
+            order_index: 0,
+            due_date: due_date.map(str::to_string),
+            due_datetime: due_datetime.map(str::to_string),
+            is_recurring: false,
+            deadline: None,
+            duration: None,
+            is_completed: false,
+            labels: Vec::new(),
+        }
+    }
+
+    /// A cached timed task plus a service whose backend answers `update_task` with `reported`.
+    async fn test_service(
+        label: &str,
+        due_date: Option<&str>,
+        due_datetime: Option<&str>,
+        reported: BackendTask,
+    ) -> (PathBuf, Arc<Mutex<LocalStorage>>, SyncService, Uuid) {
+        let db_path = std::env::temp_dir().join(format!("terminalist-{label}-{}.db", Uuid::new_v4()));
+        let storage = LocalStorage::new_at(db_path.clone()).await.unwrap();
+
+        let backend_uuid = Uuid::new_v4();
+        let project_uuid = Uuid::new_v4();
+        let task_uuid = Uuid::new_v4();
+
+        backend::Entity::insert(backend::ActiveModel {
+            uuid: ActiveValue::Set(backend_uuid),
+            backend_type: ActiveValue::Set("test".to_string()),
+            name: ActiveValue::Set("Test".to_string()),
+            credentials: ActiveValue::Set("{}".to_string()),
+        })
+        .exec(&storage.conn)
+        .await
+        .unwrap();
+
+        project::Entity::insert(project::ActiveModel {
+            uuid: ActiveValue::Set(project_uuid),
+            backend_uuid: ActiveValue::Set(backend_uuid),
+            remote_id: ActiveValue::Set("p1".to_string()),
+            name: ActiveValue::Set("Project".to_string()),
+            is_favorite: ActiveValue::Set(false),
+            is_inbox_project: ActiveValue::Set(false),
+            order_index: ActiveValue::Set(0),
+            parent_uuid: ActiveValue::Set(None),
+        })
+        .exec(&storage.conn)
+        .await
+        .unwrap();
+
+        task::Entity::insert(task::ActiveModel {
+            uuid: ActiveValue::Set(task_uuid),
+            backend_uuid: ActiveValue::Set(backend_uuid),
+            remote_id: ActiveValue::Set("t1".to_string()),
+            content: ActiveValue::Set("Task".to_string()),
+            description: ActiveValue::Set(None),
+            project_uuid: ActiveValue::Set(project_uuid),
+            section_uuid: ActiveValue::Set(None),
+            parent_uuid: ActiveValue::Set(None),
+            priority: ActiveValue::Set(1),
+            order_index: ActiveValue::Set(0),
+            due_date: ActiveValue::Set(due_date.map(str::to_string)),
+            due_datetime: ActiveValue::Set(due_datetime.map(str::to_string)),
+            is_recurring: ActiveValue::Set(false),
+            deadline: ActiveValue::Set(None),
+            duration: ActiveValue::Set(None),
+            is_completed: ActiveValue::Set(false),
+            is_deleted: ActiveValue::Set(false),
+        })
+        .exec(&storage.conn)
+        .await
+        .unwrap();
+
+        let storage = Arc::new(Mutex::new(storage));
+        let service =
+            SyncService::new_for_test_with_backend(storage.clone(), backend_uuid, Box::new(FakeBackend { reported }))
+                .await;
+
+        (db_path, storage, service, task_uuid)
+    }
+
+    async fn teardown(db_path: PathBuf, storage: Arc<Mutex<LocalStorage>>) {
+        storage.lock().await.conn.clone().close().await.unwrap();
+        let _ = std::fs::remove_file(db_path);
+    }
+
+    /// Pressing `t` on a timed task moves it to today and Todoist drops the time. The cached
+    /// row must drop it too, or the list keeps rendering the old timestamp.
+    #[tokio::test]
+    async fn changing_the_due_day_clears_the_cached_time() {
+        let (db_path, storage, service, task_uuid) = test_service(
+            "due-date-clears-time",
+            Some("2026-11-20"),
+            Some("2026-11-20T13:00:00"),
+            reported_task(Some("2026-11-21"), None),
+        )
+        .await;
+
+        service.update_task_due_date(&task_uuid, Some("2026-11-21")).await.unwrap();
+
+        let stored = TaskRepository::get_by_id(&storage.lock().await.conn, &task_uuid)
+            .await
+            .unwrap()
+            .expect("task is still cached");
+        assert_eq!(stored.due_date.as_deref(), Some("2026-11-21"));
+        assert_eq!(
+            stored.due_datetime, None,
+            "a time the backend dropped must not survive in the cache"
+        );
+
+        teardown(db_path, storage).await;
+    }
+
+    /// Whatever the backend reports after the update is what the cache must hold, time included.
+    #[tokio::test]
+    async fn cached_due_fields_come_from_the_backend_response() {
+        let (db_path, storage, service, task_uuid) = test_service(
+            "due-date-from-response",
+            Some("2026-11-20"),
+            Some("2026-11-20T13:00:00"),
+            reported_task(Some("2026-11-21"), Some("2026-11-21T09:30:00")),
+        )
+        .await;
+
+        service.update_task_due_date(&task_uuid, Some("2026-11-21")).await.unwrap();
+
+        let stored = TaskRepository::get_by_id(&storage.lock().await.conn, &task_uuid)
+            .await
+            .unwrap()
+            .expect("task is still cached");
+        assert_eq!(stored.due_date.as_deref(), Some("2026-11-21"));
+        assert_eq!(stored.due_datetime.as_deref(), Some("2026-11-21T09:30:00"));
+
+        teardown(db_path, storage).await;
     }
 }
