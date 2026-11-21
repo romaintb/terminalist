@@ -63,6 +63,12 @@ impl BackendRegistry {
             .ok_or_else(|| anyhow::anyhow!("Backend not found: {}", uuid))
     }
 
+    /// Test-only: register an already-built backend instance without persisting it.
+    #[doc(hidden)]
+    pub(crate) async fn insert_for_test(&self, uuid: Uuid, backend: Box<dyn Backend>) {
+        self.backends.lock().await.insert(uuid, Arc::new(backend));
+    }
+
     /// List all backend configurations from the database.
     ///
     /// # Returns

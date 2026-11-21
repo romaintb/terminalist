@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, Weekday};
+use chrono::{DateTime, Local, NaiveDate, Weekday};
 use terminalist::utils::datetime::*;
 
 #[test]
@@ -90,12 +90,30 @@ fn test_split_todoist_due_prefers_an_explicit_datetime() {
     assert_eq!(time.as_deref(), Some("2026-11-20T13:00:00.000000"));
 }
 
-/// A fixed-timezone time is in UTC; the day comes out as a plain date either way.
+/// A trailing "Z" is a UTC instant, so the day must be the same instant seen from here, not
+/// the date prefix of the string.
 #[test]
-fn test_split_todoist_due_handles_a_utc_time() {
-    let (day, time) = split_todoist_due("2026-11-20T13:00:00Z", None);
-    assert!(NaiveDate::parse_from_str(&day, "%Y-%m-%d").is_ok(), "got {day}");
-    assert_eq!(time.as_deref(), Some("2026-11-20T13:00:00Z"));
+fn test_split_todoist_due_takes_a_utc_instant_in_local_time() {
+    let instant = "2026-11-20T23:30:00Z";
+    let expected_day = DateTime::parse_from_rfc3339(instant)
+        .expect("test instant parses")
+        .with_timezone(&Local)
+        .format("%Y-%m-%d")
+        .to_string();
+
+    let (day, time) = split_todoist_due(instant, None);
+
+    assert_eq!(day, expected_day);
+    assert_eq!(time.as_deref(), Some(instant));
+}
+
+/// The API leaves `datetime` empty on a timed task; that must not blank the time.
+#[test]
+fn test_split_todoist_due_treats_an_empty_datetime_as_absent() {
+    assert_eq!(
+        split_todoist_due("2026-11-20T13:00:00", Some("")),
+        ("2026-11-20".to_string(), Some("2026-11-20T13:00:00".to_string()))
+    );
 }
 
 #[test]
