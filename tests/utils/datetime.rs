@@ -67,3 +67,39 @@ fn test_format_human_datetime_iso_format() {
     assert!(formatted.contains("at"));
     assert!(formatted.contains("09:00"));
 }
+
+#[test]
+fn test_split_todoist_due_keeps_a_plain_date() {
+    assert_eq!(split_todoist_due("2026-11-20", None), ("2026-11-20".to_string(), None));
+}
+
+/// Todoist puts a floating time inside `date`. The day alone must go to `due_date`, or the
+/// Today and Upcoming views drop the task.
+#[test]
+fn test_split_todoist_due_moves_a_floating_time_out_of_the_date() {
+    assert_eq!(
+        split_todoist_due("2026-11-20T13:00:00", None),
+        ("2026-11-20".to_string(), Some("2026-11-20T13:00:00".to_string()))
+    );
+}
+
+#[test]
+fn test_split_todoist_due_prefers_an_explicit_datetime() {
+    let (day, time) = split_todoist_due("2026-11-20T13:00:00", Some("2026-11-20T13:00:00.000000"));
+    assert_eq!(day, "2026-11-20");
+    assert_eq!(time.as_deref(), Some("2026-11-20T13:00:00.000000"));
+}
+
+/// A fixed-timezone time is in UTC; the day comes out as a plain date either way.
+#[test]
+fn test_split_todoist_due_handles_a_utc_time() {
+    let (day, time) = split_todoist_due("2026-11-20T13:00:00Z", None);
+    assert!(NaiveDate::parse_from_str(&day, "%Y-%m-%d").is_ok(), "got {day}");
+    assert_eq!(time.as_deref(), Some("2026-11-20T13:00:00Z"));
+}
+
+#[test]
+fn test_format_human_datetime_shows_the_time_with_or_without_fractions() {
+    assert!(format_human_datetime("2026-11-20T13:00:00").ends_with("at 13:00"));
+    assert!(format_human_datetime("2026-11-20T13:00:00.000000").ends_with("at 13:00"));
+}

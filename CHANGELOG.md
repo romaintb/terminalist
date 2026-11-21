@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Timed tasks missing from the date views** - A task due at a set time shows in Today and Upcoming again, with its time.
+
 ## [0.6.0] - 2026-09-22
 
 ### Added
