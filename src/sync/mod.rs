@@ -104,6 +104,18 @@ impl SyncService {
         }
     }
 
+    /// Test-only: a service wired to a backend instance built by the test.
+    #[cfg(test)]
+    pub(crate) async fn new_for_test_with_backend(
+        storage: Arc<Mutex<LocalStorage>>,
+        backend_uuid: Uuid,
+        backend: Box<dyn crate::backend::Backend>,
+    ) -> Self {
+        let service = Self::new_for_test(storage, backend_uuid);
+        service.backend_registry.insert_for_test(backend_uuid, backend).await;
+        service
+    }
+
     /// Creates a new `SyncService` instance with the provided backend registry.
     ///
     /// This creates a sync service that manages synchronization for a specific backend.

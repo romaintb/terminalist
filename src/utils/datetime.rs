@@ -161,18 +161,24 @@ pub fn format_human_datetime(datetime_str: &str) -> String {
 /// Splits a Todoist due date into the plain day the views filter on and, for a task with a
 /// time, the full date and time for display.
 ///
-/// Todoist puts the time inside `date` for timed tasks ("2026-11-20T13:00:00", or with a
-/// trailing "Z" for a fixed timezone) and may leave `datetime` empty. The views compare
-/// `due_date` with "YYYY-MM-DD" strings, so it must hold the day alone. A fixed-timezone time
-/// is in UTC, so its day is taken in local time, where it can differ.
+/// Todoist puts the time inside `date` for timed tasks ("2026-11-20T13:00:00") and may leave
+/// `datetime` empty. The views compare `due_date` with "YYYY-MM-DD" strings, so it must hold
+/// the day alone.
+///
+/// A trailing "Z" is a UTC instant, so its day is taken on the machine's clock: the grouping
+/// then matches the time the list shows. A task pinned to another timezone (`due.timezone`)
+/// is not honoured; the machine's timezone wins.
 #[must_use]
 pub fn split_todoist_due(date: &str, datetime: Option<&str>) -> (String, Option<String>) {
+    // The API sends an empty `datetime` on some tasks; it means no time, not a blank one.
+    let datetime = datetime.filter(|d| !d.is_empty());
     if !date.contains('T') {
         return (date.to_string(), datetime.map(str::to_string));
     }
     let full = datetime.unwrap_or(date);
     let day = match DateTime::parse_from_rfc3339(full) {
         Ok(dt) => dt.with_timezone(&Local).format(TODOIST_DATE_FORMAT).to_string(),
+        // Todoist dates are zero-padded, so the day still fits in the first ten characters.
         Err(_) => date.chars().take(10).collect(),
     };
     (day, Some(full.to_string()))
