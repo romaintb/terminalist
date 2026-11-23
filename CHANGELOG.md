@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-11-23
+
 ### Fixed
 - **Timed tasks missing from the date views** - A task due at a set time shows in Today and Upcoming again, with its time.
+- **Stale time after a date shortcut** - `t`, `T`, `w` and `W` on a timed task no longer leave the old time on screen.
+- **Blank task time** - An empty `due.datetime` from Todoist no longer blanks the time.
+
+### Security
+- **SQLite page-cache leak** - Bumped sqlx to 0.9.1 and the bundled SQLite to 3.54.1 for RUSTSEC-2026-0459.
+- **url stack overflow** - Bumped url to 2.5.9 for RUSTSEC-2026-0592.
+- **Audit findings cleared** - rustls, rustls-webpki, quinn-proto, quinn-udp and rustix updated.
 
 ## [0.6.0] - 2026-09-22
 
